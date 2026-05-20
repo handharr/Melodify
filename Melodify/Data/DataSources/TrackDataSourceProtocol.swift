@@ -1,5 +1,6 @@
 import Foundation
 
 protocol TrackDataSourceProtocol {
-    func searchTracks(query: String, offset: Int, limit: Int) async throws -> [TrackDTO]
+    func searchTracks(_ request: TrackSearchRequest) async throws -> [TrackDTO]
+    func getTrackDetail(_ request: TrackDetailRequest) async throws -> TrackDTO
 }

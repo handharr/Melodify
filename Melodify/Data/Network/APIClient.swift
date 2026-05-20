@@ -2,6 +2,7 @@ import Foundation
 
 enum APIError: Error {
     case invalidURL
+    case notFound
     case decodingFailed(Error)
     case networkError(Error)
 }
