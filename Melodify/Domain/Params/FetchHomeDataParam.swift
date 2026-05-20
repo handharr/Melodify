@@ -1,5 +1,7 @@
 import Foundation
 
-struct FetchHomeDataParam {
-    let trackParam: SearchTracksParam
+struct FetchHomeDataQuery: Sendable {
+    let trackQuery: SearchTracksQuery
 }
+
+typealias FetchHomeDataParam = Param<FetchHomeDataQuery, Void>

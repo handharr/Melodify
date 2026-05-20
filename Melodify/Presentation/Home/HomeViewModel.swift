@@ -20,7 +20,9 @@ final class HomeViewModel {
         isLoading = true
 
         let param = FetchHomeDataParam(
-            trackParam: SearchTracksParam(query: "top hits", page: 1, limit: 20)
+            query: FetchHomeDataQuery(
+                trackQuery: SearchTracksQuery(term: "top hits", page: 1, limit: 20)
+            )
         )
 
         Task {

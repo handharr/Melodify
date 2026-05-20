@@ -12,7 +12,7 @@ final class UpdatePlaylistUseCase: UpdatePlaylistUseCaseProtocol {
     }
 
     func execute(param: UpdatePlaylistParam) async throws -> Playlist {
-        guard !param.name.trimmingCharacters(in: .whitespaces).isEmpty else {
+        guard !param.query.name.trimmingCharacters(in: .whitespaces).isEmpty else {
             throw PlaylistError.emptyName
         }
         return try await repository.updatePlaylist(param: param)

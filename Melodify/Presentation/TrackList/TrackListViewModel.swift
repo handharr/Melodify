@@ -37,9 +37,11 @@ final class TrackListViewModel: ObservableObject {
             defer { isLoading = false }
             do {
                 let param = SearchTracksParam(
-                    query: currentQuery,
-                    page: currentPage,
-                    genre: currentGenre
+                    query: SearchTracksQuery(
+                        term: currentQuery,
+                        page: currentPage,
+                        genre: currentGenre
+                    )
                 )
                 let newTracks = try await searchTracks.execute(policy: policy, param: param)
                 tracks += newTracks

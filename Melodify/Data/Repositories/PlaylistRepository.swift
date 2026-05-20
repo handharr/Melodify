@@ -14,9 +14,9 @@ final class PlaylistRepository: PlaylistRepositoryProtocol {
 
     func createPlaylist(param: CreatePlaylistParam) async throws -> Playlist {
         let body = CreatePlaylistRequestDTO(
-            name: param.name,
-            description: param.description,
-            trackIds: param.trackIds
+            name: param.query.name,
+            description: param.query.description,
+            trackIds: param.query.trackIds
         )
         let dto = try await remoteDataSource.createPlaylist(body: body)
         return PlaylistMapper.toDomain(dto)
@@ -24,10 +24,10 @@ final class PlaylistRepository: PlaylistRepositoryProtocol {
 
     func updatePlaylist(param: UpdatePlaylistParam) async throws -> Playlist {
         let body = UpdatePlaylistRequestDTO(
-            name: param.name,
-            description: param.description
+            name: param.query.name,
+            description: param.query.description
         )
-        let dto = try await remoteDataSource.updatePlaylist(id: param.id, body: body)
+        let dto = try await remoteDataSource.updatePlaylist(id: param.path.id, body: body)
         return PlaylistMapper.toDomain(dto)
     }
 }

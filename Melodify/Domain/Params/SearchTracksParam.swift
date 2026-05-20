@@ -1,17 +1,19 @@
 import Foundation
 
-struct SearchTracksParam: Sendable {
-    let query: String
+struct SearchTracksQuery: Sendable, Equatable {
+    let term: String
     let page: Int
     let limit: Int
-    let genre: String?
+    var genre: String?
 
     var offset: Int { (page - 1) * limit }
 
-    nonisolated init(query: String, page: Int = 1, limit: Int = 20, genre: String? = nil) {
-        self.query = query
+    init(term: String, page: Int = 1, limit: Int = 20, genre: String? = nil) {
+        self.term = term
         self.page = page
         self.limit = limit
         self.genre = genre
     }
 }
+
+typealias SearchTracksParam = Param<SearchTracksQuery, Void>

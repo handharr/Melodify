@@ -13,10 +13,11 @@ final class FetchHomeSectionsUseCase: FetchHomeSectionsUseCaseProtocol {
 
     func execute(policy: FetchPolicy, param: FetchHomeSectionsParam) async throws -> [HomeSection] {
         let repository = repository
-        let genres = param.genreParams.map { $0.genre }
+        let genres = param.query.genreQueries.map { $0.genre }
 
         return try await withThrowingTaskGroup(of: HomeSection.self) { group in
-            for (genre, trackParam) in param.genreParams {
+            for (genre, query) in param.query.genreQueries {
+                let trackParam = SearchTracksParam(query: query)
                 group.addTask {
                     let tracks = try await repository.searchTracks(policy: policy, param: trackParam)
                     return HomeSection(genre: genre, tracks: tracks)

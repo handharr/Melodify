@@ -9,13 +9,13 @@ final class TrackRepository: TrackRepositoryProtocol {
 
     func searchTracks(policy: FetchPolicy, param: SearchTracksParam) async throws -> [Track] {
         let dtos = try await remoteDataSource.searchTracks(
-            query: param.query,
-            offset: param.offset,
-            limit: param.limit
+            query: param.query.term,
+            offset: param.query.offset,
+            limit: param.query.limit
         )
         let tracks = dtos.compactMap { TrackMapper.toDomain($0) }
 
-        guard let genre = param.genre else { return tracks }
+        guard let genre = param.query.genre else { return tracks }
         return tracks.filter { $0.genre.lowercased() == genre.lowercased() }
     }
 }

@@ -1,5 +1,7 @@
 import Foundation
 
-struct FetchHomeSectionsParam {
-    let genreParams: [(genre: String, param: SearchTracksParam)]
+struct FetchHomeSectionsQuery: Sendable {
+    let genreQueries: [(genre: String, query: SearchTracksQuery)]
 }
+
+typealias FetchHomeSectionsParam = Param<FetchHomeSectionsQuery, Void>
