@@ -1,7 +1,9 @@
 import UIKit
+import Combine
 
 final class TrackDetailViewController: UIViewController {
     private let viewModel: TrackDetailViewModel
+    private var cancellable = Set<AnyCancellable>()
 
     private let artworkImageView = UIImageView()
     private let titleLabel = UILabel()
@@ -20,9 +22,9 @@ final class TrackDetailViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .systemBackground
-        title = viewModel.title
         setupLayout()
-        populate()
+        self.bindViewModel()
+        self.viewModel.load()
     }
 
     private func setupLayout() {
@@ -66,19 +68,30 @@ final class TrackDetailViewController: UIViewController {
             stack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24)
         ])
     }
+    
+    private func bindViewModel() {
+        viewModel.$track
+            .receive(on: DispatchQueue.main)
+            .compactMap({ $0 })
+            .sink { [weak self] value in
+                self?.populateTrack(with: value)
+            }
+            .store(in: &self.cancellable)
+    }
+    
+    private func populateTrack(with track: Track) {
+        titleLabel.text = track.title
+        artistLabel.text = track.artist
+        albumLabel.text = track.album
+        genreLabel.text = track.genre
+        durationLabel.text = self.viewModel.duration
+        self.title = track.title
 
-    private func populate() {
-        titleLabel.text = viewModel.title
-        artistLabel.text = viewModel.artist
-        albumLabel.text = viewModel.album
-        genreLabel.text = viewModel.genre
-        durationLabel.text = viewModel.duration
-
-        guard let url = viewModel.artworkURL else { return }
-        Task {
+        guard let url = track.artworkURL else { return }
+        Task { [weak self] in
             guard let (data, _) = try? await URLSession.shared.data(from: url),
                   let image = UIImage(data: data) else { return }
-            artworkImageView.image = image
+            self?.artworkImageView.image = image
         }
     }
 }

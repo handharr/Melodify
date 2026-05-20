@@ -102,7 +102,7 @@ extension TrackListViewController: UITableViewDelegate {
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
         let track = viewModel.tracks[indexPath.row]
-        let detailVC = TrackDetailViewController(viewModel: TrackDetailViewModel(track: track))
+        let detailVC = TrackDetailViewController(viewModel: TrackDetailViewModel(track: track, getTrackDetailUseCase: GetTrackDetailUseCase()))
         navigationController?.pushViewController(detailVC, animated: true)
     }
 
