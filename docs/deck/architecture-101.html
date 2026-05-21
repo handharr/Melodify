@@ -504,16 +504,16 @@
 
 <!-- CONCURRENCY POSITIONING -->
 <section>
-  <h2>Combine vs async/await — Where Each Belongs</h2>
+  <h2>Combine vs async/await — Trade-offs</h2>
   <div class="table-wrap">
     <table>
-      <tr><th></th><th>Use for</th><th>Why</th></tr>
-      <tr><td>async/await</td><td>Data-fetching layer — UseCase, Repository</td><td>Simpler to read, structured cancellation, no AnyCancellable</td></tr>
-      <tr><td>Combine</td><td>Reactive binding layer — ViewModel → ViewController</td><td>@Published + sink for multiple UI elements reacting to one state change</td></tr>
+      <tr><th></th><th>Strengths</th><th>When to reach for it</th></tr>
+      <tr><td>async/await</td><td>Readable, structured cancellation, no AnyCancellable lifecycle to manage</td><td>Sequential async work, one-shot requests, clearer error propagation</td></tr>
+      <tr><td>Combine</td><td>Declarative stream composition, operators (debounce, removeDuplicates, combineLatest)</td><td>Multiple subscribers reacting to shared state, UI binding, complex transformations</td></tr>
     </table>
   </div>
-  <p>They compose fine — a <code>Task { }</code> inside a <code>sink</code> is valid when you need async work triggered by a publisher.</p>
-  <div class="rule"><strong>Rule:</strong> don't mix them for the same operation. async/await for fetching, Combine for broadcasting the result.</div>
+  <p>They compose well — a <code>Task { }</code> inside a <code>sink</code> is valid when you need async work triggered by a publisher. Many codebases use both.</p>
+  <div class="callout"><strong>Interview answer:</strong> "I'd use whichever the team is already using consistently. If starting fresh, I'd lean toward async/await for data work and Combine for reactive binding — but both are valid, and the most important thing is not mixing them for the same operation without a clear reason."</div>
 </section>
 
 <!-- ALGORITHM COMPLEXITY -->

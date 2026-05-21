@@ -306,7 +306,7 @@ Application   → AppDelegate + Coordinator + DI</p>
       <div class="tl-content">
         <h3>Trace the Full Data Flow</h3>
         <p>Pick the hardest piece and walk it end-to-end out loud:</p>
-        <blockquote>"User opens the app. AppCoordinator builds the dependency graph. ViewModel calls FetchHomeDataUseCase with FetchPolicy.cached. UseCase fires async let for tracks and playlists concurrently. Each repo checks policy: cache-first, fall back to network. Response comes back as a DTO, Mapper converts it to a Domain model, ViewModel maps it to a UIModel. UIModel is the only type that reaches the ViewController. ViewController sinks on @Published feedItems — a HomeFeedItem enum — and switches on each case in cellForRowAt. Compiler enforces exhaustiveness, no casting."</blockquote>
+        <blockquote>"User opens the app. The coordinator or app entry point builds the dependency graph. The ViewModel calls FetchHomeDataUseCase with FetchPolicy.cached. The UseCase fires async let for tracks and playlists concurrently. Each repo checks policy: cache-first, fall back to network. Response comes back as a DTO, Mapper converts it to a Domain model, ViewModel maps it to a UIModel. UIModel is the only type that reaches the View layer. The View binds to published state — a HomeFeedItem enum — and switches on each case. Compiler enforces exhaustiveness, no casting."</blockquote>
       </div>
     </div>
 
@@ -334,11 +334,12 @@ Application   → AppDelegate + Coordinator + DI</p>
         <div class="table-wrap">
           <table>
             <tr><th>They ask</th><th>Your answer</th></tr>
-            <tr><td>"Why not SwiftUI?"</td><td>UIKit gives granular control over cell reuse and transitions. Migrate incrementally with UIHostingController.</td></tr>
-            <tr><td>"Why not Combine everywhere?"</td><td>@Published + sink for ViewModel state. async/await for one-shot work. Don't mix for the same operation.</td></tr>
-            <tr><td>"Why UIModel?"</td><td>UIModel carries display-ready data. Domain model in the ViewController leaks formatting into business logic.</td></tr>
-            <tr><td>"Why UserDefaults, not Core Data?"</td><td>For read-through caching, UserDefaults + Codable is sufficient. Core Data only when you need relationships or migrations.</td></tr>
-            <tr><td>"Why Coordinator?"</td><td>ViewController has no reference to nav stack — reusable and independently testable. Coordinator owns navigation.</td></tr>
+            <tr><td>"UIKit or SwiftUI?"</td><td>Both are valid — depends on team's stack and iOS version floor. SwiftUI is the modern default, faster for declarative state-driven UI. UIKit gives more control over custom layouts, cell reuse, and transitions. Worth asking before assuming.</td></tr>
+            <tr><td>"Combine or async/await?"</td><td>Both are valid and compose well together. async/await excels at sequential async work with structured cancellation. Combine excels when multiple UI elements react to the same state, or when you need operators like debounce or removeDuplicates. Many teams use both — the key is not mixing them for the same operation without a clear reason.</td></tr>
+            <tr><td>"Why UIModel instead of Domain model in ViewController?"</td><td>UIModel carries display-ready data — formatted strings, localized text. If Domain model reaches the ViewController, formatting logic leaks into business logic. That said, for simple screens a 1:1 mapping may not need a dedicated type — it's a trade-off between purity and ceremony.</td></tr>
+            <tr><td>"UserDefaults or Core Data?"</td><td>Depends on the data shape and access patterns. UserDefaults + Codable is simple and sufficient for read-through caching of flat API responses. Core Data is the right fit when you need relational queries, complex migrations, or large datasets. Neither is universally better.</td></tr>
+            <tr><td>"MVVM, MVP, or MVI?"</td><td>All three achieve separation of concerns — the meaningful difference is in how state flows. MVVM with @Published is reactive and familiar to iOS teams. MVP makes the Presenter easier to unit test without a framework. MVI gives strict unidirectional flow which helps in complex state scenarios. The best choice is often what the team already uses consistently.</td></tr>
+            <tr><td>"Why Coordinator?"</td><td>Coordinators remove navigation ownership from ViewControllers, making them independently reusable and testable. The trade-off is added indirection — for simple apps it can be unnecessary ceremony. Alternatives like flow controllers or enum-driven routing solve the same problem differently. Worth naming the trade-off before recommending one.</td></tr>
           </table>
         </div>
       </div>
