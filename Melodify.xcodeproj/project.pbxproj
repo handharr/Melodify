@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		B4403E022FBE9E3B0004ADA9 /* MelodifyDesignSystem in Frameworks */ = {isa = PBXBuildFile; productRef = B4403E012FBE9E3B0004ADA9 /* MelodifyDesignSystem */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		B4FEE2212FB84A6000626790 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -52,6 +56,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B4403E022FBE9E3B0004ADA9 /* MelodifyDesignSystem in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -112,6 +117,7 @@
 			);
 			name = Melodify;
 			packageProductDependencies = (
+				B4403E012FBE9E3B0004ADA9 /* MelodifyDesignSystem */,
 			);
 			productName = Melodify;
 			productReference = B4FEE2132FB84A5F00626790 /* Melodify.app */;
@@ -195,6 +201,9 @@
 			);
 			mainGroup = B4FEE20A2FB84A5F00626790;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				B4403E002FBE9E3B0004ADA9 /* XCLocalSwiftPackageReference "MelodifyDesignSystem" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = B4FEE2142FB84A5F00626790 /* Products */;
 			projectDirPath = "";
@@ -615,6 +624,20 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		B4403E002FBE9E3B0004ADA9 /* XCLocalSwiftPackageReference "MelodifyDesignSystem" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = MelodifyDesignSystem;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		B4403E012FBE9E3B0004ADA9 /* MelodifyDesignSystem */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = MelodifyDesignSystem;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = B4FEE20B2FB84A5F00626790 /* Project object */;
 }
