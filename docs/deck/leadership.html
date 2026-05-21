@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>How to Lead — Melodify</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --border: #30363d;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --accent: #58a6ff;
+    --green: #3fb950;
+    --orange: #d29922;
+    --purple: #bc8cff;
+    --red: #f85149;
+  }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 15px;
+    line-height: 1.6;
+    padding-bottom: 100px;
+  }
+  nav {
+    position: sticky;
+    top: 0;
+    background: rgba(13,17,23,0.92);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    z-index: 100;
+  }
+  nav a { color: var(--muted); text-decoration: none; font-size: 13px; }
+  nav .sep { color: var(--border); }
+  nav .current { color: var(--purple); font-weight: 600; }
+  header {
+    padding: 32px 20px 24px;
+    border-bottom: 1px solid var(--border);
+  }
+  header .tag {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--purple);
+    margin-bottom: 8px;
+  }
+  header h1 { font-size: 26px; font-weight: 700; }
+  header p { color: var(--muted); margin-top: 6px; font-size: 14px; }
+  section { padding: 28px 20px 0; }
+  h2 {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--purple);
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  h3 { font-size: 15px; font-weight: 600; color: var(--orange); margin: 20px 0 8px; }
+  h3:first-of-type { margin-top: 0; }
+  p { color: var(--muted); margin-bottom: 12px; line-height: 1.6; }
+  p strong { color: var(--text); }
+  blockquote {
+    background: var(--surface);
+    border-left: 3px solid var(--purple);
+    border-radius: 0 8px 8px 0;
+    padding: 12px 16px;
+    margin: 10px 0 12px;
+    font-size: 14px;
+    color: var(--text);
+    line-height: 1.6;
+    font-style: italic;
+  }
+  blockquote.bad {
+    border-left-color: var(--red);
+    color: var(--muted);
+  }
+  blockquote.good {
+    border-left-color: var(--green);
+  }
+  .label-bad {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--red);
+    margin-bottom: 4px;
+  }
+  .label-good {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--green);
+    margin-bottom: 4px;
+  }
+  .rule {
+    background: rgba(63, 185, 80, 0.08);
+    border: 1px solid rgba(63, 185, 80, 0.3);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    font-size: 14px;
+    color: var(--text);
+    line-height: 1.5;
+  }
+  .rule strong { color: var(--green); }
+  .callout {
+    background: rgba(88, 166, 255, 0.08);
+    border: 1px solid rgba(88, 166, 255, 0.3);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    font-size: 14px;
+    color: var(--text);
+    line-height: 1.5;
+  }
+  .callout strong { color: var(--accent); }
+  .kill {
+    background: rgba(248, 81, 73, 0.08);
+    border: 1px solid rgba(248, 81, 73, 0.3);
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin-bottom: 16px;
+  }
+  .kill h4 {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--red);
+    margin-bottom: 10px;
+  }
+  .kill li {
+    color: var(--muted);
+    font-size: 14px;
+    margin-bottom: 6px;
+    line-height: 1.5;
+    padding-left: 4px;
+  }
+  .kill li::before { content: "✕ "; color: var(--red); font-weight: 700; }
+  .kill ul { list-style: none; padding: 0; }
+  .phrases {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 16px;
+  }
+  .phrase {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    font-size: 14px;
+    font-style: italic;
+    color: var(--text);
+    line-height: 1.5;
+  }
+  .phrase:last-child { border-bottom: none; }
+  .phrase::before { content: '"'; color: var(--purple); font-style: normal; font-weight: 700; margin-right: 2px; }
+  .phrase::after { content: '"'; color: var(--purple); font-style: normal; font-weight: 700; margin-left: 2px; }
+  .the-rule {
+    background: linear-gradient(135deg, rgba(188, 140, 255, 0.1), rgba(88, 166, 255, 0.1));
+    border: 1px solid rgba(188, 140, 255, 0.4);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 16px;
+    text-align: center;
+  }
+  .the-rule .row {
+    font-size: 14px;
+    color: var(--muted);
+    margin-bottom: 8px;
+    line-height: 1.5;
+  }
+  .the-rule .row strong { color: var(--text); }
+  .the-rule .divider {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 14px 0;
+  }
+  .the-rule .highlight {
+    font-size: 15px;
+    color: var(--purple);
+    font-weight: 600;
+    line-height: 1.5;
+  }
+  code {
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 5px;
+    color: #a5d6ff;
+  }
+  .bottom-nav {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: rgba(13,17,23,0.95);
+    backdrop-filter: blur(8px);
+    border-top: 1px solid var(--border);
+    padding: 12px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .bottom-nav a {
+    color: var(--accent);
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 500;
+    flex: 1;
+  }
+  .bottom-nav a.right { text-align: right; }
+  .bottom-nav a.center { text-align: center; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="index.html">Home</a>
+  <span class="sep">›</span>
+  <span class="current">How to Lead</span>
+</nav>
+
+<header>
+  <div class="tag">Behavioral</div>
+  <h1>How to Lead</h1>
+  <p>Drive the interview. Don't wait to be driven.</p>
+</header>
+
+<!-- MENTAL MODEL -->
+<section>
+  <h2>Mental Model</h2>
+  <div class="callout">
+    <strong>You're the Tech Lead.</strong> They're the Stakeholder.<br><br>
+    They hand you a requirement. You run the design meeting. They listen, probe, and push back — but you own the direction.
+  </div>
+</section>
+
+<!-- OPENING -->
+<section>
+  <h2>Opening — Frame Before Drawing</h2>
+  <div class="label-bad">Don't say</div>
+  <blockquote class="bad">Ok so let me start drawing the layers...</blockquote>
+  <div class="label-good">Say this instead</div>
+  <blockquote class="good">Before I draw anything — let me make sure I understand the problem fully, because the architecture decisions depend heavily on the constraints. Can I ask a few questions first?</blockquote>
+  <p>You told them you don't jump to solutions. That's the first senior signal.</p>
+</section>
+
+<!-- NARRATE -->
+<section>
+  <h2>Narrate Every Decision</h2>
+  <p>Never draw silently. Every box on the board, say why.</p>
+  <blockquote class="good">I'm putting the UseCase here in the Domain layer — not in the ViewModel — because if I ever swap UIKit for SwiftUI, the business logic doesn't move.</blockquote>
+  <blockquote class="good">I'm choosing async let here instead of a TaskGroup because there are exactly two fetches. TaskGroup is for N — when you don't know the count at compile time.</blockquote>
+  <p>They're not grading the diagram. <strong>They're grading the reasoning.</strong> The diagram is the visual aid.</p>
+</section>
+
+<!-- PUSHBACK -->
+<section>
+  <h2>Handling Push Back</h2>
+  <p>They will push back intentionally — it's a probe, not a correction. Don't fold. Don't get defensive. Acknowledge, then hold or adjust with a reason.</p>
+  <p>Example — they ask: <em>"Why not just use the Domain model directly in the ViewController?"</em></p>
+  <blockquote class="good">Fair question — for a simple CRUD app I'd consider it. The reason I'm adding a UIModel here is that this feed has formatted durations, placeholder image logic, and localized strings. If that lives in the Domain model, it becomes a presentation concern inside business logic. That's the trade-off I'm making. If the team prefers to keep it simpler, I can work with that — I'd just want to be consistent.</blockquote>
+  <p>Acknowledged their point. Explained the trade-off. Signaled flexibility.</p>
+</section>
+
+<!-- TIMEBOX -->
+<section>
+  <h2>Timebox Yourself Out Loud</h2>
+  <p>Around the 25-minute mark:</p>
+  <blockquote class="good">I've got the core architecture laid out. I want to make sure we have time to cover concurrency and the cache layer — which I think are the most interesting parts. Should I go deeper here or move on?</blockquote>
+  <p>Shows you're aware of time. Shows you know what's complex. Gives them control over depth.</p>
+</section>
+
+<!-- ANTICIPATE -->
+<section>
+  <h2>Anticipate the Next Question</h2>
+  <p>After every major decision, preempt the follow-up.</p>
+  <blockquote class="good">...and the obvious question here is what happens when the cache is stale. I handle that with FetchPolicy. Three modes: .fresh always hits the network and saves. .cached returns cache if it exists, falls back to network. .strict returns cache-only and throws on a miss — useful for offline mode where you want an explicit signal rather than a silent empty state.</blockquote>
+  <p>You answered a question they were about to ask. That's leading.</p>
+</section>
+
+<!-- OBSERVABILITY -->
+<section>
+  <h2>Bring Up Observability Unprompted</h2>
+  <p>Around minute 50, without being asked:</p>
+  <blockquote class="good">One thing I always add at the senior level — observability. I'd wire an AnalyticsServiceProtocol into the Domain layer. Events are typed enums with associated values — compiler catches typos and associated values carry structured context. The concrete implementation is in the Application layer — swap ConsoleAnalyticsService for Firebase or Segment without touching business logic. Beyond analytics, crash reporting at the AppDelegate level and performance tracing on the repository layer for slow network calls.</blockquote>
+  <p><strong>Most candidates wait to be asked. You brought it up.</strong></p>
+</section>
+
+<!-- CLOSE -->
+<section>
+  <h2>Close With a Forward Question</h2>
+  <p>Don't stop when the diagram is done:</p>
+  <blockquote class="good">What's the biggest scalability concern on the current app that this design should address? I want to make sure I haven't optimized for the wrong thing.</blockquote>
+  <p>Shows you care about the actual problem, not just showing off patterns.</p>
+</section>
+
+<!-- PHRASES -->
+<section>
+  <h2>Phrases That Signal Seniority</h2>
+  <div class="phrases">
+    <div class="phrase">Let me clarify before I commit to this — it changes the design.</div>
+    <div class="phrase">I'm making a trade-off here. The alternative is X, but I prefer Y because...</div>
+    <div class="phrase">The interesting engineering problem in this feature is actually...</div>
+    <div class="phrase">I want to flag a risk: if the requirement changes to real-time, this part of the design needs to change.</div>
+    <div class="phrase">Should I go deeper here or is the concept clear and we move on?</div>
+    <div class="phrase">That's a valid concern — here's how I'd handle it...</div>
+  </div>
+</section>
+
+<!-- WHAT KILLS IT -->
+<section>
+  <h2>What Kills Leadership</h2>
+  <div class="kill">
+    <h4>Avoid these</h4>
+    <ul>
+      <li>Drawing silently for more than 60 seconds</li>
+      <li>Asking "Is this correct?" — you decide and defend</li>
+      <li>Starting with login or simple screens — go to the hardest piece first</li>
+      <li>Waiting to be asked about caching, concurrency, analytics — bring them up yourself</li>
+      <li>Changing your answer the moment they push back without giving a reason</li>
+    </ul>
+  </div>
+</section>
+
+<!-- THE ONE RULE -->
+<section>
+  <h2>The One Rule</h2>
+  <div class="the-rule">
+    <div class="row"><strong>Mid-level</strong> answers the question asked.</div>
+    <hr class="divider">
+    <div class="highlight">Senior anticipates the next question and names the trade-off before the interviewer points it out.</div>
+  </div>
+  <p style="text-align:center; font-size:14px;">Every decision on the board: <em>"I'm choosing X over Y because..."</em> — before they ask.</p>
+</section>
+
+<div class="bottom-nav">
+  <a href="interview-prep.html">← Prep</a>
+  <a class="center" href="index.html">●</a>
+  <a class="right" href="index.html">Home →</a>
+</div>
+
+</body>
+</html>

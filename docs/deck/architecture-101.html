@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Architecture 101 — Melodify</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --border: #30363d;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --accent: #58a6ff;
+    --green: #3fb950;
+    --orange: #d29922;
+    --purple: #bc8cff;
+    --red: #f85149;
+    --keyword: #ff7b72;
+    --string: #a5d6ff;
+    --type: #ffa657;
+    --comment: #8b949e;
+  }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 15px;
+    line-height: 1.6;
+    padding-bottom: 100px;
+  }
+  nav {
+    position: sticky;
+    top: 0;
+    background: rgba(13,17,23,0.92);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    z-index: 100;
+  }
+  nav a {
+    color: var(--muted);
+    text-decoration: none;
+    font-size: 13px;
+  }
+  nav a:hover { color: var(--text); }
+  nav .sep { color: var(--border); }
+  nav .current { color: var(--accent); font-weight: 600; }
+  header {
+    padding: 32px 20px 24px;
+    border-bottom: 1px solid var(--border);
+  }
+  header .tag {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 8px;
+  }
+  header h1 { font-size: 26px; font-weight: 700; }
+  section {
+    padding: 28px 20px 0;
+  }
+  h2 {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  h3 {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--orange);
+    margin: 20px 0 10px;
+  }
+  p { color: var(--muted); margin-bottom: 12px; }
+  p strong { color: var(--text); }
+  .stack {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 16px;
+  }
+  .stack-row {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .stack-row:last-child { border-bottom: none; }
+  .arrow { color: var(--border); font-size: 16px; margin-top: 1px; flex-shrink: 0; }
+  .stack-name { font-weight: 600; font-size: 14px; color: var(--text); min-width: 120px; }
+  .stack-desc { font-size: 13px; color: var(--muted); line-height: 1.4; }
+  code {
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 5px;
+    color: var(--string);
+  }
+  pre {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    overflow-x: auto;
+    margin-bottom: 16px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--text);
+  }
+  .kw { color: var(--keyword); }
+  .ty { color: var(--type); }
+  .st { color: var(--string); }
+  .cm { color: var(--comment); font-style: italic; }
+  .nm { color: var(--accent); }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 16px;
+    font-size: 13px;
+  }
+  th {
+    background: var(--surface);
+    color: var(--muted);
+    font-weight: 600;
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    color: var(--muted);
+    vertical-align: top;
+  }
+  td:first-child { color: var(--text); font-weight: 500; }
+  tr:last-child td { border-bottom: none; }
+  .table-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 16px;
+  }
+  .callout {
+    background: rgba(88, 166, 255, 0.08);
+    border: 1px solid rgba(88, 166, 255, 0.3);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    font-size: 13px;
+    color: var(--text);
+    line-height: 1.5;
+  }
+  .callout strong { color: var(--accent); }
+  .rule {
+    background: rgba(63, 185, 80, 0.08);
+    border: 1px solid rgba(63, 185, 80, 0.3);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    font-size: 13px;
+    color: var(--text);
+  }
+  .rule strong { color: var(--green); }
+  .bottom-nav {
+    position: fixed;
+    bottom: 0;
+    left: 0; right: 0;
+    background: rgba(13,17,23,0.95);
+    backdrop-filter: blur(8px);
+    border-top: 1px solid var(--border);
+    padding: 12px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+  }
+  .bottom-nav a {
+    color: var(--accent);
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 500;
+    flex: 1;
+  }
+  .bottom-nav a.right { text-align: right; }
+  .bottom-nav a.center { text-align: center; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="index.html">Home</a>
+  <span class="sep">›</span>
+  <span class="current">Architecture 101</span>
+</nav>
+
+<header>
+  <div class="tag">Technical Reference</div>
+  <h1>Architecture 101</h1>
+</header>
+
+<!-- LAYERS -->
+<section>
+  <h2>The Layers</h2>
+  <div class="stack">
+    <div class="stack-row">
+      <div class="stack-name">ViewController</div>
+      <div class="stack-desc">Layout, user events, binds to ViewModel via Combine</div>
+    </div>
+    <div class="stack-row">
+      <div class="arrow">↓</div>
+      <div class="stack-name">ViewModel</div>
+      <div class="stack-desc"><code>@MainActor</code> · <code>@Published</code> state · owns loading + error</div>
+    </div>
+    <div class="stack-row">
+      <div class="arrow">↓</div>
+      <div class="stack-name">UseCase</div>
+      <div class="stack-desc">Business rules, validation, orchestration (async let / TaskGroup)</div>
+    </div>
+    <div class="stack-row">
+      <div class="arrow">↓</div>
+      <div class="stack-name">Repository</div>
+      <div class="stack-desc">Translates Param → Request · owns Domain↔Data boundary</div>
+    </div>
+    <div class="stack-row">
+      <div class="arrow">↓</div>
+      <div class="stack-name">DataSource</div>
+      <div class="stack-desc">Builds URL · calls APIClient · returns DTO</div>
+    </div>
+    <div class="stack-row">
+      <div class="arrow">↓</div>
+      <div class="stack-name">APIClient</div>
+      <div class="stack-desc">URLSession wrapper · GET / POST / PUT / PATCH / DELETE</div>
+    </div>
+  </div>
+  <div class="callout"><strong>Layer rule:</strong> Presentation → Domain ← Data. Domain depends on nothing.</div>
+</section>
+
+<!-- SINGLE RESPONSIBILITY -->
+<section>
+  <h2>Single Responsibility</h2>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Layer</th><th>Owns</th><th>Does NOT own</th></tr>
+      <tr><td>ViewController</td><td>Layout, user events, binding</td><td>Business logic, fetching</td></tr>
+      <tr><td>ViewModel</td><td>State, loading, error</td><td>Formatting, mapping</td></tr>
+      <tr><td>UIModelMapper</td><td>Display formatting</td><td>Business logic</td></tr>
+      <tr><td>UseCase</td><td>Business rules, validation</td><td>HTTP, DB, UI</td></tr>
+      <tr><td>Repository</td><td>Param→Request, domain mapping</td><td>HTTP details</td></tr>
+      <tr><td>DataSource</td><td>URL building, HTTP, DTO decoding</td><td>Domain types</td></tr>
+      <tr><td>APIClient</td><td>URLSession, encoding/decoding</td><td>Business logic</td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- DATA FLOW READ -->
+<section>
+  <h2>Data Flow — Read</h2>
+<pre><code><span class="nm">ViewModel</span>.load()
+  → <span class="nm">UseCase</span>.execute(policy: .fresh, param: <span class="ty">SearchTracksParam</span>)
+    → <span class="nm">Repository</span>.searchTracks(policy:param:)
+      → <span class="ty">TrackSearchRequest</span>(query:offset:limit:)  <span class="cm">← Param → Request</span>
+      → <span class="nm">DataSource</span>.searchTracks(request)
+        → <span class="nm">APIClient</span>.get(url)               <span class="cm">← URLSession</span>
+          → <span class="ty">iTunesSearchResponse</span> (DTO)
+      → <span class="nm">TrackMapper</span>.toDomain(dto) → <span class="ty">Track</span>  <span class="cm">← only Mapper knows both</span>
+    → [<span class="ty">Track</span>]
+  → <span class="nm">TrackUIModelMapper</span>.toUIModel(track) → <span class="ty">TrackUIModel</span>
+→ <span class="nm">ViewModel</span>.tracks = [<span class="ty">TrackUIModel</span>]     <span class="cm">← VC never sees Track</span></code></pre>
+</section>
+
+<!-- DATA FLOW WRITE -->
+<section>
+  <h2>Data Flow — Write</h2>
+<pre><code><span class="nm">ViewModel</span>.createPlaylist(name:)
+  → <span class="nm">UseCase</span>.execute(param: <span class="ty">CreatePlaylistParam</span>)
+    → <span class="kw">guard</span> !name.isEmpty <span class="kw">else throw</span> <span class="ty">PlaylistError</span>.emptyName
+    → <span class="nm">Repository</span>.createPlaylist(param:)
+      → <span class="ty">CreatePlaylistRequest</span>(name:description:trackIds:)
+      → <span class="nm">DataSource</span>.createPlaylist(request)
+        → <span class="nm">APIClient</span>.post(url, body: request)   <span class="cm">← Encodable, id excluded</span>
+          → <span class="ty">PlaylistDTO</span> (response)
+      → <span class="nm">PlaylistMapper</span>.toDomain(dto) → <span class="ty">Playlist</span>
+→ <span class="nm">ViewModel</span>.playlist = <span class="ty">PlaylistUIModel</span></code></pre>
+  <div class="rule"><strong>Rule:</strong> No FetchPolicy on writes — always hit the network. FetchPolicy only answers "where do I read from?"</div>
+</section>
+
+<!-- KEY TYPES -->
+<section>
+  <h2>Key Types</h2>
+
+  <h3>Param&lt;Query, Path&gt;</h3>
+<pre><code><span class="kw">struct</span> <span class="ty">Param</span>&lt;Query, Path&gt; {
+    <span class="kw">let</span> query: Query   <span class="cm">// filter / body fields</span>
+    <span class="kw">let</span> path: Path     <span class="cm">// URL path segments</span>
+}
+<span class="kw">typealias</span> <span class="ty">SearchTracksParam</span> = <span class="ty">Param</span>&lt;<span class="ty">SearchTracksQuery</span>, <span class="ty">Void</span>&gt;
+<span class="kw">typealias</span> <span class="ty">UpdatePlaylistParam</span> = <span class="ty">Param</span>&lt;<span class="ty">UpdatePlaylistQuery</span>, <span class="ty">UpdatePlaylistPath</span>&gt;</code></pre>
+  <p>Adding a field to <code>Query</code> or <code>Path</code> <strong>never breaks call sites.</strong></p>
+
+  <h3>FetchPolicy</h3>
+<pre><code><span class="kw">static let</span> fresh  = <span class="ty">FetchPolicy</span>(force: <span class="kw">true</span>,  allowStale: <span class="kw">false</span>) <span class="cm">// always network</span>
+<span class="kw">static let</span> cached = <span class="ty">FetchPolicy</span>(force: <span class="kw">false</span>, allowStale: <span class="kw">true</span>)  <span class="cm">// cache-first</span>
+<span class="kw">static let</span> strict = <span class="ty">FetchPolicy</span>(force: <span class="kw">false</span>, allowStale: <span class="kw">false</span>) <span class="cm">// cache only, fail if missing</span></code></pre>
+  <p>Travels from <strong>ViewModel → UseCase → Repository</strong>. Read UseCases only.</p>
+
+  <h3>Request Structs (Data layer)</h3>
+<pre><code><span class="kw">struct</span> <span class="ty">TrackSearchRequest</span> { <span class="kw">let</span> query: <span class="ty">String</span>; <span class="kw">let</span> offset: <span class="ty">Int</span>; <span class="kw">let</span> limit: <span class="ty">Int</span> }
+<span class="kw">struct</span> <span class="ty">UpdatePlaylistRequest</span>: <span class="ty">Encodable</span> {
+    <span class="kw">let</span> id: <span class="ty">Int</span>          <span class="cm">// path param — excluded via CodingKeys</span>
+    <span class="kw">let</span> name: <span class="ty">String</span>
+    <span class="kw">enum</span> <span class="ty">CodingKeys</span>: <span class="ty">String</span>, <span class="ty">CodingKey</span> { <span class="kw">case</span> name }
+}</code></pre>
+
+  <h3>UIModel + UIModelMapper</h3>
+<pre><code><span class="kw">enum</span> <span class="ty">TrackUIModelMapper</span> {
+    <span class="kw">static func</span> toUIModel(<span class="kw">_</span> track: <span class="ty">Track</span>) -> <span class="ty">TrackUIModel</span> {
+        <span class="kw">let</span> seconds = track.durationMs / <span class="nm">1000</span>
+        <span class="ty">TrackUIModel</span>(duration: <span class="ty">String</span>(format: <span class="st">"%d:%02d"</span>, seconds / <span class="nm">60</span>, seconds % <span class="nm">60</span>), ...)
+    }
+}</code></pre>
+  <p>ViewController only ever sees UIModel. Domain entities <strong>never reach the ViewController.</strong></p>
+</section>
+
+<!-- CONCURRENCY -->
+<section>
+  <h2>Concurrency Patterns</h2>
+
+  <h3>2 concurrent fetches → async let</h3>
+<pre><code><span class="kw">async let</span> tracks = trackRepository.searchTracks(policy: policy, param: ...)
+<span class="kw">async let</span> playlists = playlistRepository.fetchPlaylists(policy: policy)
+<span class="kw">return</span> <span class="ty">HomeData</span>(featuredTracks: <span class="kw">try await</span> tracks, playlists: <span class="kw">try await</span> playlists)</code></pre>
+
+  <h3>N concurrent fetches → withThrowingTaskGroup</h3>
+<pre><code><span class="kw">return try await</span> withThrowingTaskGroup(of: <span class="ty">HomeSection</span>.<span class="kw">self</span>) { group <span class="kw">in</span>
+    <span class="kw">for</span> (genre, query) <span class="kw">in</span> param.query.genreQueries {
+        group.addTask { <span class="kw">try await</span> repository.searchTracks(policy: policy, param: ...) }
+    }
+    <span class="kw">var</span> sections: [<span class="ty">HomeSection</span>] = []
+    <span class="kw">for try await</span> section <span class="kw">in</span> group { sections.append(section) }
+    <span class="kw">return</span> sections.sorted { ... }  <span class="cm">// order is non-deterministic — always sort</span>
+}</code></pre>
+
+  <h3>ViewModel state pattern</h3>
+<pre><code><span class="kw">@MainActor final class</span> <span class="ty">TrackListViewModel</span> {
+    <span class="kw">@Published private(set) var</span> tracks: [<span class="ty">TrackUIModel</span>] = []
+    <span class="kw">@Published private(set) var</span> isLoading = <span class="kw">false</span>
+    <span class="kw">@Published private(set) var</span> errorMessage: <span class="ty">String</span>?
+
+    <span class="kw">func</span> load() {
+        isLoading = <span class="kw">true</span>
+        <span class="ty">Task</span> {
+            <span class="kw">defer</span> { isLoading = <span class="kw">false</span> }   <span class="cm">// guaranteed on success AND failure</span>
+            <span class="kw">do</span> {
+                tracks = <span class="kw">try await</span> useCase.execute(...)
+            } <span class="kw">catch</span> {
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
+}</code></pre>
+</section>
+
+<!-- TESTING -->
+<section>
+  <h2>Testing Strategy</h2>
+  <div class="rule"><strong>Rule:</strong> Mock the layer below. Assert on the layer you just built.</div>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Layer under test</th><th>Mock</th><th>Assert</th></tr>
+      <tr><td>UseCase</td><td>Repository mock</td><td>Business rule enforced</td></tr>
+      <tr><td>Repository</td><td>DataSource mock</td><td>Param→Request, domain mapping</td></tr>
+      <tr><td>DataSource</td><td>APIClient mock</td><td>Correct URL, HTTP method</td></tr>
+      <tr><td>Mapper</td><td>None (pure fn)</td><td>Every field, every nil/default</td></tr>
+      <tr><td>ViewModel</td><td>UseCase mock</td><td>State transitions, error handling</td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- TRADE-OFFS -->
+<section>
+  <h2>Trade-off Talking Points</h2>
+
+  <h3>Repository + DataSource vs Repository alone?</h3>
+  <p>Repository owns the Domain↔Data boundary (Param→Request, DTO→Domain). DataSource owns HTTP details. Splitting them means you can swap clients or add caching without touching business mapping logic.</p>
+
+  <h3>Param&lt;Query, Path&gt; vs plain arguments?</h3>
+  <p>Adding a field doesn't break every call site. Path and Query have different semantic roles — typed struct makes intent explicit, type system enforces it.</p>
+
+  <h3>No BaseUseCase protocol?</h3>
+  <p>Read and write have different contracts — FetchPolicy vs none. A base type either lies about the contract or recreates what per-UseCase protocols already do with less ceremony.</p>
+
+  <h3>UIModelMapper as a separate type?</h3>
+  <p>Only when it has display formatting logic worth testing independently. A pure 1:1 field copy doesn't need a dedicated type — inline in ViewModel is cleaner. Consistency for its own sake is boilerplate.</p>
+
+  <h3>@MainActor on ViewModel?</h3>
+  <p>All <code>@Published</code> mutations must happen on the main thread. <code>@MainActor</code> enforces this at compile time instead of relying on manual <code>DispatchQueue.main.async</code>.</p>
+</section>
+
+<div class="bottom-nav">
+  <a href="index.html">← Home</a>
+  <a class="center" href="index.html">●</a>
+  <a class="right" href="interview-prep.html">Prep →</a>
+</div>
+
+</body>
+</html>
