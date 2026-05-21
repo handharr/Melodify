@@ -24,14 +24,19 @@ final class HomeCoordinator: Coordinator {
         vc.tabBarItem = UITabBarItem(title: "Home", image: UIImage(systemName: "house"), tag: 1)
         navigationController.viewControllers = [vc]
     }
+
+    // Called by AppCoordinator when a deep link targets a specific playlist
+    @MainActor func showPlaylistDetail(id: Int) {
+        let useCase = PlaylistDetailUseCase(playlistRepository: playlistRepository, trackRepository: trackRepository)
+        let viewModel = PlaylistDetailViewModel(playlistId: id, useCase: useCase)
+        let vc = PlaylistDetailViewController(viewModel: viewModel)
+        navigationController.pushViewController(vc, animated: true)
+    }
 }
 
 extension HomeCoordinator: HomeDelegate {
     func didSelectPlaylist(_ playlist: PlaylistUIModel) {
         analytics.track(.playlistOpened(id: playlist.id, name: playlist.name))
-        let useCase = PlaylistDetailUseCase(playlistRepository: playlistRepository, trackRepository: trackRepository)
-        let viewModel = PlaylistDetailViewModel(playlistId: playlist.id, useCase: useCase)
-        let vc = PlaylistDetailViewController(viewModel: viewModel)
-        navigationController.pushViewController(vc, animated: true)
+        showPlaylistDetail(id: playlist.id)
     }
 }
