@@ -416,6 +416,122 @@
   <p>All <code>@Published</code> mutations must happen on the main thread. <code>@MainActor</code> enforces this at compile time instead of relying on manual <code>DispatchQueue.main.async</code>.</p>
 </section>
 
+<!-- WHY THE RULE EXISTS -->
+<section>
+  <h2>Why the Rule Exists</h2>
+  <p>The real insight behind Clean Architecture is about <strong>rate of change</strong>.</p>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Layer</th><th>Changes</th><th>Example trigger</th></tr>
+      <tr><td>Domain</td><td>Slowly</td><td>A business rule changes</td></tr>
+      <tr><td>Data</td><td>Frequently</td><td>Server renames a JSON field</td></tr>
+      <tr><td>Presentation</td><td>Very frequently</td><td>Design gets iterated</td></tr>
+    </table>
+  </div>
+  <div class="rule"><strong>Volatile depends on stable. Stable depends on nothing.</strong></div>
+  <p>The dependency rule forces volatile layers to depend on stable ones, never the reverse. If Domain depended on Data, a server-side rename would force changes in your business logic — which is absurd.</p>
+</section>
+
+<!-- THE PLUGIN METAPHOR -->
+<section>
+  <h2>The Plugin Metaphor</h2>
+  <p>Think of Domain as a standalone business application. Everything else snaps onto it as a plugin.</p>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Plugin</th><th>What it means</th></tr>
+      <tr><td>UI is a plugin</td><td>Swap UIKit for SwiftUI without changing any business logic</td></tr>
+      <tr><td>Database is a plugin</td><td>Swap URLSession for Alamofire, or REST for GraphQL, without touching UseCases</td></tr>
+      <tr><td>Framework is a plugin</td><td>UIKit, Combine, CoreData — implementation details, not load-bearing architecture</td></tr>
+    </table>
+  </div>
+  <p>This is why <code>RepositoryProtocol</code> is <strong>defined in Domain, implemented in Data</strong>. Domain defines the interface it needs. Data conforms to it. The direction of the source code dependency is the <em>opposite</em> of the runtime call direction. This reversal is called <strong>Dependency Inversion</strong> — the D in SOLID.</p>
+  <div class="callout"><strong>At runtime:</strong> ViewModel → UseCase → Repository protocol → concrete Repository (networking). The business logic has no idea URLSession exists.</div>
+</section>
+
+<!-- TESTABILITY AS A CONSEQUENCE -->
+<section>
+  <h2>Testability Is a Consequence</h2>
+  <p>People describe Clean Architecture as "good for testability" as if testability were the point. It isn't. Testability is a <strong>consequence</strong> of proper dependency direction, not the motivation for it.</p>
+  <p>The real reason you can test a ViewModel with a mock repository: the ViewModel literally cannot import the real Repository without violating the dependency rule. <strong>The architecture forces you into testable seams.</strong></p>
+  <div class="callout"><strong>Diagnostic:</strong> If testing a component requires mocking ten things, the component is doing too much — it has absorbed responsibilities from multiple layers. Test difficulty is a signal, not a test infrastructure problem.</div>
+</section>
+
+<!-- HOW TO PLACE LOGIC -->
+<section>
+  <h2>How to Place Any Piece of Logic</h2>
+  <p>When you don't know where something belongs, ask:</p>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Question</th><th>Answer → Layer</th></tr>
+      <tr><td>Does this change when the API shape changes?</td><td>Data layer</td></tr>
+      <tr><td>Does this change when the design changes?</td><td>Presentation layer</td></tr>
+      <tr><td>Is this a business rule true regardless of infrastructure?</td><td>Domain layer</td></tr>
+    </table>
+  </div>
+  <p>Three-second version: <em>"Domain owns the contracts. Data fulfills them. Presentation consumes them. None of the outer layers know about each other."</em></p>
+</section>
+
+<!-- COST OF VIOLATIONS -->
+<section>
+  <h2>Cost of Breaking the Rule</h2>
+  <p>Each violation creates a hidden coupling that only reveals itself when something changes.</p>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Violation</th><th>When it hurts</th></tr>
+      <tr><td>ViewModel imports DTO</td><td>Renaming a JSON field requires a ViewModel change</td></tr>
+      <tr><td>UseCase uses URLSession directly</td><td>Can't test the UseCase without a live network</td></tr>
+      <tr><td>Repository constructs a Domain model from raw JSON</td><td>API change breaks business logic</td></tr>
+      <tr><td>ViewController reads from a Repository</td><td>Navigation breaks when the data layer is refactored</td></tr>
+    </table>
+  </div>
+  <div class="callout"><strong>Compound effect:</strong> once a few violations exist, the architecture degrades rapidly — new code copies the pattern it sees. A single DTO import in a ViewModel becomes "that's just how we do it here" within weeks.</div>
+</section>
+
+<!-- COMMON ANTI-PATTERNS -->
+<section>
+  <h2>Common Anti-Patterns — Name Them</h2>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Anti-pattern</th><th>Sign</th></tr>
+      <tr><td>Fat ViewController</td><td>Network calls, validation, or state flags inside a ViewController</td></tr>
+      <tr><td>Layer violation</td><td>A UseCase imports a networking type; a ViewModel touches a DTO</td></tr>
+      <tr><td>Mapper bleed</td><td>Domain models constructed from raw API fields outside the Mapper</td></tr>
+      <tr><td>Hidden dependency</td><td>Concrete type grabbed from a singleton instead of injected via init</td></tr>
+      <tr><td>Stringly-typed params</td><td>Adding a field breaks every call site instead of one struct</td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- CONCURRENCY POSITIONING -->
+<section>
+  <h2>Combine vs async/await — Where Each Belongs</h2>
+  <div class="table-wrap">
+    <table>
+      <tr><th></th><th>Use for</th><th>Why</th></tr>
+      <tr><td>async/await</td><td>Data-fetching layer — UseCase, Repository</td><td>Simpler to read, structured cancellation, no AnyCancellable</td></tr>
+      <tr><td>Combine</td><td>Reactive binding layer — ViewModel → ViewController</td><td>@Published + sink for multiple UI elements reacting to one state change</td></tr>
+    </table>
+  </div>
+  <p>They compose fine — a <code>Task { }</code> inside a <code>sink</code> is valid when you need async work triggered by a publisher.</p>
+  <div class="rule"><strong>Rule:</strong> don't mix them for the same operation. async/await for fetching, Combine for broadcasting the result.</div>
+</section>
+
+<!-- ALGORITHM COMPLEXITY -->
+<section>
+  <h2>Algorithm Complexity — O Notation</h2>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Notation</th><th>Meaning</th><th>Swift example</th></tr>
+      <tr><td>O(1)</td><td>Constant — doesn't grow with input</td><td>Dictionary lookup by key</td></tr>
+      <tr><td>O(n)</td><td>Linear — one pass</td><td>filter, map, forEach, Dictionary(grouping:)</td></tr>
+      <tr><td>O(n log n)</td><td>Log-linear — sorting</td><td>sorted, sort</td></tr>
+      <tr><td>O(n²)</td><td>Quadratic — nested loops</td><td>Naive duplicate check — avoid, replace with a Set</td></tr>
+    </table>
+  </div>
+  <div class="callout"><strong>Chaining rule:</strong> when operations are chained, the slowest one dominates. filter O(n) → sort O(n log n) = total O(n log n).</div>
+  <p>What to say: <em>"My approach is X — that's O(?) because Y. If the dataset were much larger I'd consider Z."</em> Always name the complexity before you write the code.</p>
+</section>
+
 <div class="bottom-nav">
   <a href="index.html">← Home</a>
   <a class="center" href="index.html">●</a>
