@@ -5,7 +5,8 @@ enum PlaylistUIModelMapper {
         PlaylistUIModel(
             id: playlist.id,
             name: playlist.name,
-            description: playlist.description
+            description: playlist.description,
+            trackIds: playlist.trackIds
         )
     }
 }

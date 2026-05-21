@@ -104,7 +104,7 @@ extension TrackListViewController: UITableViewDelegate {
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
         let uiModel = viewModel.tracks[indexPath.row]
-        delegate?.didSelectTrack(id: uiModel.id)
+        delegate?.didSelectTrack(uiModel)
     }
 
     func scrollViewDidScroll(_ scrollView: UIScrollView) {

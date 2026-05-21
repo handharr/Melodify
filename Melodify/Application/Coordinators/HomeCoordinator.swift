@@ -1,20 +1,37 @@
 import UIKit
 
+protocol HomeDelegate: AnyObject {
+    func didSelectPlaylist(_ playlist: PlaylistUIModel)
+}
+
 final class HomeCoordinator: Coordinator {
     let navigationController = UINavigationController()
     private let trackRepository: TrackRepositoryProtocol
     private let playlistRepository: PlaylistRepositoryProtocol
+    private let analytics: AnalyticsServiceProtocol
 
-    init(trackRepository: TrackRepositoryProtocol, playlistRepository: PlaylistRepositoryProtocol) {
+    init(trackRepository: TrackRepositoryProtocol, playlistRepository: PlaylistRepositoryProtocol, analytics: AnalyticsServiceProtocol) {
         self.trackRepository = trackRepository
         self.playlistRepository = playlistRepository
+        self.analytics = analytics
     }
 
     func start() {
         let useCase = FetchHomeDataUseCase(trackRepository: trackRepository, playlistRepository: playlistRepository)
         let viewModel = HomeViewModel(fetchHomeData: useCase)
         let vc = HomeViewController(viewModel: viewModel)
+        vc.delegate = self
         vc.tabBarItem = UITabBarItem(title: "Home", image: UIImage(systemName: "house"), tag: 1)
         navigationController.viewControllers = [vc]
+    }
+}
+
+extension HomeCoordinator: HomeDelegate {
+    func didSelectPlaylist(_ playlist: PlaylistUIModel) {
+        analytics.track(.playlistOpened(id: playlist.id, name: playlist.name))
+        let useCase = PlaylistDetailUseCase(playlistRepository: playlistRepository, trackRepository: trackRepository)
+        let viewModel = PlaylistDetailViewModel(playlistId: playlist.id, useCase: useCase)
+        let vc = PlaylistDetailViewController(viewModel: viewModel)
+        navigationController.pushViewController(vc, animated: true)
     }
 }

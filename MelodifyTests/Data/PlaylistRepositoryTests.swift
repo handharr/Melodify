@@ -31,6 +31,16 @@ final class PlaylistRepositoryTests: XCTestCase {
         XCTAssertEqual(playlists[1].name, "Workout")
     }
 
+    func test_fetchPlaylist_translatesIdToRequest() async throws {
+        mockDataSource.fetchOneResult = .success(.stub(id: 5, name: "My Mix", trackIds: [10, 20]))
+
+        let playlist = try await sut.fetchPlaylist(id: 5, policy: .fresh)
+
+        XCTAssertEqual(mockDataSource.lastFetchOneRequest?.id, 5)
+        XCTAssertEqual(playlist.id, 5)
+        XCTAssertEqual(playlist.trackIds, [10, 20])
+    }
+
     func test_createPlaylist_translatesParamToRequest() async throws {
         mockDataSource.createResult = .success(.stub(id: 5, name: "New"))
         let param = CreatePlaylistParam(query: CreatePlaylistQuery(name: "New", description: "desc", trackIds: [1, 2, 3]))

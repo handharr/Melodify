@@ -10,11 +10,16 @@ final class AppCoordinator {
 
     func start() {
         let client = APIClient()
-        let trackRepository = TrackRepository(remoteDataSource: TrackRemoteDataSource(client: client))
+        let localDataSource = TrackLocalDataSource()
+        let trackRepository = TrackRepository(
+            remoteDataSource: TrackRemoteDataSource(client: client),
+            localDataSource: localDataSource
+        )
         let playlistRepository = PlaylistRepository(remoteDataSource: PlaylistRemoteDataSource(client: client))
+        let analytics = ConsoleAnalyticsService()
 
-        let search = SearchCoordinator(trackRepository: trackRepository)
-        let home = HomeCoordinator(trackRepository: trackRepository, playlistRepository: playlistRepository)
+        let search = SearchCoordinator(trackRepository: trackRepository, analytics: analytics)
+        let home = HomeCoordinator(trackRepository: trackRepository, playlistRepository: playlistRepository, analytics: analytics)
         childCoordinators = [search, home]
 
         search.start()

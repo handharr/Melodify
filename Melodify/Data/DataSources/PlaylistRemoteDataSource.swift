@@ -13,6 +13,11 @@ final class PlaylistRemoteDataSource: PlaylistDataSourceProtocol {
         return try await client.get(url)
     }
 
+    func fetchPlaylist(_ request: FetchPlaylistRequest) async throws -> PlaylistDTO {
+        guard let url = URL(string: "\(baseURL)/\(request.id)") else { throw APIError.invalidURL }
+        return try await client.get(url)
+    }
+
     func createPlaylist(_ request: CreatePlaylistRequest) async throws -> PlaylistDTO {
         guard let url = URL(string: baseURL) else { throw APIError.invalidURL }
         return try await client.post(url, body: request)

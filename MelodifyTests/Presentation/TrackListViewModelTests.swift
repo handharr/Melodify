@@ -6,18 +6,21 @@ import Combine
 final class TrackListViewModelTests: XCTestCase {
     var sut: TrackListViewModel!
     var mockUseCase: MockSearchTracksUseCase!
+    var mockAnalytics: MockAnalyticsService!
     var cancellables: Set<AnyCancellable>!
 
     override func setUp() {
         super.setUp()
         mockUseCase = MockSearchTracksUseCase()
-        sut = TrackListViewModel(searchTracks: mockUseCase)
+        mockAnalytics = MockAnalyticsService()
+        sut = TrackListViewModel(searchTracks: mockUseCase, analytics: mockAnalytics)
         cancellables = []
     }
 
     override func tearDown() {
         sut = nil
         mockUseCase = nil
+        mockAnalytics = nil
         cancellables = nil
         super.tearDown()
     }
@@ -100,7 +103,7 @@ final class TrackListViewModelTests: XCTestCase {
         let expectation = expectation(description: "settled")
         sut.$isLoading
             .filter { !$0 }
-            .dropFirst() // skip initial false, wait for true→false transition
+            .dropFirst()
             .sink { _ in expectation.fulfill() }
             .store(in: &cancellables)
 
@@ -110,5 +113,20 @@ final class TrackListViewModelTests: XCTestCase {
         await fulfillment(of: [expectation], timeout: 1)
 
         XCTAssertEqual(mockUseCase.executedParams.count, 1)
+    }
+
+    func test_search_success_tracksAnalyticsEvent() async {
+        mockUseCase.stubbedResult = .success([.stub(), .stub(id: 2)])
+        let expectation = expectation(description: "tracks updated")
+        sut.$tracks.filter { !$0.isEmpty }.sink { _ in expectation.fulfill() }.store(in: &cancellables)
+
+        sut.search(query: "coldplay")
+        await fulfillment(of: [expectation], timeout: 1)
+
+        guard case .searchPerformed(let query, let count) = mockAnalytics.trackedEvents.first else {
+            return XCTFail("Expected searchPerformed event")
+        }
+        XCTAssertEqual(query, "coldplay")
+        XCTAssertEqual(count, 2)
     }
 }

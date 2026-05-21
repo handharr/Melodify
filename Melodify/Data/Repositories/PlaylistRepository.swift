@@ -12,6 +12,11 @@ final class PlaylistRepository: PlaylistRepositoryProtocol {
         return dtos.map { PlaylistMapper.toDomain($0) }
     }
 
+    func fetchPlaylist(id: Int, policy: FetchPolicy) async throws -> Playlist {
+        let dto = try await remoteDataSource.fetchPlaylist(FetchPlaylistRequest(id: id))
+        return PlaylistMapper.toDomain(dto)
+    }
+
     func createPlaylist(param: CreatePlaylistParam) async throws -> Playlist {
         let request = CreatePlaylistRequest(
             name: param.query.name,

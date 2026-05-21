@@ -6,8 +6,8 @@ extension Playlist {
         id: Int = 1,
         name: String = "Stub Playlist",
         description: String = "Stub Description",
-        tracks: [Track] = []
+        trackIds: [Int] = []
     ) -> Playlist {
-        Playlist(id: id, name: name, description: description, tracks: tracks)
+        Playlist(id: id, name: name, description: description, trackIds: trackIds)
     }
 }

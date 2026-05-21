@@ -4,6 +4,7 @@ import Combine
 @MainActor
 final class TrackListViewModel: ObservableObject {
     private let searchTracks: SearchTracksUseCaseProtocol
+    private let analytics: AnalyticsServiceProtocol
 
     @Published private(set) var tracks: [TrackUIModel] = []
     @Published private(set) var isLoading: Bool = false
@@ -13,8 +14,9 @@ final class TrackListViewModel: ObservableObject {
     private var currentPage: Int = 1
     private var currentGenre: String? = nil
 
-    init(searchTracks: SearchTracksUseCaseProtocol) {
+    init(searchTracks: SearchTracksUseCaseProtocol, analytics: AnalyticsServiceProtocol) {
         self.searchTracks = searchTracks
+        self.analytics = analytics
     }
 
     func search(query: String, genre: String? = nil) {
@@ -45,6 +47,9 @@ final class TrackListViewModel: ObservableObject {
                 )
                 let newTracks = try await searchTracks.execute(policy: policy, param: param)
                 tracks += newTracks.map(TrackUIModelMapper.toUIModel)
+                if policy.force {
+                    analytics.track(.searchPerformed(query: currentQuery, resultCount: tracks.count))
+                }
             } catch {
                 errorMessage = error.localizedDescription
             }

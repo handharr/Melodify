@@ -5,9 +5,10 @@ extension PlaylistDTO {
     static func stub(
         id: Int = 1,
         name: String = "Stub Playlist",
-        description: String = "Stub Description"
+        description: String = "Stub Description",
+        trackIds: [Int] = []
     ) -> PlaylistDTO {
-        PlaylistDTO(id: id, name: name, description: description)
+        PlaylistDTO(id: id, name: name, description: description, trackIds: trackIds)
     }
 }
 

@@ -5,16 +5,19 @@ import XCTest
 final class TrackRepositoryTests: XCTestCase {
     var sut: TrackRepository!
     var mockDataSource: MockTrackDataSource!
+    var mockLocalDataSource: MockTrackLocalDataSource!
 
     override func setUp() {
         super.setUp()
         mockDataSource = MockTrackDataSource()
-        sut = TrackRepository(remoteDataSource: mockDataSource)
+        mockLocalDataSource = MockTrackLocalDataSource()
+        sut = TrackRepository(remoteDataSource: mockDataSource, localDataSource: mockLocalDataSource)
     }
 
     override func tearDown() {
         sut = nil
         mockDataSource = nil
+        mockLocalDataSource = nil
         super.tearDown()
     }
 
@@ -60,6 +63,51 @@ final class TrackRepositoryTests: XCTestCase {
         let tracks = try await sut.searchTracks(policy: .fresh, param: param)
 
         XCTAssertEqual(tracks.count, 1)
+    }
+
+    func test_searchTracks_freshPolicy_alwaysHitsNetworkAndSavesToCache() async throws {
+        mockDataSource.searchResult = .success([TrackDTO.stub(trackId: 1)])
+        mockLocalDataSource.searchResult = [TrackDTO.stub(trackId: 99)] // cache has different data
+        let param = SearchTracksParam(query: SearchTracksQuery(term: "test"))
+
+        let tracks = try await sut.searchTracks(policy: .fresh, param: param)
+
+        XCTAssertEqual(tracks.first?.id, 1)           // network result, not cache
+        XCTAssertNotNil(mockLocalDataSource.savedSearchTracks) // saved to cache
+    }
+
+    func test_searchTracks_cachedPolicy_returnsCacheWhenAvailable() async throws {
+        mockLocalDataSource.searchResult = [TrackDTO.stub(trackId: 99)]
+        let param = SearchTracksParam(query: SearchTracksQuery(term: "test"))
+
+        let tracks = try await sut.searchTracks(policy: .cached, param: param)
+
+        XCTAssertEqual(tracks.first?.id, 99)          // cache result
+        XCTAssertNil(mockDataSource.lastSearchRequest) // network never called
+    }
+
+    func test_searchTracks_cachedPolicy_hitsNetworkOnCacheMiss() async throws {
+        mockLocalDataSource.searchResult = nil // no cache
+        mockDataSource.searchResult = .success([TrackDTO.stub(trackId: 1)])
+        let param = SearchTracksParam(query: SearchTracksQuery(term: "test"))
+
+        let tracks = try await sut.searchTracks(policy: .cached, param: param)
+
+        XCTAssertEqual(tracks.first?.id, 1)           // network fallback
+    }
+
+    func test_searchTracks_strictPolicy_throwsOnCacheMiss() async {
+        mockLocalDataSource.searchResult = nil
+        let param = SearchTracksParam(query: SearchTracksQuery(term: "test"))
+
+        do {
+            _ = try await sut.searchTracks(policy: .strict, param: param)
+            XCTFail("Expected error on cache miss with strict policy")
+        } catch APIError.notFound {
+            // expected
+        } catch {
+            XCTFail("Unexpected error type: \(error)")
+        }
     }
 
     func test_getTrackDetail_translatesPathToRequest() async throws {

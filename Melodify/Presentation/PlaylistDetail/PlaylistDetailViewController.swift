@@ -1,16 +1,14 @@
 import UIKit
 import Combine
 
-final class HomeViewController: UIViewController {
-    weak var delegate: HomeDelegate?
-
-    private let viewModel: HomeViewModel
+final class PlaylistDetailViewController: UIViewController {
+    private let viewModel: PlaylistDetailViewModel
     private var cancellables = Set<AnyCancellable>()
 
     private let tableView = UITableView()
     private let activityIndicator = UIActivityIndicatorView(style: .medium)
 
-    init(viewModel: HomeViewModel) {
+    init(viewModel: PlaylistDetailViewModel) {
         self.viewModel = viewModel
         super.init(nibName: nil, bundle: nil)
     }
@@ -19,12 +17,11 @@ final class HomeViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        title = "Home"
         view.backgroundColor = .systemBackground
         setupTableView()
         setupActivityIndicator()
         bindViewModel()
-        viewModel.loadHome()
+        viewModel.load()
     }
 
     private func setupTableView() {
@@ -32,7 +29,6 @@ final class HomeViewController: UIViewController {
         tableView.register(UITableViewCell.self, forCellReuseIdentifier: "cell")
         tableView.rowHeight = 56
         tableView.dataSource = self
-        tableView.delegate = self
         view.addSubview(tableView)
         NSLayoutConstraint.activate([
             tableView.topAnchor.constraint(equalTo: view.topAnchor),
@@ -52,9 +48,12 @@ final class HomeViewController: UIViewController {
     }
 
     private func bindViewModel() {
-        viewModel.$feedItems
+        viewModel.$detail
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in self?.tableView.reloadData() }
+            .sink { [weak self] detail in
+                self?.title = detail?.name
+                self?.tableView.reloadData()
+            }
             .store(in: &cancellables)
 
         viewModel.$isLoading
@@ -78,34 +77,18 @@ final class HomeViewController: UIViewController {
     }
 }
 
-extension HomeViewController: UITableViewDataSource {
+extension PlaylistDetailViewController: UITableViewDataSource {
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        viewModel.feedItems.count
+        viewModel.detail?.tracks.count ?? 0
     }
 
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = tableView.dequeueReusableCell(withIdentifier: "cell", for: indexPath)
+        guard let track = viewModel.detail?.tracks[indexPath.row] else { return cell }
         var content = cell.defaultContentConfiguration()
-        switch viewModel.feedItems[indexPath.row] {
-        case .banner(let model):
-            content.text = model.title
-            content.secondaryText = model.subtitle
-        case .track(let model):
-            content.text = model.title
-            content.secondaryText = model.artist
-        case .playlist(let model):
-            content.text = model.name
-            content.secondaryText = model.description
-        }
+        content.text = track.title
+        content.secondaryText = "\(track.artist) · \(track.duration)"
         cell.contentConfiguration = content
         return cell
-    }
-}
-
-extension HomeViewController: UITableViewDelegate {
-    func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-        tableView.deselectRow(at: indexPath, animated: true)
-        guard case .playlist(let model) = viewModel.feedItems[indexPath.row] else { return }
-        delegate?.didSelectPlaylist(model)
     }
 }

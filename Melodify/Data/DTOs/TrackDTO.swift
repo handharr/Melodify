@@ -4,7 +4,7 @@ struct iTunesSearchResponse: Decodable {
     let results: [TrackDTO]
 }
 
-struct TrackDTO: Decodable {
+struct TrackDTO: Codable {
     let trackId: Int?
     let trackName: String?
     let artistName: String?
@@ -13,5 +13,4 @@ struct TrackDTO: Decodable {
     let previewUrl: String?
     let primaryGenreName: String?
     let trackTimeMillis: Int?
-
 }
