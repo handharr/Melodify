@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Music Streaming System Design — iOS</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --border: #30363d;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --accent: #58a6ff;
+    --green: #3fb950;
+    --orange: #d29922;
+    --purple: #bc8cff;
+    --red: #f85149;
+    --keyword: #ff7b72;
+    --string: #a5d6ff;
+    --type: #ffa657;
+    --comment: #8b949e;
+  }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 15px;
+    line-height: 1.6;
+    padding-bottom: 100px;
+  }
+  nav {
+    position: sticky;
+    top: 0;
+    background: rgba(13,17,23,0.92);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    z-index: 100;
+  }
+  nav a { color: var(--muted); text-decoration: none; font-size: 13px; }
+  nav a:hover { color: var(--text); }
+  nav .sep { color: var(--border); }
+  nav .current { color: var(--accent); font-weight: 600; }
+  header {
+    padding: 32px 20px 24px;
+    border-bottom: 1px solid var(--border);
+  }
+  header .tag {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 8px;
+  }
+  header h1 { font-size: 26px; font-weight: 700; }
+  header p { color: var(--muted); font-size: 14px; margin-top: 6px; }
+
+  /* TOC */
+  .toc {
+    margin: 20px 20px 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+  }
+  .toc-title {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 10px;
+  }
+  .toc a {
+    display: block;
+    color: var(--accent);
+    text-decoration: none;
+    font-size: 13px;
+    padding: 3px 0;
+  }
+  .toc a:hover { color: var(--text); }
+  .toc .toc-sub { padding-left: 14px; color: var(--muted); font-size: 12px; }
+  .toc .toc-sub:hover { color: var(--text); }
+
+  section { padding: 28px 20px 0; }
+  h2 {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  h3 {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--orange);
+    margin: 24px 0 10px;
+  }
+  h3:first-child { margin-top: 0; }
+  h4 {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    margin: 16px 0 8px;
+  }
+  p { color: var(--muted); margin-bottom: 12px; line-height: 1.6; }
+  p strong { color: var(--text); }
+  ul, ol { color: var(--muted); padding-left: 20px; margin-bottom: 12px; }
+  li { margin-bottom: 4px; line-height: 1.5; }
+  li strong { color: var(--text); }
+
+  .stack {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 16px;
+  }
+  .stack-row {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .stack-row:last-child { border-bottom: none; }
+  .arrow { color: var(--border); font-size: 16px; margin-top: 1px; flex-shrink: 0; }
+  .stack-name { font-weight: 600; font-size: 14px; color: var(--text); min-width: 140px; flex-shrink: 0; }
+  .stack-desc { font-size: 13px; color: var(--muted); line-height: 1.4; }
+
+  code {
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 5px;
+    color: var(--string);
+  }
+  pre {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    overflow-x: auto;
+    margin-bottom: 16px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 12px;
+    line-height: 1.7;
+    color: var(--text);
+  }
+  .kw { color: var(--keyword); }
+  .ty { color: var(--type); }
+  .st { color: var(--string); }
+  .cm { color: var(--comment); font-style: italic; }
+  .nm { color: var(--accent); }
+  .gr { color: var(--green); }
+
+  table { width: 100%; border-collapse: collapse; margin-bottom: 16px; font-size: 13px; }
+  th {
+    background: var(--surface);
+    color: var(--muted);
+    font-weight: 600;
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    color: var(--muted);
+    vertical-align: top;
+  }
+  td:first-child { color: var(--text); font-weight: 500; }
+  tr:last-child td { border-bottom: none; }
+  .table-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 16px;
+  }
+  .callout {
+    background: rgba(88,166,255,0.08);
+    border: 1px solid rgba(88,166,255,0.3);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    font-size: 13px;
+    color: var(--text);
+    line-height: 1.5;
+  }
+  .callout strong { color: var(--accent); }
+  .rule {
+    background: rgba(63,185,80,0.08);
+    border: 1px solid rgba(63,185,80,0.3);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    font-size: 13px;
+    color: var(--text);
+    line-height: 1.5;
+  }
+  .rule strong { color: var(--green); }
+  .warn {
+    background: rgba(210,153,34,0.08);
+    border: 1px solid rgba(210,153,34,0.3);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    font-size: 13px;
+    color: var(--text);
+    line-height: 1.5;
+  }
+  .warn strong { color: var(--orange); }
+  .divider { border: none; border-top: 1px solid var(--border); margin: 28px 0 0; }
+  .bottom-nav {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: rgba(13,17,23,0.95);
+    backdrop-filter: blur(8px);
+    border-top: 1px solid var(--border);
+    padding: 12px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .bottom-nav a { color: var(--accent); text-decoration: none; font-size: 14px; font-weight: 500; }
+  .bottom-nav a.right { text-align: right; }
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="index.html">Home</a>
+  <span class="sep">›</span>
+  <span class="current">Music Streaming System Design</span>
+</nav>
+
+<header>
+  <div class="tag">System Design</div>
+  <h1>iOS Music Streaming App</h1>
+  <p>API design · data model · Clean Architecture · HLS streaming · pagination · offline playback</p>
+</header>
+
+<!-- TOC -->
+<div class="toc">
+  <div class="toc-title">Contents</div>
+  <a href="#requirements">Requirements</a>
+  <a href="#api">API Design</a>
+  <a href="#model">Data Model</a>
+  <a href="#architecture">High-Level Architecture</a>
+  <a href="#services">Domain Services</a>
+  <a href="#deepdive">Technical Deep Dives</a>
+  <a class="toc-sub" href="#pagination">1. Pagination — offset vs cursor</a>
+  <a class="toc-sub" href="#hls-why">2. What is HLS and why does it exist?</a>
+  <a class="toc-sub" href="#hls-how">3. How HLS works step by step</a>
+  <a class="toc-sub" href="#avplayer">4. AVPlayer and HLS on iOS</a>
+  <a class="toc-sub" href="#audiosession">5. AVAudioSession</a>
+  <a class="toc-sub" href="#storage">6. File storage — three tiers</a>
+  <a class="toc-sub" href="#offline">7. Offline playback</a>
+  <a class="toc-sub" href="#expiry">8. Short-lived URLs</a>
+  <a class="toc-sub" href="#lru">9. LRU Cache</a>
+  <a class="toc-sub" href="#badnetwork">10. Bad network — adaptive bitrate</a>
+  <a class="toc-sub" href="#failure">11. Complete network failure</a>
+  <a class="toc-sub" href="#failures">12. Common failure modes</a>
+  <a class="toc-sub" href="#seeking">13. Seeking during streaming</a>
+  <a class="toc-sub" href="#ownership">14. What you own vs AVPlayer</a>
+  <a href="#feedback">Key Takeaways</a>
+</div>
+
+<!-- REQUIREMENTS -->
+<section id="requirements">
+  <h2>Requirements</h2>
+  <h3>Functional</h3>
+  <div class="stack">
+    <div class="stack-row"><div class="stack-name">Library Screen</div><div class="stack-desc">Scrollable list of collections (playlists, albums, podcasts), sorted by recent or date added</div></div>
+    <div class="stack-row"><div class="stack-name">Collection Detail</div><div class="stack-desc">Cover art, metadata, track list — play from start or any index</div></div>
+    <div class="stack-row"><div class="stack-name">Playback Screen</div><div class="stack-desc">Album art, seek bar, shuffle / prev / play / next controls</div></div>
+  </div>
+
+  <h3>Non-Functional</h3>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Requirement</th><th>Detail</th></tr>
+      <tr><td>Offline support</td><td>Explicit "save locally" button — not automatic</td></tr>
+      <tr><td>Low network support</td><td>Adaptive bitrate streaming via HLS</td></tr>
+      <tr><td>Scale</td><td>100M DAU</td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- API DESIGN -->
+<section id="api">
+  <h2>API Design</h2>
+  <h3>Key Decisions</h3>
+  <ul>
+    <li><strong>REST + JSON,</strong> authentication assumed</li>
+    <li><strong>Cursor-based pagination</strong> over offset — prevents skips/duplicates when library order changes mid-scroll (desktop sync)</li>
+    <li><strong>Sort as API param,</strong> not client-side — client doesn't have full library context at 100M DAU scale</li>
+    <li><strong><code>stream-info</code> is a separate endpoint</strong> — keeps manifest URL short-lived without invalidating item metadata</li>
+  </ul>
+  <div class="callout"><strong>Why REST over GraphQL?</strong> REST maps to predictable URLs that CDNs and HTTP caches understand natively. GraphQL POST requests are harder to cache and add client complexity (query language, schema). For a mobile app with well-defined screens and known data shapes, REST is sufficient. GraphQL pays off when many clients need different field subsets — not the case here.</div>
+  <div class="callout"><strong>Why JSON over Protobuf?</strong> JSON is human-readable (debuggable in Charles/Proxyman), natively supported by <code>Codable</code>, and fast enough for library-sized payloads. Protobuf wins on bandwidth for very high-frequency or very large payloads — not a bottleneck for this design.</div>
+
+  <h3>Endpoints</h3>
+<pre><code><span class="gr">GET</span> /me/library?sort={<span class="st">recent</span>|<span class="st">date_added</span>}&cursor={}&limit={}
+→ {
+    libraryItems: [<span class="ty">LibraryItem</span>],
+    nextCursor: <span class="ty">Cursor</span>?
+  }
+
+<span class="gr">GET</span> /collections/{id}?cursor={}
+→ {
+    collectionSummary: <span class="ty">CollectionSummary</span>,
+    collectionDetail: <span class="ty">CollectionDetail</span>,
+    items: [<span class="ty">PlayableItem</span>],
+    nextCursor: <span class="ty">Cursor</span>?
+  }
+
+<span class="gr">GET</span> /item/{id}
+→ { item: <span class="ty">PlayableItem</span> }
+
+<span class="gr">GET</span> /item/{id}/stream-info
+→ {
+    type: <span class="st">"HLS"</span>,
+    manifestUrl: <span class="ty">String</span>,
+    expiresAt: <span class="ty">Date</span>
+  }</code></pre>
+</section>
+
+<!-- DATA MODEL -->
+<section id="model">
+  <h2>Data Model</h2>
+<pre><code><span class="kw">struct</span> <span class="ty">LibraryItem</span> {
+    id: <span class="ty">UUID</span>
+    collectionSummary: <span class="ty">CollectionSummary</span>
+    updatedAt: <span class="ty">Date</span>
+    lastListenAt: <span class="ty">Date</span>       <span class="cm">// drives "sort by recent"</span>
+}
+
+<span class="kw">struct</span> <span class="ty">CollectionSummary</span> {
+    id: <span class="ty">UUID</span>
+    title: <span class="ty">String</span>
+    itemCount: <span class="ty">Int</span>
+    type: playlist | album | podcast
+    artworkUrl: <span class="ty">URL</span>
+}
+
+<span class="cm">// Polymorphic — enum in Swift</span>
+<span class="kw">enum</span> <span class="ty">PlayableItem</span> {
+    <span class="kw">case</span> <span class="nm">track</span>(<span class="ty">Track</span>)      <span class="cm">// always starts from beginning</span>
+    <span class="kw">case</span> <span class="nm">episode</span>(<span class="ty">Episode</span>)  <span class="cm">// resumes from resumeTimestamp</span>
+}
+
+<span class="kw">struct</span> <span class="ty">Track</span>   { id, title, artist }
+<span class="kw">struct</span> <span class="ty">Episode</span> { id, title, artist, resumeTimestamp: <span class="ty">TimeInterval</span> }
+
+<span class="kw">struct</span> <span class="ty">PlayableAsset</span> {    <span class="cm">// streaming representation — not for list views</span>
+    itemId: <span class="ty">UUID</span>
+    streamInfo: <span class="ty">StreamInfo</span>
+}
+
+<span class="kw">struct</span> <span class="ty">StreamInfo</span> {
+    manifestUrl: <span class="ty">URL</span>
+    expiresAt: <span class="ty">Date</span>       <span class="cm">// client must refresh before expiry</span>
+}
+
+<span class="kw">struct</span> <span class="ty">PlaybackState</span> {
+    status: idle | playing | paused | seeking
+    asset: <span class="ty">PlayableAsset</span>?
+    queue: <span class="ty">PlaybackQueue</span>?
+}</code></pre>
+
+  <div class="callout"><strong>Why enum over protocol/class inheritance for PlayableItem?</strong> Enum gives exhaustive switch — the compiler forces you to handle every case. Protocol polymorphism lets new types slip in silently; class inheritance adds coupling and shared mutable state. For a closed set of types (track, episode) enum is the right tool — new cases are a compile error, not a runtime surprise.</div>
+  <div class="callout"><strong>PlayableItem vs PlayableAsset:</strong> <code>PlayableItem</code> is the list representation (title, artist, artwork). <code>PlayableAsset</code> is the streaming representation (signed URL, expiry). Keep them separate — list views should never receive short-lived signed URLs they don't need.</div>
+  <div class="callout"><strong>Why Track and Episode are separate types:</strong> <code>Episode</code> requires <code>resumeTimestamp</code> — it must resume from where the user left off. <code>Track</code> always starts from zero. The enum makes the compiler enforce this distinction at every call site.</div>
+</section>
+
+<!-- HIGH-LEVEL ARCHITECTURE -->
+<section id="architecture">
+  <h2>High-Level Architecture</h2>
+  <p>Pattern: <strong>MVVM + Clean Architecture</strong> — Presentation → Domain ← Data.</p>
+
+  <div class="callout"><strong>Why MVVM over MVP?</strong> In MVP the Presenter holds a reference back to the View via protocol, creating two-way coupling. MVVM breaks that — ViewModel exposes <code>@Published</code> state and doesn't know the View exists. ViewModels are easier to test (no mock View needed) and bind naturally to Combine. MVP made sense before reactive frameworks; MVVM is the current iOS standard.</div>
+  <div class="callout"><strong>Why MVVM over VIPER?</strong> VIPER splits a screen into 5 objects (View, Interactor, Presenter, Entity, Router). The overhead is justified for very large teams where each layer is owned by different people. For a solo/small team the boilerplate slows you down with no real benefit. MVVM + UseCase gives the same testability with half the files.</div>
+  <div class="callout"><strong>Why Clean Architecture over MVC?</strong> MVC in iOS degrades to Massive ViewController — business logic, networking, and layout end up in the same file. Clean Architecture enforces a dependency rule (Presentation → Domain ← Data) that makes each layer independently testable and replaceable. The cost is more files; the benefit is every layer can be tested without the others.</div>
+  <div class="callout"><strong>Why UIKit over SwiftUI?</strong> UIKit gives fine-grained control over scroll performance, custom transitions, and <code>AVPlayerViewController</code> integration — all critical for a music app. SwiftUI's <code>List</code> and animation model can't yet match UIKit for complex interactive layouts. SwiftUI is right for simple new screens; UIKit is preferred when you need full control over performance and native media playback.</div>
+  <div class="callout"><strong>Why GRDB over Core Data?</strong> Core Data has a complex concurrency model (<code>NSManagedObjectContext</code>) and generates verbose boilerplate. GRDB is plain SQLite with a Swift-first API — you write SQL you understand, get Combine publishers out of the box, no magic behind the scenes. Core Data wins if you need CloudKit sync or have an existing stack. For greenfield, GRDB is simpler and faster to iterate on.</div>
+
+  <h3>Layer Breakdown</h3>
+  <div class="stack">
+    <div class="stack-row"><div class="stack-name">Presentation</div><div class="stack-desc">ViewController + ViewModel · binds to UseCases and Domain Services</div></div>
+    <div class="stack-row"><div class="arrow">↓</div><div class="stack-name">UseCase</div><div class="stack-desc">Single operation, user-triggered · calls Repository · has I/O</div></div>
+    <div class="stack-row"><div class="arrow">↓</div><div class="stack-name">Domain Service</div><div class="stack-desc">Stateful/reusable logic · no I/O · pure business rules (PlayerService, StreamRefreshService)</div></div>
+    <div class="stack-row"><div class="arrow">↓</div><div class="stack-name">Repository</div><div class="stack-desc">Coordinates RemoteDataSource + LocalDataSource · applies FetchPolicy</div></div>
+    <div class="stack-row"><div class="arrow">↓</div><div class="stack-name">DataSource</div><div class="stack-desc">Remote: API calls · Local: GRDB (SSOT for metadata) / LocalFileDataSource (audio files)</div></div>
+  </div>
+
+  <h3>Data Flow — Library Screen</h3>
+<pre><code><span class="nm">LibraryViewModel</span>.load(policy: .cached)
+  → <span class="nm">FetchLibraryUseCase</span>.execute(policy:param:)
+    → <span class="nm">LibraryRepository</span>
+        1. localDataSource.fetch()     <span class="cm">// return cached rows → UI renders instantly</span>
+        2. remoteDataSource.fetch()    <span class="cm">// hit API in parallel</span>
+        3. write DTOs → LocalDataSource via <span class="ty">LibraryItemMapper</span>
+        4. LocalDataSource emits stream → ViewModel updates UI</code></pre>
+
+  <div class="callout"><strong>Why FetchPolicy over hardcoding network/cache logic per ViewModel?</strong> Without a policy, every ViewModel independently decides whether to hit the network — leading to inconsistent behaviour and duplicated cache logic. FetchPolicy centralises the decision into a typed value that travels ViewModel → UseCase → Repository. The caller declares intent (fresh / stale OK / cache only), the Repository enforces it. Easy to test, easy to change globally.</div>
+  <div class="rule"><strong>GRDB as Single Source of Truth:</strong> ViewModels never read directly from the network. All reads come from LocalDataSource. Repos write API responses into the DB, the DB emits a stream back up. Instant UI on launch (stale data), silently refreshed when API responds.</div>
+
+  <h3>Data Flow — Playback</h3>
+<pre><code><span class="nm">PlayerViewModel</span>.play(item, at: index)
+  → <span class="nm">PlayerService</span>  <span class="cm">// Domain Service — app-scoped singleton</span>
+      1. build queue from <span class="nm">PlayableItemLocalDataSource</span>  <span class="cm">// no network call</span>
+      2. resolve asset:
+           <span class="nm">DownloadLocalDataSource</span>: downloaded?
+             ├─ yes → <span class="st">file://</span> URL → <span class="nm">PlayerEngine</span> → AVPlayer
+             └─ no  → <span class="nm">FetchStreamInfoUseCase</span> → <span class="nm">MediaRemoteDataSource</span> → HLS CDN
+      3. delegate expiry to <span class="nm">StreamRefreshService</span>
+           near expiry? → background fetch new stream-info
+                          buffered chunks keep playing uninterrupted</code></pre>
+
+  <h3>Concept Translation</h3>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Video term</th><th>Your Clean Architecture equivalent</th></tr>
+      <tr><td><code>LibraryRepo</code></td><td><code>LibraryRepository: LibraryRepositoryProtocol</code></td></tr>
+      <tr><td><code>APIClient</code></td><td><code>RemoteDataSource</code> (one per domain)</td></tr>
+      <tr><td><code>LocalDB / GRDB</code></td><td><code>LocalDataSource</code> (one per domain)</td></tr>
+      <tr><td><code>LibraryStore</code> / <code>PlayableItemStore</code></td><td>Gone — this is just what <code>LocalDataSource</code> returns</td></tr>
+      <tr><td><code>PlaybackAssetResolver</code></td><td>Logic inside <code>PlayerService</code> (Domain Service)</td></tr>
+      <tr><td><code>DownloadStore</code></td><td><code>DownloadLocalDataSource</code> — maps <code>itemId → localFilePath</code></td></tr>
+      <tr><td><code>DownloadService</code></td><td><code>DownloadTrackUseCase</code> + <code>MediaRemoteDataSource</code> + <code>LocalFileDataSource</code></td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- DOMAIN SERVICES -->
+<section id="services">
+  <h2>Domain Services</h2>
+  <div class="callout"><strong>UseCase vs Domain Service:</strong> UseCase has I/O (calls a Repository). Domain Service is pure logic — no network, no DB. You can unit test it without mocking anything.</div>
+
+  <div class="table-wrap">
+    <table>
+      <tr><th></th><th>UseCase</th><th>Domain Service</th></tr>
+      <tr><td>Triggered by</td><td>User action</td><td>Another component</td></tr>
+      <tr><td>State</td><td>Stateless</td><td>Can be stateful</td></tr>
+      <tr><td>Has I/O?</td><td>Yes — via Repository</td><td>No</td></tr>
+      <tr><td>Lifetime</td><td>Per call</td><td>App-scoped or injected</td></tr>
+      <tr><td>Example</td><td><code>FetchLibraryUseCase</code></td><td><code>PlayerService</code>, <code>StreamRefreshService</code></td></tr>
+    </table>
+  </div>
+
+  <h3>PlayerService</h3>
+  <p>Owns <code>PlaybackState</code>, queue, shuffle/repeat logic. App-scoped singleton — must outlive any single screen.</p>
+  <div class="warn"><strong>Common gotcha:</strong> if <code>PlayerService</code> is owned by <code>PlayerViewModel</code>, it deallocates when the Player screen pops — the music stops. Register it in your DI container at app startup, not inside a ViewController.</div>
+
+  <h3>StreamRefreshService</h3>
+  <p>Pure logic — given <code>StreamInfo.expiresAt</code>, decides when to trigger <code>FetchStreamInfoUseCase</code>. No network calls itself. Checks if the current time is within a refresh threshold (e.g. 60s before expiry).</p>
+  <div class="rule"><strong>Background audio and PlayerService scope are the same problem.</strong> Both require the service to outlive any single screen. Solve the scope problem once and both are solved.</div>
+</section>
+
+<!-- TECHNICAL DEEP DIVES -->
+<section id="deepdive">
+  <h2>Technical Deep Dives</h2>
+
+  <!-- 1. PAGINATION -->
+  <h3 id="pagination">1. Pagination — offset vs cursor</h3>
+  <h4>Offset-based (simple, breaks on live data)</h4>
+<pre><code>GET /me/library?page=2&limit=20
+→ server: SELECT * FROM library OFFSET 20 LIMIT 20
+
+Page 1:  [A, B, C, D, E, F, G, H, I, J]
+                       ↑
+           New item "X" inserted here (desktop sync)
+
+Page 2:  [F, G, H, I, J, K, ...]  ← F already seen — duplicate</code></pre>
+
+  <h4>Cursor-based (stable across insertions)</h4>
+<pre><code>GET /me/library?cursor=eyJpZCI6IkYifQ&limit=20
+→ server: SELECT * FROM library WHERE id > :cursor LIMIT 20
+
+Page 1:  [A, B, C, D, E, F, G, H, I, J]  → nextCursor points to J
+                       ↑
+           New item "X" inserted here
+
+Page 2 using cursor→J:  [K, L, M, ...]  ← starts after J, unaffected</code></pre>
+
+  <p>The cursor is an <strong>opaque string</strong> — the client never parses it, just stores and sends it back. The server decides what's inside (ID, timestamp, composite key). This decouples client from server internals.</p>
+  <div class="callout"><strong>Why opaque string over a typed cursor struct?</strong> Exposing cursor internals (e.g. <code>{ id: "abc", timestamp: 123 }</code>) couples the client to server implementation. If the server changes its cursor strategy, every client breaks. An opaque base64 string hides that detail — the client echoes it back without understanding it. Same principle as treating an HTTP <code>ETag</code> as opaque.</div>
+
+  <div class="table-wrap">
+    <table>
+      <tr><th></th><th>Cursor</th><th>Offset</th></tr>
+      <tr><td>Live-synced data</td><td>✅ stable</td><td>❌ skips / duplicates</td></tr>
+      <tr><td>Static data</td><td>Overkill</td><td>✅ simpler</td></tr>
+      <tr><td>Jump to arbitrary page</td><td>❌</td><td>✅</td></tr>
+      <tr><td>Server implementation</td><td>Harder</td><td>Easy</td></tr>
+    </table>
+  </div>
+  <div class="rule"><strong>Rule:</strong> cursor when data moves (library synced across devices), offset when it doesn't (search results, static lists).</div>
+
+  <hr class="divider">
+
+  <!-- 2. WHAT IS HLS -->
+  <h3 id="hls-why">2. What is HLS and why does it exist?</h3>
+  <div class="callout"><strong>Why HLS over progressive download (plain MP3/AAC)?</strong> Progressive download streams a single file from start to finish — no quality switching. If the network drops, playback stalls immediately. HLS chunks the audio and lets the player switch quality levels between chunks. At 100M DAU on mobile networks, adaptive bitrate is non-negotiable.</div>
+  <div class="callout"><strong>Why HLS over DASH?</strong> Both are adaptive bitrate protocols. HLS is Apple's standard — <code>AVPlayer</code> has first-class native support with zero extra libraries. DASH requires a third-party player on iOS. Always default to HLS unless there's a specific cross-platform SDK requirement.</div>
+  <p>HLS (HTTP Live Streaming) solves one problem: <strong>audio quality degrades or buffers on slow networks.</strong></p>
+  <p>The naive approach — serve one large audio file — falls apart because you can't switch quality mid-way, the whole file must download before playback starts, and a leaked URL gives permanent access.</p>
+  <p>HLS solves all three by splitting audio into small chunks and letting the player pick quality dynamically.</p>
+
+  <hr class="divider">
+
+  <!-- 3. HOW HLS WORKS -->
+  <h3 id="hls-how">3. How HLS works — step by step</h3>
+<pre><code>1. Client calls GET /item/{id}/stream-info
+   → receives manifestUrl (.m3u8 file)
+
+2. Client fetches manifest from CDN:
+   #EXT-X-STREAM-INF:BANDWIDTH=128000
+   https://cdn.example.com/low/index.m3u8
+
+   #EXT-X-STREAM-INF:BANDWIDTH=320000
+   https://cdn.example.com/high/index.m3u8
+
+3. Client picks a quality, fetches its chunk playlist:
+   #EXTINF:6.0,
+   https://cdn.example.com/high/chunk_001.aac
+   #EXTINF:6.0,
+   https://cdn.example.com/high/chunk_002.aac
+   ...
+
+4. Client downloads chunks one at a time, plays in sequence
+5. Bandwidth drops → switch to low/ playlist → next chunk is lower bitrate
+   No restart. Seamless.</code></pre>
+  <div class="callout"><strong>Key insight:</strong> the client never downloads the whole file. It only ever has a few seconds of buffer ahead of the playhead.</div>
+
+  <hr class="divider">
+
+  <!-- 4. AVPLAYER -->
+  <h3 id="avplayer">4. AVPlayer and HLS on iOS</h3>
+  <p>You write almost no streaming code yourself — AVPlayer handles it all.</p>
+<pre><code><span class="cm">// This is all you need for HLS streaming</span>
+<span class="kw">let</span> url = <span class="ty">URL</span>(string: <span class="st">"https://cdn.example.com/manifest.m3u8"</span>)!
+<span class="kw">let</span> player = <span class="ty">AVPlayer</span>(url: url)
+player.play()</code></pre>
+  <p>AVPlayer internally: fetches and parses the manifest, monitors bandwidth, switches quality levels automatically, buffers chunks ahead of playback, retries failed chunk downloads.</p>
+  <p>Your job: give it the right URL and configure <code>AVAudioSession</code>.</p>
+
+  <hr class="divider">
+
+  <!-- 5. AUDIOSESSION -->
+  <h3 id="audiosession">5. AVAudioSession — required for real playback</h3>
+  <p>Without this, audio stops when the screen locks or the app backgrounds.</p>
+<pre><code><span class="cm">// Call once at app startup, before any playback</span>
+<span class="kw">try</span> <span class="ty">AVAudioSession</span>.sharedInstance().setCategory(.playback, mode: .default)
+<span class="kw">try</span> <span class="ty">AVAudioSession</span>.sharedInstance().setActive(<span class="kw">true</span>)</code></pre>
+  <p>Also requires <code>audio</code> background mode in <code>Info.plist</code>:</p>
+<pre><code>&lt;key&gt;UIBackgroundModes&lt;/key&gt;
+&lt;array&gt;
+    &lt;string&gt;audio&lt;/string&gt;
+&lt;/array&gt;</code></pre>
+
+  <hr class="divider">
+
+  <!-- 6. FILE STORAGE -->
+  <h3 id="storage">6. File storage — three tiers</h3>
+  <div class="stack">
+    <div class="stack-row"><div class="stack-name">Tier 1 — Memory buffer</div><div class="stack-desc">AVPlayer owns this. A few seconds of decoded audio ahead of the playhead. Freed on track change. You never touch it.</div></div>
+    <div class="stack-row"><div class="stack-name">Tier 2 — LRU disk cache</div><div class="stack-desc">Recently streamed chunk files. Max 5 GB, evicts least-recently-used when full. If user replays a track, skip the network. You manage this via <code>DownloadService</code>.</div></div>
+    <div class="stack-row"><div class="stack-name">Tier 3 — Explicit download</div><div class="stack-desc">User tapped "Save for offline." Full track stored permanently. Never evicted — only removed when user deletes. Separate from Tier 2.</div></div>
+  </div>
+  <div class="warn"><strong>Why Tier 2 and Tier 3 must be separate stores:</strong> if they shared storage, streaming cache pressure could evict a track the user explicitly saved for offline. Separate <code>LocalFileDataSource</code> instances prevent this entirely.</div>
+  <div class="callout"><strong>Why LRU over FIFO or LFU eviction?</strong> FIFO evicts the oldest item regardless of recent use — you'd evict an album played daily. LFU favours popular items but punishes newly added content and is expensive to track. LRU evicts what hasn't been touched recently — a good proxy for "user probably doesn't need this." Simple to implement, good real-world performance for media caches.</div>
+  <div class="callout"><strong>Why 5 GB?</strong> Roughly 40–60 full albums at 128kbps. Enough for meaningful background caching without dominating a typical iPhone's storage. Expose it as a user setting ("Storage limit") so users can tune it.</div>
+
+  <hr class="divider">
+
+  <!-- 7. OFFLINE -->
+  <h3 id="offline">7. Offline playback — how AVPlayer reads local files</h3>
+  <p>When a track is fully downloaded, skip the CDN entirely and hand a <code>file://</code> URL to AVPlayer:</p>
+<pre><code><span class="cm">// Online path</span>
+<span class="kw">let</span> url = <span class="ty">URL</span>(string: <span class="st">"https://cdn.example.com/manifest.m3u8"</span>)!
+
+<span class="cm">// Offline path — AVPlayer doesn't care which one it is</span>
+<span class="kw">let</span> url = <span class="ty">URL</span>(fileURLWithPath: <span class="st">"/var/mobile/.../track_123.m4a"</span>)
+
+<span class="ty">AVPlayer</span>(url: url).play()</code></pre>
+
+  <p><code>PlaybackAssetResolver</code> (inside <code>PlayerService</code>) makes the decision:</p>
+<pre><code><span class="nm">DownloadLocalDataSource</span>.filePath(for: itemId)
+  ├─ found  → file:// URL  (offline)
+  └─ nil    → fetch stream-info → HLS manifest URL  (streaming)</code></pre>
+  <div class="callout"><strong>Why <code>file://</code> URL over <code>AVAssetResourceLoadingDelegate</code>?</strong> <code>AVAssetResourceLoadingDelegate</code> lets you intercept every request AVPlayer makes and serve data yourself — useful for DRM, encryption, or proprietary chunk formats. But it adds significant complexity (manage loading requests, handle cancellation, byte-range requests). For standard downloaded audio files a plain <code>file://</code> URL is sufficient and far simpler. Use the delegate only when the file format or protection requires it.</div>
+  <div class="callout"><strong>Advanced:</strong> if files are stored in a protected/chunked format, use a custom <code>AVAssetResourceLoadingDelegate</code> to intercept requests and serve local binary data. Default to the simple <code>file://</code> path first.</div>
+
+  <hr class="divider">
+
+  <!-- 8. EXPIRY -->
+  <h3 id="expiry">8. Short-lived URLs — why and how</h3>
+  <h4>Why URLs expire</h4>
+  <p>A permanent CDN URL can be extracted from a packet sniffer and shared publicly. A signed URL with an expiry is useless after it expires.</p>
+<pre><code><span class="cm">// Server signs the URL</span>
+https://cdn.example.com/track_123.m3u8?token=abc&expires=1716490800
+
+<span class="cm">// CDN validates token + expiry on every request</span>
+<span class="cm">// After expiresAt → CDN returns 403</span></code></pre>
+
+  <h4>How the client handles it</h4>
+<pre><code><span class="nm">StreamRefreshService</span>.needsRefresh(for: streamInfo)
+  → checks: <span class="ty">Date</span>() > streamInfo.expiresAt - refreshThreshold  <span class="cm">(e.g. 60s)</span>
+  → if yes → background fetch new stream-info from API
+             swap manifest URL in PlayerEngine
+             buffered chunks already playing are unaffected</code></pre>
+  <div class="rule"><strong>The refresh is invisible to the user</strong> — chunks already in the buffer play out while the new manifest loads in the background.</div>
+
+  <hr class="divider">
+
+  <!-- 9. LRU -->
+  <h3 id="lru">9. LRU Cache — how it works</h3>
+  <p>LRU = Least Recently Used. When the cache is full, evict the item accessed least recently.</p>
+<pre><code>Cache (max 3 items for illustration):
+  [chunk_A (oldest), chunk_B, chunk_C (newest)]
+
+New chunk_D needs caching → cache full → evict chunk_A:
+  [chunk_B, chunk_C, chunk_D]
+
+User replays chunk_B → promoted to newest:
+  [chunk_C, chunk_D, chunk_B]</code></pre>
+  <p>In practice (max 5 GB): each chunk is ~50–200 KB. 5 GB holds tens of thousands of chunks — roughly 40–60 full albums. Eviction is by byte size, not item count.</p>
+  <p>Implement with <code>NSCache</code> (auto-evicts under memory pressure) or a manual SQLite-backed LRU using GRDB.</p>
+
+  <hr class="divider">
+
+  <!-- 10. BAD NETWORK -->
+  <h3 id="badnetwork">10. Bad network — adaptive bitrate in detail</h3>
+  <p>AVPlayer measures <strong>observed bandwidth</strong> and <strong>buffer level</strong> continuously:</p>
+<pre><code>Buffer > 30s AND bandwidth stable  → upgrade quality
+Buffer < 10s OR bandwidth dropping → downgrade quality
+Buffer = 0s                        → stall</code></pre>
+
+  <p>You don't control this — AVPlayer owns it. What you do own:</p>
+<pre><code><span class="cm">// Observe stalls — show buffering indicator</span>
+player.observe(\.timeControlStatus) { player, _ <span class="kw">in</span>
+    <span class="kw">switch</span> player.timeControlStatus {
+    <span class="kw">case</span> .playing:               <span class="cm">// hide spinner</span>
+    <span class="kw">case</span> .waitingToPlayAtSpecifiedRate: <span class="cm">// show spinner</span>
+    <span class="kw">case</span> .paused:                <span class="cm">// user paused or ended</span>
+    }
+}
+
+<span class="cm">// Data saver mode — cap quality from client side</span>
+player.currentItem?.preferredPeakBitRate = <span class="nm">128_000</span>  <span class="cm">// cap at 128kbps</span>
+player.currentItem?.preferredPeakBitRate = <span class="nm">0</span>         <span class="cm">// 0 = no cap (default)</span></code></pre>
+
+  <hr class="divider">
+
+  <!-- 11. COMPLETE FAILURE -->
+  <h3 id="failure">11. Complete network failure — retry strategy</h3>
+  <p>When network cuts out entirely (airplane mode, tunnel):</p>
+  <ul>
+    <li>AVPlayer plays out existing buffer (~15–30s)</li>
+    <li>Buffer hits zero → stall → <code>timeControlStatus = .waitingToPlayAtSpecifiedRate</code></li>
+    <li>AVPlayer automatically retries when network returns — no code needed</li>
+    <li>Playback resumes from where it stalled</li>
+  </ul>
+
+  <p>What you DO need to handle — distinguish stall from error:</p>
+<pre><code><span class="cm">// Track finished normally</span>
+<span class="ty">NotificationCenter</span>.default.addObserver(
+    forName: .AVPlayerItemDidPlayToEndTime, ...
+) { _ <span class="kw">in</span> <span class="cm">// advance queue</span> }
+
+<span class="cm">// Actual error — corrupted chunk, 403, bad URL</span>
+<span class="ty">NotificationCenter</span>.default.addObserver(
+    forName: .AVPlayerItemFailedToPlayToEndTime, ...
+) { _ <span class="kw">in</span> <span class="cm">// show error, offer retry</span> }</code></pre>
+
+  <div class="table-wrap">
+    <table>
+      <tr><th>Event</th><th>Cause</th><th>AVPlayer recovers?</th><th>You act?</th></tr>
+      <tr><td><code>waitingToPlayAtSpecifiedRate</code></td><td>Slow/no network</td><td>Yes, auto</td><td>Show spinner only</td></tr>
+      <tr><td><code>AVPlayerItemPlaybackStalled</code></td><td>Buffer ran dry</td><td>Yes, auto</td><td>Show spinner only</td></tr>
+      <tr><td><code>AVPlayerItemFailedToPlayToEndTime</code></td><td>Corrupt chunk, 403</td><td>No</td><td>Show error + retry</td></tr>
+    </table>
+  </div>
+
+  <hr class="divider">
+
+  <!-- 12. FAILURE MODES -->
+  <h3 id="failures">12. Common failure modes</h3>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Failure</th><th>How to handle</th></tr>
+      <tr><td>Stream URL expires mid-playback</td><td><code>StreamRefreshService</code> refreshes before expiry threshold</td></tr>
+      <tr><td>Network drops mid-stream</td><td>Observe <code>timeControlStatus</code>, show spinner — AVPlayer recovers</td></tr>
+      <tr><td>Offline file deleted externally</td><td>Check file exists before handing URL to AVPlayer, fall back to stream</td></tr>
+      <tr><td>App killed during download</td><td><code>DownloadService</code> checks file integrity on resume, restarts incomplete</td></tr>
+      <tr><td>LRU cache full</td><td>Silent eviction — user re-downloads on next play</td></tr>
+    </table>
+  </div>
+
+  <hr class="divider">
+
+  <!-- 13. SEEKING -->
+  <h3 id="seeking">13. Seeking during streaming</h3>
+  <p>Seeking in HLS is different from seeking in a local file — you're jumping between chunks, not byte offsets.</p>
+<pre><code>User drags seek bar to 2:30 (150s)
+
+AVPlayer calculates which chunk contains t=150s:
+  chunk_025 = 144–150s  ← target
+
+AVPlayer:
+  1. Discards buffered chunks ahead of current position
+  2. Fetches chunk_025 from CDN
+  3. Resumes buffering forward from chunk_026
+  4. Playback resumes at t=150s</code></pre>
+
+  <p>The chunk containing the seek target must download before playback resumes — this is the brief pause on slow networks.</p>
+
+  <h4>Implementing the seek bar</h4>
+<pre><code><span class="cm">// Drive seek bar position — fires every 0.5s</span>
+<span class="kw">let</span> interval = <span class="ty">CMTime</span>(seconds: <span class="nm">0.5</span>, preferredTimescale: <span class="ty">CMTimeScale</span>(<span class="ty">NSEC_PER_SEC</span>))
+player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { time <span class="kw">in</span>
+    <span class="kw">let</span> current = <span class="ty">CMTimeGetSeconds</span>(time)
+    <span class="kw">let</span> duration = <span class="ty">CMTimeGetSeconds</span>(player.currentItem?.duration ?? .zero)
+    progress = current / duration   <span class="cm">// 0.0 → 1.0</span>
+}
+
+<span class="cm">// User finishes dragging</span>
+<span class="kw">func</span> <span class="nm">seek</span>(to fraction: <span class="ty">Double</span>) {
+    <span class="kw">guard let</span> duration = player.currentItem?.duration <span class="kw">else</span> { <span class="kw">return</span> }
+    <span class="kw">let</span> target = <span class="ty">CMTime</span>(seconds: <span class="ty">CMTimeGetSeconds</span>(duration) * fraction,
+                         preferredTimescale: <span class="nm">600</span>)
+    <span class="cm">// .positiveInfinity = chunk-boundary accuracy, faster — right for music</span>
+    player.seek(to: target, toleranceBefore: .positiveInfinity, toleranceAfter: .positiveInfinity)
+}</code></pre>
+
+  <div class="table-wrap">
+    <table>
+      <tr><th>Tolerance</th><th>Accuracy</th><th>Speed</th><th>Use for</th></tr>
+      <tr><td><code>.zero / .zero</code></td><td>Frame-accurate</td><td>Slower</td><td>Video scrubbing</td></tr>
+      <tr><td><code>.positiveInfinity</code></td><td>Chunk-boundary</td><td>Faster</td><td>Music ✅</td></tr>
+    </table>
+  </div>
+
+  <div class="warn"><strong>PlaybackState during seek is transient.</strong> <code>.seeking</code> must always resolve back to <code>.playing</code> or <code>.paused</code> in the completion handler. Never leave the state machine stuck at <code>.seeking</code>.</div>
+
+  <hr class="divider">
+
+  <!-- 14. OWNERSHIP -->
+  <h3 id="ownership">14. What you own vs what AVPlayer owns</h3>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Responsibility</th><th>Owner</th></tr>
+      <tr><td>Fetching and playing chunks</td><td>AVPlayer</td></tr>
+      <tr><td>Switching quality levels</td><td>AVPlayer</td></tr>
+      <tr><td>Buffering ahead of playhead</td><td>AVPlayer</td></tr>
+      <tr><td>Retrying on network recovery</td><td>AVPlayer</td></tr>
+      <tr><td>Online vs offline path decision</td><td><code>PlayerService</code> (your code)</td></tr>
+      <tr><td>Refreshing expired manifest URLs</td><td><code>StreamRefreshService</code> (your code)</td></tr>
+      <tr><td>Writing chunks to LRU disk cache</td><td><code>DownloadService</code> (your code)</td></tr>
+      <tr><td>Managing explicit offline downloads</td><td><code>DownloadService</code> (your code)</td></tr>
+      <tr><td>Background audio session config</td><td><code>PlayerService</code> at app startup (your code)</td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- KEY TAKEAWAYS -->
+<section id="feedback">
+  <h2>Key Takeaways</h2>
+  <div class="rule"><strong>State principles first, then draw</strong> — architecture rationale before the diagram.</div>
+  <div class="rule"><strong>Walk the data flow end-to-end after drawing</strong> — out loud, top to bottom. Catches missing repo dependencies and edge cases live.</div>
+  <div class="rule"><strong>Always wrap the DB</strong> — never let repos talk directly to GRDB types. Add a Store/abstraction layer on top.</div>
+  <div class="rule"><strong>Go deep on complex topics proactively</strong> — don't wait to be asked. Signed URL expiry, offline edge cases, stall vs error distinction.</div>
+  <div class="callout"><strong>The two things most people get wrong:</strong> (1) <code>PlayerService</code> scoped to a ViewController instead of app-level — music stops when screen pops. (2) Conflating a network stall with a playback error — they require completely different handling.</div>
+</section>
+
+<div class="bottom-nav">
+  <a href="index.html">← Home</a>
+  <a class="right" href="architecture-101.html">Architecture 101 →</a>
+</div>
+
+</body>
+</html>
