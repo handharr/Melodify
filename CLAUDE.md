@@ -49,3 +49,4 @@ Window is wired in `application(_:didFinishLaunchingWithOptions:)`.
 | `temp-dir/progress.md` | Session progress, file list, pending tasks |
 | `temp-dir/mockapi-setup.md` | MockAPI.io setup + endpoint reference |
 | `temp-dir/hr-itvw.md` | HR interview notes |
+| `temp-dir/ios-music-streaming-system-design.md` | iOS music streaming system design — HLS, architecture, streaming deep dive |
