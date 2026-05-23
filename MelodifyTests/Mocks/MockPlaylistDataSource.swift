@@ -1,7 +1,7 @@
 import Foundation
 @testable import Melodify
 
-final class MockPlaylistDataSource: PlaylistDataSourceProtocol {
+final class MockPlaylistDataSource: PlaylistRemoteDataSourceProtocol {
     var fetchResult: Result<[PlaylistDTO], Error> = .success([])
     var fetchOneResult: Result<PlaylistDTO, Error> = .success(.stub())
     var createResult: Result<PlaylistDTO, Error> = .success(.stub())

@@ -1,6 +1,6 @@
 import Foundation
 
-final class PlaylistRemoteDataSource: PlaylistDataSourceProtocol {
+final class PlaylistRemoteDataSource: PlaylistRemoteDataSourceProtocol {
     private let client: APIClientProtocol
     private let baseURL = "https://6a09e642e7e3f433d483900b.mockapi.io/api/v1/playlist"
 

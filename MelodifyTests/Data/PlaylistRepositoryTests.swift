@@ -24,7 +24,7 @@ final class PlaylistRepositoryTests: XCTestCase {
             .stub(id: 2, name: "Workout")
         ])
 
-        let playlists = try await sut.fetchPlaylists(policy: .fresh)
+        let playlists = try await sut.fetchPlaylists()
 
         XCTAssertEqual(playlists.count, 2)
         XCTAssertEqual(playlists[0].id, 1)
@@ -34,7 +34,7 @@ final class PlaylistRepositoryTests: XCTestCase {
     func test_fetchPlaylist_translatesIdToRequest() async throws {
         mockDataSource.fetchOneResult = .success(.stub(id: 5, name: "My Mix", trackIds: [10, 20]))
 
-        let playlist = try await sut.fetchPlaylist(id: 5, policy: .fresh)
+        let playlist = try await sut.fetchPlaylist(id: 5)
 
         XCTAssertEqual(mockDataSource.lastFetchOneRequest?.id, 5)
         XCTAssertEqual(playlist.id, 5)
@@ -70,7 +70,7 @@ final class PlaylistRepositoryTests: XCTestCase {
         mockDataSource.fetchResult = .failure(APIError.networkError(URLError(.notConnectedToInternet)))
 
         do {
-            _ = try await sut.fetchPlaylists(policy: .fresh)
+            _ = try await sut.fetchPlaylists()
             XCTFail("Expected error")
         } catch {
             XCTAssertNotNil(error)

@@ -7,17 +7,15 @@ final class MockPlaylistRepository: PlaylistRepositoryProtocol {
     var createResult: Result<Playlist, Error> = .success(.stub())
     var updateResult: Result<Playlist, Error> = .success(.stub())
 
-    private(set) var lastFetchPolicy: FetchPolicy?
     private(set) var lastFetchOneId: Int?
     private(set) var lastCreateParam: CreatePlaylistParam?
     private(set) var lastUpdateParam: UpdatePlaylistParam?
 
-    func fetchPlaylists(policy: FetchPolicy) async throws -> [Playlist] {
-        lastFetchPolicy = policy
+    func fetchPlaylists() async throws -> [Playlist] {
         return try fetchResult.get()
     }
 
-    func fetchPlaylist(id: Int, policy: FetchPolicy) async throws -> Playlist {
+    func fetchPlaylist(id: Int) async throws -> Playlist {
         lastFetchOneId = id
         return try fetchOneResult.get()
     }

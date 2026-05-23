@@ -14,7 +14,7 @@ final class PlaylistDetailUseCase: PlaylistDetailUseCaseProtocol {
     }
 
     func execute(policy: FetchPolicy, param: PlaylistDetailParam) async throws -> PlaylistDetail {
-        let playlist = try await playlistRepository.fetchPlaylist(id: param.path.playlistId, policy: policy)
+        let playlist = try await playlistRepository.fetchPlaylist(id: param.path.playlistId)
 
         let trackRepo = trackRepository
         let detailParams = playlist.trackIds.map { GetTrackDetailParam(path: GetTrackDetailPath(id: $0)) }

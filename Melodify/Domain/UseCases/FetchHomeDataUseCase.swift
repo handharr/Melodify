@@ -16,7 +16,7 @@ final class FetchHomeDataUseCase: FetchHomeDataUseCaseProtocol {
     func execute(policy: FetchPolicy, param: FetchHomeDataParam) async throws -> HomeData {
         let trackParam = SearchTracksParam(query: param.query.trackQuery)
         async let tracks = trackRepository.searchTracks(policy: policy, param: trackParam)
-        async let playlists = playlistRepository.fetchPlaylists(policy: policy)
+        async let playlists = playlistRepository.fetchPlaylists()
         return HomeData(featuredTracks: try await tracks, playlists: try await playlists)
     }
 }

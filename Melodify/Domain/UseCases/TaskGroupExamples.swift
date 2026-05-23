@@ -53,7 +53,7 @@ func fetchHomeData(
             return .tracks(tracks)
         }
         group.addTask {
-            let playlists = try await playlistRepository.fetchPlaylists(policy: .cached)
+            let playlists = try await playlistRepository.fetchPlaylists()
             return .playlists(playlists)
         }
 
@@ -111,7 +111,7 @@ func fetchHomeDataAsyncLet(
     trackParam: SearchTracksParam
 ) async throws -> HomeData {
     async let tracks = trackRepository.searchTracks(policy: .cached, param: trackParam)
-    async let playlists = playlistRepository.fetchPlaylists(policy: .cached)
+    async let playlists = playlistRepository.fetchPlaylists()
 
     return HomeData(
         featuredTracks: try await tracks,

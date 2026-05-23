@@ -1,10 +1,10 @@
 import Foundation
 
 final class TrackRepository: TrackRepositoryProtocol {
-    private let remoteDataSource: TrackDataSourceProtocol
+    private let remoteDataSource: TrackRemoteDataSourceProtocol
     private let localDataSource: TrackLocalDataSourceProtocol
 
-    init(remoteDataSource: TrackDataSourceProtocol, localDataSource: TrackLocalDataSourceProtocol = TrackLocalDataSource()) {
+    init(remoteDataSource: TrackRemoteDataSourceProtocol, localDataSource: TrackLocalDataSourceProtocol) {
         self.remoteDataSource = remoteDataSource
         self.localDataSource = localDataSource
     }

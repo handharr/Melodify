@@ -1,18 +1,18 @@
 import Foundation
 
 final class PlaylistRepository: PlaylistRepositoryProtocol {
-    private let remoteDataSource: PlaylistDataSourceProtocol
+    private let remoteDataSource: PlaylistRemoteDataSourceProtocol
 
-    init(remoteDataSource: PlaylistDataSourceProtocol = PlaylistRemoteDataSource()) {
+    init(remoteDataSource: PlaylistRemoteDataSourceProtocol) {
         self.remoteDataSource = remoteDataSource
     }
 
-    func fetchPlaylists(policy: FetchPolicy) async throws -> [Playlist] {
+    func fetchPlaylists() async throws -> [Playlist] {
         let dtos = try await remoteDataSource.fetchPlaylists(FetchPlaylistsRequest())
         return dtos.map { PlaylistMapper.toDomain($0) }
     }
 
-    func fetchPlaylist(id: Int, policy: FetchPolicy) async throws -> Playlist {
+    func fetchPlaylist(id: Int) async throws -> Playlist {
         let dto = try await remoteDataSource.fetchPlaylist(FetchPlaylistRequest(id: id))
         return PlaylistMapper.toDomain(dto)
     }

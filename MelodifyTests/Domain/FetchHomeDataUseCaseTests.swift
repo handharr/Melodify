@@ -33,17 +33,6 @@ final class FetchHomeDataUseCaseTests: XCTestCase {
         XCTAssertEqual(result.playlists.first?.id, 10)
     }
 
-    func test_execute_passesCorrectPolicyToBothRepositories() async throws {
-        mockTrackRepository.stubbedResult = .success([])
-        mockPlaylistRepository.fetchResult = .success([])
-
-        let param = FetchHomeDataParam(query: FetchHomeDataQuery(trackQuery: SearchTracksQuery(term: "hits")))
-        _ = try await sut.execute(policy: .cached, param: param)
-
-        XCTAssertEqual(mockPlaylistRepository.lastFetchPolicy?.force, FetchPolicy.cached.force)
-        XCTAssertEqual(mockPlaylistRepository.lastFetchPolicy?.allowStale, FetchPolicy.cached.allowStale)
-    }
-
     func test_execute_trackRepositoryThrows_propagatesError() async {
         mockTrackRepository.stubbedResult = .failure(APIError.networkError(URLError(.notConnectedToInternet)))
         mockPlaylistRepository.fetchResult = .success([])

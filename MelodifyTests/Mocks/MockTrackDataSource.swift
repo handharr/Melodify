@@ -1,7 +1,7 @@
 import Foundation
 @testable import Melodify
 
-final class MockTrackDataSource: TrackDataSourceProtocol {
+final class MockTrackDataSource: TrackRemoteDataSourceProtocol {
     var searchResult: Result<[TrackDTO], Error> = .success([])
     var detailResult: Result<TrackDTO, Error> = .success(.stub())
 
