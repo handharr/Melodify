@@ -259,11 +259,14 @@
 <div class="toc">
   <div class="toc-title">Contents</div>
   <a href="#delta">Delta — What This Scenario Adds</a>
+  <a href="#screens">Screens in Scope</a>
   <a href="#requirements">Requirements</a>
   <a href="#api">API Design</a>
   <a href="#model">Data Model</a>
+  <a href="#hls">Streaming — HLS (Adaptive Bitrate)</a>
   <a href="#architecture">High-Level Architecture</a>
   <a href="#services">Domain Services</a>
+  <a href="#streaming">Streaming &amp; Playback</a>
   <a href="#deepdive">Technical Deep Dives</a>
   <a class="toc-sub" href="#pagination">1. Pagination — offset vs cursor</a>
   <a class="toc-sub" href="#hls-why">2. What is HLS and why does it exist?</a>
@@ -293,7 +296,10 @@
     <li>DTO → Mapper → Domain Model</li>
     <li><code>FetchPolicy</code> (.fresh / .cached / .strict) on all Repository reads</li>
     <li>Typed <code>Param</code> structs on every UseCase</li>
-    <li>Coordinator-based navigation, app-scoped services via init injection</li>
+    <li><code>@MainActor</code> on ViewModel — all state mutations on main thread, no <code>DispatchQueue.main.async</code></li>
+    <li><code>defer { isLoading = false }</code> — guaranteed cleanup on success and failure</li>
+    <li><code>[weak self]</code> in all closures to avoid retain cycles</li>
+    <li>Coordinator-based navigation, app-scoped services via manual init injection</li>
     <li>Mock-the-layer-below testing strategy</li>
   </ul>
 
@@ -304,10 +310,10 @@
       <tr><td>Local storage</td><td>LocalDataSource (cache)</td><td>Two tiers: metadata cache (GRDB) + file storage (LRU disk cache)</td></tr>
       <tr><td>File storage</td><td>Not in generic</td><td><code>LocalFileDataSource</code> — binary audio files on disk, LRU 5 GB cap</td></tr>
       <tr><td>Offline saves</td><td>Not in generic</td><td><code>DownloadLocalDataSource</code> — maps <code>itemId → localFilePath</code></td></tr>
-      <tr><td>Domain Services</td><td>Generic concept only</td><td><code>PlayerService</code> (app-scoped, owns queue + playback state) · <code>StreamRefreshService</code> (manifest expiry logic)</td></tr>
+      <tr><td>Domain Services</td><td>Generic (SessionService example)</td><td><code>PlayerService</code> (app-scoped, owns queue + playback state) · <code>StreamRefreshService</code> (manifest expiry logic)</td></tr>
       <tr><td>Streaming</td><td>Not in generic</td><td>HLS via <code>AVPlayer</code> — adaptive bitrate, chunk-based, short-lived signed URLs</td></tr>
       <tr><td>Pagination</td><td>Not in generic</td><td>Cursor-based (not offset) — library syncs live across devices</td></tr>
-      <tr><td>Playback asset resolution</td><td>Not in generic</td><td>Offline file → HLS manifest → <code>AVPlayer</code>, decided inside <code>PlayerService</code></td></tr>
+      <tr><td>Playback asset resolution</td><td>Not in generic</td><td><code>PlaybackAssetResolver</code>: offline file → HLS manifest → <code>AVPlayer</code></td></tr>
     </table>
   </div>
 
@@ -315,7 +321,20 @@
   <div class="rule"><strong><code>PlayerService</code> must be app-scoped.</strong> If owned by <code>PlayerViewModel</code>, it deallocates when the Player screen pops — music stops. Register at app startup in the DI composition root.</div>
   <div class="rule"><strong>Two separate <code>LocalFileDataSource</code> instances.</strong> Streaming LRU cache and explicit offline saves must never share storage — cache pressure must not evict user-saved tracks.</div>
   <div class="callout"><strong><code>stream-info</code> is a separate endpoint.</strong> Manifest URL is short-lived. Decoupled from item metadata so it can be refreshed without invalidating the rest of the model.</div>
-  <div class="callout"><strong>Queue is client-owned.</strong> Built locally from <code>PlayableItemLocalDataSource</code> — no server round-trip on every playback action.</div>
+  <div class="callout"><strong>Queue is client-owned.</strong> Built via <code>PlayableItemRepository</code> (.strict policy, local-only) by <code>PlayerService</code> — no server round-trip on every playback action.</div>
+</section>
+
+<!-- SCREENS IN SCOPE -->
+<section id="screens">
+  <h2>Screens in Scope</h2>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Screen</th><th>Description</th></tr>
+      <tr><td>Your Library</td><td>Scrollable list of collections (playlists, albums, podcasts), sortable by recent / date added</td></tr>
+      <tr><td>Playlist / Album</td><td>Cover art + metadata + track list — play from start or any track</td></tr>
+      <tr><td>Playback</td><td>Album art, seek bar, shuffle / prev / play / next controls</td></tr>
+    </table>
+  </div>
 </section>
 
 <!-- REQUIREMENTS -->
@@ -426,6 +445,25 @@
   <div class="callout"><strong>Why Track and Episode are separate types:</strong> <code>Episode</code> requires <code>resumeTimestamp</code> — it must resume from where the user left off. <code>Track</code> always starts from zero. The enum makes the compiler enforce this distinction at every call site.</div>
 </section>
 
+<!-- STREAMING — HLS -->
+<section id="hls">
+  <h2>Streaming — HLS (Adaptive Bitrate)</h2>
+
+  <div class="callout"><strong>Why HLS over progressive download (plain MP3/AAC)?</strong> Progressive download streams a single file from start to finish — no quality switching. If the network drops, playback stalls immediately. HLS chunks the audio and lets the player switch quality levels between chunks. At 100M DAU on mobile networks, adaptive bitrate is non-negotiable. Progressive download is fine for short clips or controlled environments; not for a global music app.</div>
+  <div class="callout"><strong>Why HLS over DASH (Dynamic Adaptive Streaming over HTTP)?</strong> Both are adaptive bitrate protocols. HLS is Apple's standard — <code>AVPlayer</code> has first-class native support with zero extra libraries. DASH requires a third-party player (e.g. ExoPlayer on Android). On iOS, always default to HLS unless there's a specific reason (e.g. cross-platform SDK requirement).</div>
+
+<pre><code><span class="cm">// Client calls /item/{id}/stream-info → gets manifestUrl (.m3u8 file)</span>
+
+Manifest:
+  { highQuality: [<span class="ty">URL</span>, ...], medium: [<span class="ty">URL</span>, ...], ... }
+
+Each quality bucket → chunks:
+  .../[quality]/[chunkId]   <span class="cm">← 2–10 second audio segments</span></code></pre>
+
+  <p><strong>Why short-lived URLs (<code>expiresAt</code>)?</strong> Direct audio URLs can be extracted from a packet sniffer and shared. Signing them with an expiry means a leaked URL becomes useless quickly. Client refreshes <code>stream-info</code> before expiry during playback.</p>
+  <p><strong>Adaptive bitrate:</strong> Player monitors bandwidth and switches quality levels mid-stream by requesting chunks from a lower/higher quality playlist — no full restart needed.</p>
+</section>
+
 <!-- HIGH-LEVEL ARCHITECTURE -->
 <section id="architecture">
   <h2>High-Level Architecture</h2>
@@ -461,9 +499,9 @@
   <h3>Data Flow — Playback</h3>
 <pre><code><span class="nm">PlayerViewModel</span>.play(item, at: index)
   → <span class="nm">PlayerService</span>  <span class="cm">// Domain Service — app-scoped singleton</span>
-      1. build queue from <span class="nm">PlayableItemLocalDataSource</span>  <span class="cm">// no network call</span>
+      1. build queue via <span class="nm">PlayableItemRepository</span> (<span class="ty">PlayableItemRepositoryProtocol</span>, policy: .strict)
       2. resolve asset:
-           <span class="nm">DownloadLocalDataSource</span>: downloaded?
+           <span class="nm">DownloadRepository</span> (<span class="ty">DownloadRepositoryProtocol</span>): downloaded?
              ├─ yes → <span class="st">file://</span> URL → <span class="nm">PlayerEngine</span> → AVPlayer
              └─ no  → <span class="nm">FetchStreamInfoUseCase</span> → <span class="nm">MediaRemoteDataSource</span> → HLS CDN
       3. delegate expiry to <span class="nm">StreamRefreshService</span>
@@ -508,6 +546,47 @@
   <h3>StreamRefreshService</h3>
   <p>Pure logic — given <code>StreamInfo.expiresAt</code>, decides when to trigger <code>FetchStreamInfoUseCase</code>. No network calls itself. Checks if the current time is within a refresh threshold (e.g. 60s before expiry).</p>
   <div class="rule"><strong>Background audio and PlayerService scope are the same problem.</strong> Both require the service to outlive any single screen. Solve the scope problem once and both are solved.</div>
+</section>
+
+<!-- STREAMING & PLAYBACK -->
+<section id="streaming">
+  <h2>Streaming &amp; Playback</h2>
+
+  <h3>HLS Flow (recap)</h3>
+<pre><code><span class="nm">PlayerService</span> triggers playback
+  → <span class="nm">PlaybackAssetResolver</span> checks <span class="nm">DownloadRepository</span> (<span class="ty">DownloadRepositoryProtocol</span>)
+      ├─ downloaded? → <span class="st">file://</span> URL → AVPlayer
+      └─ not downloaded? → <span class="nm">MediaRemoteDataSource</span> → HLS CDN
+                             → manifest (.m3u8)
+                             → quality buckets → chunks (2–10s each)
+                             → AVPlayer streams chunks adaptively</code></pre>
+
+  <h3>manifest <code>expiresAt</code> — Refresh During Playback</h3>
+  <ul>
+    <li><code>PlayerEngine</code> checks <code>expiresAt</code> before initiating each new chunk request</li>
+    <li>If near expiry → background task fetches a fresh <code>stream-info</code> via <code>FetchStreamInfoUseCase</code> → <code>MediaRemoteDataSource</code></li>
+    <li>Refresh happens <strong>without interrupting the active audio buffer</strong> — chunks already buffered keep playing while the new manifest loads</li>
+    <li>Owner: <code>PlayerService</code> / <code>PlayerEngine</code>, not the ViewModel</li>
+  </ul>
+
+  <h3>Offline Playback — Two Paths</h3>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Scenario</th><th>Approach</th></tr>
+      <tr><td>Standard downloaded files</td><td><code>PlaybackAssetResolver</code> returns <code>file://</code> URL directly to <code>AVPlayer</code> — no extra work</td></tr>
+      <tr><td>Protected / chunked format</td><td>Custom <code>AVAssetResourceLoadingDelegate</code> intercepts requests and serves local binary data</td></tr>
+    </table>
+  </div>
+  <p><code>DownloadLocalDataSource</code> holds the <code>itemId → localFilePath</code> mapping; <code>PlaybackAssetResolver</code> (inside <code>PlayerService</code>) accesses it via <code>DownloadRepository</code>.</p>
+  <div class="callout"><strong>Why <code>file://</code> URL over <code>AVAssetResourceLoadingDelegate</code>?</strong> <code>AVAssetResourceLoadingDelegate</code> lets you intercept every network request AVPlayer makes and serve data yourself — useful for DRM, encryption, or proprietary chunk formats. But it adds significant complexity (manage loading requests, handle cancellation, byte-range requests). For standard downloaded audio files a plain <code>file://</code> URL is sufficient and far simpler. Use the delegate only when the file format or protection requires it.</div>
+
+  <h3>Background Audio</h3>
+  <ul>
+    <li>App must declare <code>audio</code> background mode in project settings</li>
+    <li><code>AVAudioSession</code> category set to <code>.playback</code> — allows audio to continue when app backgrounds</li>
+    <li><code>PlayerService</code> must be <strong>app-level singleton</strong> (not owned by a ViewModel) so the audio thread stays alive across screen transitions and backgrounding</li>
+  </ul>
+  <div class="rule"><strong>Background audio and <code>PlayerService</code> scope are the same problem.</strong> Both require the service to outlive any single screen. Solve the scope problem once and both are solved.</div>
 </section>
 
 <!-- TECHNICAL DEEP DIVES -->
@@ -638,8 +717,8 @@ player.play()</code></pre>
 
 <span class="ty">AVPlayer</span>(url: url).play()</code></pre>
 
-  <p><code>PlaybackAssetResolver</code> (inside <code>PlayerService</code>) makes the decision:</p>
-<pre><code><span class="nm">DownloadLocalDataSource</span>.filePath(for: itemId)
+  <p><code>PlaybackAssetResolver</code> (inside <code>PlayerService</code>) makes the decision via <code>DownloadRepository</code> (injected as <code>DownloadRepositoryProtocol</code>):</p>
+<pre><code><span class="nm">DownloadRepository</span>.localFilePath(for: itemId)  <span class="cm">// protocol call — Domain knows nothing about DownloadLocalDataSource</span>
   ├─ found  → file:// URL  (offline)
   └─ nil    → fetch stream-info → HLS manifest URL  (streaming)</code></pre>
   <div class="callout"><strong>Why <code>file://</code> URL over <code>AVAssetResourceLoadingDelegate</code>?</strong> <code>AVAssetResourceLoadingDelegate</code> lets you intercept every request AVPlayer makes and serve data yourself — useful for DRM, encryption, or proprietary chunk formats. But it adds significant complexity (manage loading requests, handle cancellation, byte-range requests). For standard downloaded audio files a plain <code>file://</code> URL is sufficient and far simpler. Use the delegate only when the file format or protection requires it.</div>

@@ -15,7 +15,10 @@
 - DTO → Mapper → Domain Model
 - FetchPolicy (.fresh / .cached / .strict) on all Repository reads
 - Typed Param structs on every UseCase
-- Coordinator-based navigation, app-scoped services
+- `@MainActor` on ViewModel — all state mutations on main thread, no `DispatchQueue.main.async`
+- `defer { isLoading = false }` — guaranteed cleanup on success and failure
+- `[weak self]` in all closures to avoid retain cycles
+- Coordinator-based navigation, app-scoped services via manual init injection
 - Mock-the-layer-below testing strategy
 
 ### What this scenario adds
@@ -33,7 +36,7 @@
 - **`PlayerService` must be app-scoped** — if owned by a ViewController it deallocates when the screen pops and music stops
 - **Two separate `LocalFileDataSource` instances** — streaming LRU cache and explicit offline saves must never share storage (cache pressure must not evict user-saved tracks)
 - **`stream-info` is a separate endpoint** — manifest URL is short-lived; decoupled from item metadata so it can be refreshed without invalidating the rest of the model
-- **Queue is client-owned** — built locally from `PlayableItemLocalDataSource`, no server round-trip on every playback action
+- **Queue is client-owned** — built via `PlayableItemRepository` (.strict policy, local-only) by `PlayerService`; no server round-trip on every playback action
 
 ---
 
@@ -176,7 +179,7 @@ struct PlaybackState {
 
 ### Queue Ownership — Client-Side
 Queue is **not a server concept** — the client builds and manages it locally using items already fetched.  
-`PlayerService` acts as the controller: when the user taps "play from index N", `PlayerService` pulls from a local `PlayableItemStore` to construct the queue. No extra network call needed.
+`PlayerService` acts as the controller: when the user taps "play from index N", `PlayerService` calls `PlayableItemRepository` (`.strict` policy — local only, no network) to construct the queue. No extra network call needed.
 
 > **Interview note:** This is an important architectural decision — pushing queue state to the server would add latency on every playback action and complicate state sync across devices. Client ownership is simpler and sufficient for the stated requirements.
 
@@ -322,9 +325,9 @@ LibraryViewModel.load(policy: .cached)
 ```
 PlayerViewModel.play(item, at: index)
   → PlayerService [Domain Service — app-scoped]
-      1. builds queue from PlayableItemLocalDataSource (no network)
+      1. builds queue via PlayableItemRepository (PlayableItemRepositoryProtocol, policy: .strict)
       2. resolves asset:
-           DownloadLocalDataSource: downloaded?
+           DownloadRepository (DownloadRepositoryProtocol): downloaded?
              ├─ yes → file:// URL → PlayerEngine → AVPlayer
              └─ no  → FetchStreamInfoUseCase → MediaRemoteDataSource → HLS CDN
                        → manifest → chunks → AVPlayer streams adaptively
@@ -378,9 +381,9 @@ Two separate `LocalFileDataSource` instances — offline saves can never be evic
 ### HLS Flow (recap)
 ```
 PlayerService triggers playback
-  → PlaybackAssetResolver checks DownloadStore
+  → PlaybackAssetResolver checks DownloadRepository (DownloadRepositoryProtocol)
       ├─ downloaded? → file:// URL → AVPlayer
-      └─ not downloaded? → MediaAPIClient → HLS CDN
+      └─ not downloaded? → MediaRemoteDataSource → HLS CDN
                              → manifest (.m3u8)
                              → quality buckets → chunks (2–10s each)
                              → AVPlayer streams chunks adaptively
@@ -388,7 +391,7 @@ PlayerService triggers playback
 
 ### manifest `expiresAt` — Refresh During Playback
 - `PlayerEngine` checks `expiresAt` before initiating each new chunk request
-- If near expiry → background task fetches a fresh `stream-info` from `MediaAPIClient`
+- If near expiry → background task fetches a fresh `stream-info` via `FetchStreamInfoUseCase` → `MediaRemoteDataSource`
 - Refresh happens **without interrupting the active audio buffer** — chunks already buffered keep playing while the new manifest loads
 - Owner: `PlayerService` / `PlayerEngine`, not the ViewModel
 
@@ -399,7 +402,7 @@ PlayerService triggers playback
 | Standard downloaded files | `PlaybackAssetResolver` returns `file://` URL directly to `AVPlayer` — no extra work |
 | Protected / chunked format | Custom `AVAssetResourceLoadingDelegate` intercepts requests and serves local binary data |
 
-Initial implementation uses the simple `file://` path. `DownloadStore` holds the `itemId → localFilePath` mapping that `PlaybackAssetResolver` reads.
+Initial implementation uses the simple `file://` path. `DownloadLocalDataSource` holds the `itemId → localFilePath` mapping; `PlaybackAssetResolver` (inside `PlayerService`) accesses it via `DownloadRepository`.
 
 > **Why `file://` URL over `AVAssetResourceLoadingDelegate`?**
 > `AVAssetResourceLoadingDelegate` lets you intercept every network request AVPlayer makes and serve data yourself — useful for DRM, encryption, or proprietary chunk formats. But it adds significant complexity (manage loading requests, handle cancellation, deal with byte-range requests). For standard downloaded audio files, a plain `file://` URL is sufficient and far simpler. Use `AVAssetResourceLoadingDelegate` only when the file format or protection requires it.
@@ -626,11 +629,11 @@ let player = AVPlayer(url: url)
 player.play()
 ```
 
-`PlaybackAssetResolver` decides which URL to hand to `AVPlayer`:
+`PlaybackAssetResolver` (inside `PlayerService`) decides which URL to hand to `AVPlayer` by calling through `DownloadRepository` (injected via `DownloadRepositoryProtocol`):
 ```
-DownloadLocalDataSource.filePath(for: itemId)
+DownloadRepository.localFilePath(for: itemId)   // protocol call — Domain knows nothing about DownloadLocalDataSource
   ├─ found → file:// URL (offline)
-  └─ not found → fetch stream-info → HLS manifest URL (streaming)
+  └─ nil   → fetch stream-info → HLS manifest URL (streaming)
 ```
 
 ---
