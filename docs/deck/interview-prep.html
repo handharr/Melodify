@@ -89,16 +89,17 @@
   }
   .tl-item:not(:last-child) .tl-line {
     position: absolute;
-    left: 20px;
+    left: 22px;
     top: 40px;
     bottom: 0;
     width: 2px;
     background: var(--border);
   }
   .tl-dot {
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
+    min-width: 44px;
+    height: 28px;
+    border-radius: 14px;
+    padding: 0 8px;
     background: var(--surface);
     border: 2px solid var(--green);
     display: flex;
@@ -109,6 +110,8 @@
     color: var(--green);
     flex-shrink: 0;
     z-index: 1;
+    white-space: nowrap;
+    margin-top: 6px;
   }
   .tl-content {
     padding: 8px 0 24px;
