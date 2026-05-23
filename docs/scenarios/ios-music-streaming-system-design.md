@@ -20,6 +20,10 @@
 - `[weak self]` in all closures to avoid retain cycles
 - Coordinator-based navigation, app-scoped services via manual init injection
 - Mock-the-layer-below testing strategy
+- `async/await` for I/O; Combine for reactive binding to `@Published` state
+- `ThirdPartyDataSource` (SDK facade) — wraps third-party SDKs as a `RemoteDataSource`; app calls protocol, never SDK directly
+- Idempotency keys on mutations — client-generated UUID at `Param` call site for any retryable mutation
+- HTTP `409 ≠ 5xx` — concurrency conflicts and transient server errors must never share a code path
 
 ### What this scenario adds
 | Concept | Generic | Music Streaming |
@@ -329,7 +333,7 @@ PlayerViewModel.play(item, at: index)
       2. resolves asset:
            DownloadRepository (DownloadRepositoryProtocol): downloaded?
              ├─ yes → file:// URL → PlayerEngine → AVPlayer
-             └─ no  → FetchStreamInfoUseCase → MediaRemoteDataSource → HLS CDN
+             └─ no  → FetchStreamInfoUseCase → DownloadRepository (DownloadRepositoryProtocol) → MediaRemoteDataSource → HLS CDN
                        → manifest → chunks → AVPlayer streams adaptively
       3. delegates expiry check to StreamRefreshService [Domain Service]
            StreamRefreshService: is expiresAt within threshold?
@@ -383,7 +387,7 @@ Two separate `LocalFileDataSource` instances — offline saves can never be evic
 PlayerService triggers playback
   → PlaybackAssetResolver checks DownloadRepository (DownloadRepositoryProtocol)
       ├─ downloaded? → file:// URL → AVPlayer
-      └─ not downloaded? → MediaRemoteDataSource → HLS CDN
+      └─ not downloaded? → FetchStreamInfoUseCase → DownloadRepository (DownloadRepositoryProtocol) → MediaRemoteDataSource → HLS CDN
                              → manifest (.m3u8)
                              → quality buckets → chunks (2–10s each)
                              → AVPlayer streams chunks adaptively
@@ -633,7 +637,7 @@ player.play()
 ```
 DownloadRepository.localFilePath(for: itemId)   // protocol call — Domain knows nothing about DownloadLocalDataSource
   ├─ found → file:// URL (offline)
-  └─ nil   → fetch stream-info → HLS manifest URL (streaming)
+  └─ nil   → FetchStreamInfoUseCase → DownloadRepository → MediaRemoteDataSource → HLS manifest URL (streaming)
 ```
 
 ---

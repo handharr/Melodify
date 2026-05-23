@@ -295,6 +295,7 @@
   <div class="callout"><strong>MVVM over MVP</strong> — In MVP the Presenter holds a reference back to the View via protocol — two-way coupling. MVVM breaks that: ViewModel exposes <code>@Published</code> state and has no reference to the View. ViewModels are easier to test (no mock View needed) and bind naturally with Combine.</div>
   <div class="callout"><strong>MVVM over VIPER</strong> — VIPER splits a screen into 5 objects. The overhead is justified for very large teams where each layer is owned by a different person. For a small team, MVVM + UseCase gives the same testability with half the files.</div>
   <div class="callout"><strong>UIKit over SwiftUI</strong> — UIKit gives fine-grained control over scroll performance, custom transitions, and <code>AVPlayerViewController</code> integration. SwiftUI is right for simple new screens; UIKit is preferred when you need full control over performance and native framework integration.</div>
+  <div class="callout"><strong>Hybrid UIKit/SwiftUI within a single app</strong> is a valid pattern when different screens have different needs. Use UIKit for screens that require granular scroll lifecycle hooks (e.g. a paginated list at scale where you need <code>willDisplay cell</code> to trigger next-page fetches) and SwiftUI for state-driven screens with simpler layouts. The split is screen-by-screen — Coordinator wires them together; <code>UIHostingController</code> bridges SwiftUI content into a UIKit hierarchy. <strong>Rule of thumb:</strong> if a screen needs <code>UITableView</code> or <code>UICollectionView</code> lifecycle control, use UIKit. If it's primarily reactive state → UI, use SwiftUI.</div>
 </section>
 
 <!-- LAYER BREAKDOWN -->
@@ -341,6 +342,7 @@
     <div class="stack-row"><div class="stack-name">LocalDataSource</div><div class="stack-desc">Wraps persistence backend (UserDefaults / SQLite / GRDB). Returns DTOs — never Domain models. Repository never touches the storage backend directly.</div></div>
     <div class="stack-row"><div class="stack-name">DTO</div><div class="stack-desc">Mirrors the API or DB schema exactly. <code>Codable</code>. Disposable — only lives between the network/DB and the Mapper.</div></div>
     <div class="stack-row"><div class="stack-name">Mapper</div><div class="stack-desc">The only type that knows both DTO and Domain model. <code>static func toDomain(_ dto: DTO) -> Model?</code> Returns Optional — invalid data is silently dropped, never crashes.</div></div>
+    <div class="stack-row"><div class="stack-name">ThirdPartyDataSource</div><div class="stack-desc">SDK facade — wraps a third-party SDK (Stripe, Firebase, etc.) as a <code>RemoteDataSource</code>. Rest of the app calls a <code>RepositoryProtocol</code> — never the SDK directly. Swapping the SDK = one change in one DataSource file. Examples: <code>PaymentRemoteDataSource</code> (Stripe), <code>AnalyticsDataSource</code> (Firebase).</div></div>
   </div>
 
   <h4>DTO → Mapper → Domain Model flow</h4>
@@ -410,6 +412,8 @@
       → <span class="kw">defer</span>: isLoading = <span class="kw">false</span></code></pre>
 
   <div class="rule"><strong>Validate in the UseCase, before the Repository call.</strong> The Repository assumes its input is valid — it shouldn't know what "valid" means for the business. The UseCase is the gatekeeper.</div>
+
+  <div class="rule"><strong>Idempotency keys on mutations.</strong> For any mutation that could be retried (network timeout, app restart mid-request), generate a client-side UUID before building the request and include it as a field (e.g. <code>localId</code>). If the request is retried with the same UUID, the server returns the existing record rather than creating a duplicate. Applies to reservations, orders, payments — any operation where a duplicate would cause business harm. Generate the UUID at the <code>Param</code> struct call site, not inside the Repository or DataSource.</div>
 </section>
 
 <!-- NETWORKING -->
@@ -418,8 +422,24 @@
   <div class="stack">
     <div class="stack-row"><div class="stack-name">APIClient</div><div class="stack-desc">Generic <code>URLSession</code>-based HTTP client. <code>get&lt;T: Decodable&gt;(_ url:)</code>, <code>post&lt;T, B: Encodable&gt;(_ url:, body:)</code>, etc. No domain knowledge.</div></div>
     <div class="stack-row"><div class="stack-name">Request structs</div><div class="stack-desc">One per endpoint: <code>TrackSearchRequest</code>, <code>CreatePlaylistRequest</code>. Carries the fields needed to build the URL and body. Lives at <code>Data/Network/Requests/</code>.</div></div>
-    <div class="stack-row"><div class="stack-name">APIError</div><div class="stack-desc">Typed enum: <code>.invalidURL</code>, <code>.notFound</code>, <code>.networkError</code>, <code>.decodingError</code>. Propagates <code>async throws</code> up to ViewModel. ViewModel catches and sets <code>errorMessage: String?</code>.</div></div>
+    <div class="stack-row"><div class="stack-name">APIError</div><div class="stack-desc">Typed enum: <code>.invalidURL</code>, <code>.notFound</code>, <code>.networkError</code>, <code>.decodingError</code>, <code>.conflict</code>. Propagates <code>async throws</code> up to ViewModel. ViewModel catches and sets <code>errorMessage: String?</code>.</div></div>
   </div>
+
+  <h4>HTTP status code semantics — map at RemoteDataSource level, never in the ViewModel</h4>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Status</th><th>Meaning</th><th>Client action</th></tr>
+      <tr><td><code>400</code></td><td>Bad Request — malformed request</td><td>Log and show generic error</td></tr>
+      <tr><td><code>401</code></td><td>Unauthorized — session expired</td><td>Trigger re-auth flow</td></tr>
+      <tr><td><code>403</code></td><td>Forbidden — user lacks permission</td><td>Show access denied</td></tr>
+      <tr><td><code>404</code></td><td>Not Found — resource gone</td><td>Remove from local cache</td></tr>
+      <tr><td><code>409</code></td><td>Conflict — concurrency event (item claimed by another user)</td><td>Domain-specific UX — NOT a generic retry</td></tr>
+      <tr><td><code>5xx</code></td><td>Server error — transient</td><td>Show retry UI</td></tr>
+      <tr><td>Network timeout</td><td>Transient</td><td>Show retry UI</td></tr>
+    </table>
+  </div>
+  <div class="warn"><strong>409 and 5xx must never share a code path.</strong> A 409 means a specific domain event occurred (another user acted first) — it requires domain-specific UX ("room no longer available", "item already claimed"). A 5xx means "try again later." Conflating them produces a confusing user experience and masks real concurrency bugs.</div>
+
   <div class="rule"><strong>APIClient lives inside Data/Network/ — not a separate layer.</strong> It's an implementation detail of RemoteDataSources. Nothing in Domain or Presentation ever touches it.</div>
 </section>
 

@@ -36,6 +36,8 @@ VIPER splits a screen into 5 objects. The overhead is justified for very large t
 ### UIKit over SwiftUI
 UIKit gives fine-grained control over scroll performance, custom transitions, and `AVPlayerViewController` integration. SwiftUI is the right choice for new simple screens; UIKit is still preferred when you need full control over performance and native framework integration.
 
+**Hybrid UIKit/SwiftUI within a single app** is a valid pattern when different screens have different needs. Use UIKit for screens that require granular scroll lifecycle hooks (e.g. a paginated list at scale where you need `willDisplay cell` to trigger next-page fetches) and SwiftUI for state-driven screens with simpler layouts. The split is screen-by-screen — Coordinator wires them together, each `ViewController` hosts its SwiftUI content via `UIHostingController` when needed. Rule of thumb: if a screen needs `UITableView` or `UICollectionView` lifecycle control, use UIKit. If it's primarily reactive state → UI, use SwiftUI.
+
 ---
 
 ## Layer Breakdown
@@ -134,6 +136,12 @@ APIClient
   └─ generic HTTP client: get/post/put/delete
   └─ lives at Data/Network/ — not a separate layer
   └─ no domain knowledge
+
+ThirdPartyDataSource (SDK facade)
+  └─ wraps a third-party SDK (Stripe, Firebase, etc.) as a RemoteDataSource
+  └─ rest of the app calls a Repository protocol — never the SDK directly
+  └─ swapping the SDK = one change in one DataSource file
+  └─ examples: PaymentRemoteDataSource (Stripe), AnalyticsDataSource (Firebase)
 ```
 
 **DTO → Mapper → Domain Model flow:**
@@ -221,6 +229,8 @@ ViewController sends user input
       → defer: isLoading = false
 ```
 
+**Idempotency keys on mutations** — for any mutation that could be retried (network timeout, app restart during request), generate a client-side UUID before building the request and include it as a field (e.g. `localId`). If the request is retried with the same UUID, the server returns the existing record rather than creating a duplicate. This applies to reservations, orders, payments, and any operation where a duplicate would cause business harm. The UUID is generated at the `Param` struct call site, not inside the Repository or DataSource.
+
 ---
 
 ## Networking
@@ -237,9 +247,23 @@ Request structs
   └─ lives at Data/Network/Requests/
 
 Error handling
-  └─ typed APIError enum: .invalidURL, .notFound, .networkError, .decodingError
+  └─ typed APIError enum: .invalidURL, .notFound, .networkError, .decodingError, .conflict
   └─ propagates async throws up to ViewModel
   └─ ViewModel catches and sets errorMessage: String?
+
+HTTP status code semantics — map at the RemoteDataSource level, never in the ViewModel:
+  └─ 4xx client errors:
+       └─ 400 Bad Request    — malformed request; log and show generic error
+       └─ 401 Unauthorized   — session expired; trigger re-auth flow
+       └─ 403 Forbidden      — user lacks permission; show access denied
+       └─ 404 Not Found      — resource gone; remove from local cache
+       └─ 409 Conflict       — concurrency conflict (e.g. item already claimed by another user)
+                               → distinct error path with specific UX, NOT a generic retry
+  └─ 5xx server errors       — transient; show retry UI
+  └─ network timeout         — transient; show retry UI
+
+409 and 5xx must never share a code path. A 409 means a specific domain event occurred
+(another user acted first) and requires domain-specific UX. A 5xx means "try again later."
 ```
 
 **APIClient lives inside the Data layer, not a separate Network layer.** It's an implementation detail of RemoteDataSources. Nothing in Domain or Presentation touches it.

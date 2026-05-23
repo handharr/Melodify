@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hotel Booking System Design — iOS</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --border: #30363d;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --accent: #58a6ff;
+    --green: #3fb950;
+    --orange: #d29922;
+    --purple: #bc8cff;
+    --red: #f85149;
+    --keyword: #ff7b72;
+    --string: #a5d6ff;
+    --type: #ffa657;
+    --comment: #8b949e;
+  }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 15px;
+    line-height: 1.6;
+    padding-bottom: 100px;
+  }
+  nav {
+    position: sticky;
+    top: 0;
+    background: rgba(13,17,23,0.92);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    z-index: 100;
+  }
+  nav a { color: var(--muted); text-decoration: none; font-size: 13px; }
+  nav a:hover { color: var(--text); }
+  nav .sep { color: var(--border); }
+  nav .current { color: var(--accent); font-weight: 600; }
+  header {
+    padding: 32px 20px 24px;
+    border-bottom: 1px solid var(--border);
+  }
+  header .tag {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 8px;
+  }
+  header h1 { font-size: 26px; font-weight: 700; }
+  header p { color: var(--muted); font-size: 14px; margin-top: 6px; }
+
+  /* TOC */
+  .toc {
+    margin: 20px 20px 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+  }
+  .toc-title {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 10px;
+  }
+  .toc a {
+    display: block;
+    color: var(--accent);
+    text-decoration: none;
+    font-size: 13px;
+    padding: 3px 0;
+  }
+  .toc a:hover { color: var(--text); }
+  .toc .toc-sub { padding-left: 14px; color: var(--muted); font-size: 12px; }
+  .toc .toc-sub:hover { color: var(--text); }
+
+  section { padding: 28px 20px 0; }
+  h2 {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  h3 {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--orange);
+    margin: 24px 0 10px;
+  }
+  h3:first-child { margin-top: 0; }
+  h4 {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    margin: 16px 0 8px;
+  }
+  p { color: var(--muted); margin-bottom: 12px; line-height: 1.6; }
+  p strong { color: var(--text); }
+  ul, ol { color: var(--muted); padding-left: 20px; margin-bottom: 12px; }
+  li { margin-bottom: 4px; line-height: 1.5; }
+  li strong { color: var(--text); }
+
+  .stack {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 16px;
+  }
+  .stack-row {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .stack-row:last-child { border-bottom: none; }
+  .arrow { color: var(--border); font-size: 16px; margin-top: 1px; flex-shrink: 0; }
+  .stack-name { font-weight: 600; font-size: 14px; color: var(--text); min-width: 140px; flex-shrink: 0; }
+  .stack-desc { font-size: 13px; color: var(--muted); line-height: 1.4; }
+
+  code {
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 5px;
+    color: var(--string);
+  }
+  pre {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    overflow-x: auto;
+    margin-bottom: 16px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 12px;
+    line-height: 1.7;
+    color: var(--text);
+  }
+  .kw { color: var(--keyword); }
+  .ty { color: var(--type); }
+  .st { color: var(--string); }
+  .cm { color: var(--comment); font-style: italic; }
+  .nm { color: var(--accent); }
+  .gr { color: var(--green); }
+
+  table { width: 100%; border-collapse: collapse; margin-bottom: 16px; font-size: 13px; }
+  th {
+    background: var(--surface);
+    color: var(--muted);
+    font-weight: 600;
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    color: var(--muted);
+    vertical-align: top;
+  }
+  td:first-child { color: var(--text); font-weight: 500; }
+  tr:last-child td { border-bottom: none; }
+  .table-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 16px;
+  }
+  .callout {
+    background: rgba(88,166,255,0.08);
+    border: 1px solid rgba(88,166,255,0.3);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    font-size: 13px;
+    color: var(--text);
+    line-height: 1.5;
+  }
+  .callout strong { color: var(--accent); }
+  .rule {
+    background: rgba(63,185,80,0.08);
+    border: 1px solid rgba(63,185,80,0.3);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    font-size: 13px;
+    color: var(--text);
+    line-height: 1.5;
+  }
+  .rule strong { color: var(--green); }
+  .warn {
+    background: rgba(210,153,34,0.08);
+    border: 1px solid rgba(210,153,34,0.3);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    font-size: 13px;
+    color: var(--text);
+    line-height: 1.5;
+  }
+  .warn strong { color: var(--orange); }
+  .divider { border: none; border-top: 1px solid var(--border); margin: 28px 0 0; }
+  .bottom-nav {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: rgba(13,17,23,0.95);
+    backdrop-filter: blur(8px);
+    border-top: 1px solid var(--border);
+    padding: 12px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .bottom-nav a { color: var(--accent); text-decoration: none; font-size: 14px; font-weight: 500; }
+  .bottom-nav a.right { text-align: right; }
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="index.html">Home</a>
+  <span class="sep">›</span>
+  <span class="current">Hotel Booking System Design</span>
+</nav>
+
+<header>
+  <div class="tag">System Design</div>
+  <h1>iOS Hotel Booking App</h1>
+  <p>API design · data model · Clean Architecture · image caching · reservation holds · offline storage · payment SDK</p>
+</header>
+
+<!-- TOC -->
+<div class="toc">
+  <div class="toc-title">Contents</div>
+  <a href="#delta">Delta — What This Scenario Adds</a>
+  <a href="#requirements">Requirements</a>
+  <a href="#screens">Screen Inventory</a>
+  <a href="#api">API Design</a>
+  <a href="#model">Data Model</a>
+  <a href="#architecture">Architecture</a>
+  <a href="#dataflow">Data Flow</a>
+  <a href="#deepdives">Deep Dives</a>
+  <a class="toc-sub" href="#image-caching">1. Image Caching — two-tier cache</a>
+  <a class="toc-sub" href="#offline-reservations">2. Offline Reservation Storage</a>
+  <a class="toc-sub" href="#autocomplete">3. Search Autocomplete — local-first</a>
+  <a class="toc-sub" href="#holds">4. Reservation Holds — server-owned lock</a>
+  <a class="toc-sub" href="#payment">5. Payment Processing — Stripe facade</a>
+  <a href="#tradeoffs">Trade-off Summary</a>
+  <a href="#feedback">Key Takeaways</a>
+</div>
+
+<!-- DELTA -->
+<section id="delta">
+  <h2>Delta — What This Scenario Adds</h2>
+  <p>Scenario extension of the generic iOS architecture. Read this first — it describes what's the same and what this problem adds on top.</p>
+
+  <h3>Same as generic architecture</h3>
+  <ul>
+    <li>Clean Architecture + MVVM + UIKit (plus SwiftUI for some screens — see delta)</li>
+    <li>DTO → Mapper → Domain Model</li>
+    <li><code>FetchPolicy</code> (.fresh / .cached / .strict) on all Repository reads</li>
+    <li>Typed <code>Param</code> structs on every UseCase</li>
+    <li><code>@MainActor</code> on ViewModel — all state mutations on main thread, no <code>DispatchQueue.main.async</code></li>
+    <li><code>defer { isLoading = false }</code> — guaranteed cleanup on success and failure</li>
+    <li><code>[weak self]</code> in all closures to avoid retain cycles</li>
+    <li>Coordinator-based navigation; app-scoped services registered at AppCoordinator level</li>
+    <li>Mock-the-layer-below testing strategy</li>
+    <li><code>async/await</code> for I/O; Combine for reactive binding to <code>@Published</code> state</li>
+    <li><code>ThirdPartyDataSource</code> (SDK facade) — wraps third-party SDKs as a <code>RemoteDataSource</code>; app calls protocol, never SDK directly</li>
+    <li>Idempotency keys on mutations — client-generated UUID at <code>Param</code> call site for any retryable mutation</li>
+    <li>HTTP 409 ≠ 5xx — concurrency conflicts and transient server errors must never share a code path</li>
+  </ul>
+
+  <h3>What this scenario adds</h3>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Concept</th><th>Generic</th><th>Hotel Booking</th></tr>
+      <tr><td>Image storage</td><td>Not in generic</td><td>Two-tier cache: <code>LocalFileDataSource</code> (disk) + CoreData metadata index (<code>url → filePath + savedAt</code> for TTL)</td></tr>
+      <tr><td>Offline storage</td><td>Not in generic</td><td><code>ReservationLocalDataSource</code> (CoreData) — read-only offline reservation history</td></tr>
+      <tr><td>Domain Services</td><td>Generic (SessionService example)</td><td><code>ReservationService</code> (hold timer + live state) · <code>ImageService</code> (two-tier image cache) · <code>PaymentService</code> (Stripe SDK facade)</td></tr>
+      <tr><td>Hold timer</td><td>Not in generic</td><td>Server-authoritative 15-min lock; client counts down using server's <code>expiration_time</code></td></tr>
+      <tr><td>Idempotency key</td><td>Documented in generic — UUID at <code>Param</code> call site for retryable mutations</td><td>Client-generated <code>local_id</code> UUID on every mutation — prevents duplicate reservations/charges on retry</td></tr>
+      <tr><td>Pagination</td><td>Not in generic</td><td>Offset-limit — simpler; BE controls sort order; data doesn't move mid-scroll</td></tr>
+      <tr><td>Third-party SDK facade</td><td><code>ThirdPartyDataSource</code> pattern documented in generic (wraps SDK as <code>RemoteDataSource</code>)</td><td><code>PaymentService</code> wraps Stripe SDK — rest of app never calls SDK directly</td></tr>
+      <tr><td>Autocomplete strategy</td><td>Not in generic</td><td>Local prefetch on launch + debounced HTTP GET fallback — WebSockets explicitly rejected</td></tr>
+      <tr><td>Amenity library</td><td>Not in generic</td><td>Batch-fetched on launch; <code>amenity_id</code> matched locally — no per-hotel icon network calls</td></tr>
+      <tr><td>UI framework split</td><td>Hybrid UIKit/SwiftUI documented in generic; UIKit for scroll lifecycle, SwiftUI for state-driven screens</td><td>UIKit <code>UITableView</code> for Hotel List; SwiftUI for Search, Detail, Reservation, Payment</td></tr>
+      <tr><td>DI framework</td><td>Manual init injection</td><td>Swinject — singleton vs transient scoping enforced per service</td></tr>
+      <tr><td>Conflict handling</td><td>409 ≠ 5xx must never share a code path (see generic doc)</td><td>HTTP 409 Conflict → distinct "room no longer available" UX + redirect to Hotel Detail (separate path from 5xx/timeout retry UI)</td></tr>
+    </table>
+  </div>
+
+  <h3>Key decisions unique to this scenario</h3>
+  <div class="rule"><strong><code>ReservationService</code> must be app-scoped.</strong> It owns the live 15-min countdown timer. If owned by a ViewModel, it deallocates when the screen pops — the hold state is lost. Register at app startup in the DI container.</div>
+  <div class="rule"><strong>Server owns the clock.</strong> <code>expiration_time</code> is always server-generated. The client never calculates a hold window — it only displays a countdown using the server's timestamp.</div>
+  <div class="callout"><strong>Offset-limit over cursor pagination.</strong> BE controls sort order; hotel search results don't change mid-scroll (no cross-device sync). Offset is simpler and sufficient. Cursor pays off only when data moves (e.g. music library synced across devices).</div>
+  <div class="callout"><strong>WebSockets rejected twice.</strong> For autocomplete and for the hold timer — HTTP + client countdown achieves the same UX at a fraction of the cost at 10M DAU.</div>
+  <div class="warn"><strong>Image cache and offline reservation storage must never share storage.</strong> Cache pressure must not evict user reservation data. <code>LocalFileDataSource</code> for images and <code>ReservationLocalDataSource</code> for reservations are completely separate.</div>
+  <div class="rule"><strong><code>local_id</code> is always client-generated.</strong> Standard industry idempotency key. Prevents duplicate charges on network retry. Server dedup would add server complexity; client UUID is cheap and reliable.</div>
+</section>
+
+<!-- REQUIREMENTS -->
+<section id="requirements">
+  <h2>Requirements</h2>
+  <h3>Functional</h3>
+  <div class="stack">
+    <div class="stack-row"><div class="stack-name">Search</div><div class="stack-desc">Search hotels by destination, check-in/out dates, guest count · autocomplete (local-first)</div></div>
+    <div class="stack-row"><div class="stack-name">Hotel List</div><div class="stack-desc">Paginated cards — name, location, price, rating · sorting owned by BE</div></div>
+    <div class="stack-row"><div class="stack-name">Hotel Detail</div><div class="stack-desc">Image gallery (thumbnails + full-size) · amenities (icon + label) · available rooms</div></div>
+    <div class="stack-row"><div class="stack-name">Reservation</div><div class="stack-desc">Reserve one or multiple rooms → 15-minute server-owned hold timer</div></div>
+    <div class="stack-row"><div class="stack-name">Payment</div><div class="stack-desc">Payment via Stripe SDK — app never handles raw card data</div></div>
+    <div class="stack-row"><div class="stack-name">Offline</div><div class="stack-desc">View existing reservation details without network (read-only)</div></div>
+  </div>
+
+  <h3>Non-Functional</h3>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Requirement</th><th>Detail</th></tr>
+      <tr><td>Scale</td><td>~10M DAU — design for high-scale read traffic</td></tr>
+      <tr><td>Financial safety</td><td>No raw financial data stored on client — payment token only</td></tr>
+      <tr><td>Offline</td><td>Cached images + reservation history readable without network</td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- SCREENS -->
+<section id="screens">
+  <h2>Screen Inventory</h2>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Screen</th><th>Key UI</th><th>Framework</th></tr>
+      <tr><td>Search</td><td>Destination, dates, guest count, autocomplete dropdown</td><td>SwiftUI</td></tr>
+      <tr><td>Hotel List</td><td>Paginated cards (name, location, price, rating)</td><td>UIKit (<code>UITableView</code>)</td></tr>
+      <tr><td>Hotel Detail</td><td>Image gallery, amenities, room list, Reserve CTA</td><td>SwiftUI</td></tr>
+      <tr><td>Reservation</td><td>Room summary, 15-min countdown timer, Proceed to Payment</td><td>SwiftUI</td></tr>
+      <tr><td>Payment</td><td>Name, credit card (Stripe SDK UI), billing address</td><td>SwiftUI</td></tr>
+    </table>
+  </div>
+  <div class="callout"><strong>Why UIKit for Hotel List only?</strong> <code>UITableView</code> / <code>UICollectionView</code> give granular scroll position control and reliable pagination lifecycle hooks. SwiftUI <code>List</code> lacks the lifecycle hooks needed to reliably trigger next-page fetch at 10M-scale result sets. All other screens are state-driven and simple — SwiftUI is the right tool.</div>
+</section>
+
+<!-- API DESIGN -->
+<section id="api">
+  <h2>API Design</h2>
+
+  <h3>Endpoints</h3>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Method</th><th>Route</th><th>Purpose</th></tr>
+      <tr><td><span class="gr" style="font-family:monospace;font-size:12px">GET</span></td><td><code>/hotels</code></td><td>Search + paginated hotel list</td></tr>
+      <tr><td><span class="gr" style="font-family:monospace;font-size:12px">GET</span></td><td><code>/hotels/:hotel_id</code></td><td>Hotel detail</td></tr>
+      <tr><td><span class="gr" style="font-family:monospace;font-size:12px">GET</span></td><td><code>/amenities</code></td><td>Full amenity library (batch fetch, on app launch)</td></tr>
+      <tr><td><span style="color:var(--orange);font-family:monospace;font-size:12px">POST</span></td><td><code>/reservations</code></td><td>Create reservation (places hold)</td></tr>
+      <tr><td><span style="color:var(--orange);font-family:monospace;font-size:12px">POST</span></td><td><code>/reservations/payment</code></td><td>Finalize payment</td></tr>
+    </table>
+  </div>
+
+  <h3>Key Request / Response Shapes</h3>
+<pre><code><span class="cm">// GET /hotels — query params</span>
+destination=&lt;string&gt;
+check_in=&lt;string&gt;
+check_out=&lt;string&gt;
+guest_count=&lt;int&gt;
+offset=&lt;int&gt;
+limit=&lt;int&gt;          <span class="cm">// 25 per page</span>
+
+<span class="cm">// POST /reservations — request</span>
+<span class="ty">CreateReservationRequest</span> {
+  local_id: <span class="ty">String</span>       <span class="cm">// client-generated UUID — idempotency key</span>
+  hotel_id: <span class="ty">String</span>
+  room_id: [<span class="ty">String</span>]      <span class="cm">// supports multi-room booking</span>
+  guest_count: <span class="ty">Int</span>
+}
+
+<span class="cm">// POST /reservations — response</span>
+<span class="ty">ReservationDTO</span> {
+  reservation_id: <span class="ty">String</span>
+  expiration_time: <span class="ty">String</span>    <span class="cm">// server-authoritative 15-min timestamp</span>
+}
+
+<span class="cm">// POST /reservations/payment — request</span>
+<span class="ty">PaymentRequest</span> {
+  payment_token: <span class="ty">String</span>    <span class="cm">// token from Stripe SDK — not raw card data</span>
+}</code></pre>
+
+  <div class="rule"><strong><code>local_id</code> is always client-generated.</strong> UUID created at call site before the request is built. If the request fails and retries, the same <code>local_id</code> is sent — server deduplicates and returns the existing reservation. Prevents double-charges on network retry.</div>
+  <div class="rule"><strong><code>expiration_time</code> is always server-generated.</strong> Client never calculates a hold window. Client renders a countdown from the server's timestamp — purely cosmetic. The server lock is authoritative.</div>
+  <div class="callout"><strong>Why offset-limit over cursor pagination?</strong> Cursor pagination prevents skips/duplicates when data moves mid-scroll (e.g. music library synced across devices). Hotel search results don't move — BE controls sort order and the result set is stable. Offset is simpler and sufficient. The cost of offset (potential for duplicates on live data) does not apply here.</div>
+</section>
+
+<!-- DATA MODEL -->
+<section id="model">
+  <h2>Data Model</h2>
+
+  <h3>DTOs — Data layer (mirror API shape exactly)</h3>
+<pre><code><span class="kw">struct</span> <span class="ty">HotelListingDTO</span>: <span class="ty">Codable</span> {
+    <span class="kw">let</span> <span class="nm">hotelId</span>: <span class="ty">String</span>
+    <span class="kw">let</span> <span class="nm">location</span>: <span class="ty">String</span>
+    <span class="kw">let</span> <span class="nm">price</span>: <span class="ty">Decimal</span>
+    <span class="kw">let</span> <span class="nm">rating</span>: <span class="ty">String</span>
+    <span class="kw">let</span> <span class="nm">mediaUrl</span>: <span class="ty">String</span>
+}
+
+<span class="kw">struct</span> <span class="ty">HotelDTO</span>: <span class="ty">Codable</span> {
+    <span class="kw">let</span> <span class="nm">hotelId</span>: <span class="ty">String</span>
+    <span class="kw">let</span> <span class="nm">amenities</span>: [<span class="ty">AmenityDTO</span>]
+    <span class="kw">let</span> <span class="nm">rooms</span>: [<span class="ty">RoomDTO</span>]
+    <span class="kw">let</span> <span class="nm">mediaUrls</span>: <span class="ty">MediaUrlsDTO</span>
+}
+
+<span class="kw">struct</span> <span class="ty">ReservationDTO</span>: <span class="ty">Codable</span> {
+    <span class="kw">let</span> <span class="nm">reservationId</span>: <span class="ty">String</span>
+    <span class="kw">let</span> <span class="nm">expirationTime</span>: <span class="ty">String</span>   <span class="cm">// server-authoritative timestamp</span>
+}
+
+<span class="kw">struct</span> <span class="ty">OfflineReservationDTO</span> {   <span class="cm">// CoreData entity — for offline read</span>
+    <span class="kw">let</span> <span class="nm">reservationId</span>: <span class="ty">String</span>
+    <span class="kw">let</span> <span class="nm">expirationTime</span>: <span class="ty">String</span>
+    <span class="kw">let</span> <span class="nm">hotelName</span>: <span class="ty">String</span>
+    <span class="kw">let</span> <span class="nm">checkIn</span>: <span class="ty">String</span>
+    <span class="kw">let</span> <span class="nm">checkOut</span>: <span class="ty">String</span>
+}</code></pre>
+
+  <h3>Domain Models — Domain layer (pure Swift, no UIKit/networking imports)</h3>
+<pre><code><span class="kw">struct</span> <span class="ty">HotelListing</span> {
+    <span class="kw">let</span> <span class="nm">hotelId</span>: <span class="ty">String</span>
+    <span class="kw">let</span> <span class="nm">location</span>: <span class="ty">String</span>
+    <span class="kw">let</span> <span class="nm">price</span>: <span class="ty">Decimal</span>
+    <span class="kw">let</span> <span class="nm">rating</span>: <span class="ty">String</span>
+    <span class="kw">let</span> <span class="nm">thumbnailUrl</span>: <span class="ty">URL</span>
+}
+
+<span class="kw">struct</span> <span class="ty">Hotel</span> {
+    <span class="kw">let</span> <span class="nm">hotelId</span>: <span class="ty">String</span>
+    <span class="kw">let</span> <span class="nm">amenities</span>: [<span class="ty">Amenity</span>]
+    <span class="kw">let</span> <span class="nm">rooms</span>: [<span class="ty">Room</span>]
+    <span class="kw">let</span> <span class="nm">thumbnailUrls</span>: [<span class="ty">URL</span>]
+    <span class="kw">let</span> <span class="nm">fullSizeImageUrls</span>: [<span class="ty">URL</span>]
+}
+
+<span class="kw">struct</span> <span class="ty">Reservation</span> {
+    <span class="kw">let</span> <span class="nm">reservationId</span>: <span class="ty">String</span>
+    <span class="kw">let</span> <span class="nm">expirationTime</span>: <span class="ty">Date</span>      <span class="cm">// server-authoritative — never recalculate client-side</span>
+    <span class="kw">let</span> <span class="nm">hotelName</span>: <span class="ty">String</span>
+    <span class="kw">let</span> <span class="nm">checkIn</span>: <span class="ty">Date</span>
+    <span class="kw">let</span> <span class="nm">checkOut</span>: <span class="ty">Date</span>
+}</code></pre>
+
+  <div class="callout"><strong>Amenity icons are standardized across the hotel chain.</strong> Fetched via <code>GET /amenities</code> on app launch (one batch call). Stored in <code>AmenityLocalDataSource</code>. When a <code>Hotel</code> detail arrives, the app matches <code>amenityId</code> against the local library — no per-hotel icon network calls. Keeps hotel detail payloads lightweight.</div>
+</section>
+
+<!-- ARCHITECTURE -->
+<section id="architecture">
+  <h2>Architecture</h2>
+  <p>Pattern: <strong>MVVM + Clean Architecture</strong> — Presentation → Domain ← Data.</p>
+
+  <h3>Layer Breakdown</h3>
+  <div class="stack">
+    <div class="stack-row"><div class="stack-name">Presentation</div><div class="stack-desc">ViewController + ViewModel (@MainActor, @Published) · SwiftUI Views · binds to UseCases and Domain Services</div></div>
+    <div class="stack-row"><div class="arrow">↓</div><div class="stack-name">UseCase</div><div class="stack-desc">SearchHotelsUseCase · FetchHotelDetailUseCase · FetchAmenitiesUseCase · CreateReservationUseCase · ProcessPaymentUseCase</div></div>
+    <div class="stack-row"><div class="arrow">↓</div><div class="stack-name">Domain Service</div><div class="stack-desc">ReservationService (hold timer + live state) · ImageService (two-tier cache) · PaymentService (presents Stripe SDK UI, collects token, delegates to ProcessPaymentUseCase)</div></div>
+    <div class="stack-row"><div class="arrow">↓</div><div class="stack-name">Repository</div><div class="stack-desc">HotelRepository · ReservationRepository · AmenityRepository · ImageRepository · PaymentRepository</div></div>
+    <div class="stack-row"><div class="arrow">↓</div><div class="stack-name">DataSource</div><div class="stack-desc">Remote: HotelRemoteDataSource · ReservationRemoteDataSource · MediaRemoteDataSource<br>Local: HotelLocalDataSource · ReservationLocalDataSource · AmenityLocalDataSource · ImageLocalDataSource · LocalFileDataSource</div></div>
+    <div class="stack-row"><div class="stack-name">Application</div><div class="stack-desc">AppDelegate · Coordinator (per flow) · Swinject DI container</div></div>
+  </div>
+
+  <h3>Swinject Scoping</h3>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Scope</th><th>Service</th><th>Reason</th></tr>
+      <tr><td>Singleton</td><td><code>ReservationService</code></td><td>Owns live hold state + 15-min countdown timer — must survive screen transitions</td></tr>
+      <tr><td>Singleton</td><td><code>ImageService</code></td><td>Owns two-tier image cache — must persist across screens</td></tr>
+      <tr><td>Singleton</td><td><code>PaymentService</code></td><td>Presents Stripe SDK UI, collects token, orchestrates <code>ProcessPaymentUseCase</code> — one instance</td></tr>
+      <tr><td>Transient</td><td>UseCases</td><td>Stateless — no mutable state to share across ViewModels</td></tr>
+    </table>
+  </div>
+  <div class="rule"><strong>Rule of thumb:</strong> if a service owns mutable state that must stay consistent across ViewModels, it must be a singleton. Transient is for stateless utility wrappers only.</div>
+
+  <h3>Combine + async/await Split</h3>
+<pre><code><span class="ty">RemoteDataSource</span> / <span class="ty">LocalDataSource</span>
+  └── <span class="kw">async</span>/<span class="kw">await</span>  <span class="cm">// I/O boundary</span>
+          │
+          ▼
+      <span class="ty">Repository</span>  <span class="cm">// coordinates DataSources, applies FetchPolicy</span>
+          │
+          ▼
+      <span class="ty">UseCase</span> / <span class="ty">Domain Service</span>
+          │
+          ▼
+      <span class="ty">ViewModel</span> (@Published)  <span class="cm">// drives SwiftUI / UIKit view</span></code></pre>
+  <div class="callout"><strong>async/await handles I/O. Combine handles reactivity.</strong> Domain Services expose <code>AnyPublisher</code> for state the ViewModel needs to observe long-term (e.g. hold timer countdown). Repositories use <code>async/await</code> internally — no Combine all the way down.</div>
+</section>
+
+<!-- DATA FLOW -->
+<section id="dataflow">
+  <h2>Data Flow</h2>
+
+  <h3>Search + Hotel List</h3>
+<pre><code><span class="nm">SearchViewModel</span>.search(param:)
+  → <span class="nm">SearchHotelsUseCase</span>.execute(policy: .fresh, param:)
+      → <span class="nm">HotelRepository</span>
+          1. <span class="nm">HotelLocalDataSource</span>.fetch()     <span class="cm">// cached DTOs → Mapper → [HotelListing] (fast return)</span>
+          2. <span class="nm">HotelRemoteDataSource</span>.get(<span class="st">"/hotels"</span>, query:)  <span class="cm">// HotelListingsDTO → Mapper → [HotelListing]</span>
+          3. <span class="nm">HotelLocalDataSource</span>.save(dtos)
+      → returns [<span class="ty">HotelListing</span>]
+  → ViewModel maps <span class="ty">HotelListing</span> → <span class="ty">UIModel</span> → @Published update → view re-renders</code></pre>
+
+  <h3>Hotel Detail</h3>
+<pre><code><span class="nm">HotelDetailViewModel</span>.load(hotelId:)
+  → <span class="nm">FetchHotelDetailUseCase</span>.execute(policy: .cached, param:)
+      → <span class="nm">HotelRepository</span>
+          1. <span class="nm">HotelLocalDataSource</span>.fetch(hotelId)  <span class="cm">// HotelDTO? → Mapper → Hotel? (fast return)</span>
+          2. <span class="nm">HotelRemoteDataSource</span>.get(<span class="st">"/hotels/:id"</span>)  <span class="cm">// HotelDTO → Mapper → Hotel</span>
+          3. <span class="nm">HotelLocalDataSource</span>.save(dto)
+      → returns <span class="ty">Hotel</span>
+  → <span class="nm">ImageService</span>.loadImage(url:) for gallery images  <span class="cm">// two-tier cache</span>
+  → ViewModel maps <span class="ty">Hotel</span> → <span class="ty">UIModel</span> → @Published update</code></pre>
+
+  <h3>Create Reservation</h3>
+<pre><code><span class="nm">ReservationViewModel</span>.reserve(param:)
+  → <span class="nm">CreateReservationUseCase</span>.execute(param:)   <span class="cm">// param.localId = UUID()</span>
+      → <span class="nm">ReservationRepository</span>
+          1. <span class="nm">ReservationRemoteDataSource</span>.post(<span class="st">"/reservations"</span>, body:)
+             → <span class="ty">ReservationDTO</span> → Mapper → <span class="ty">Reservation</span>
+          2. <span class="nm">ReservationLocalDataSource</span>.save(dto)  <span class="cm">// write offline record before navigating</span>
+      → returns <span class="ty">Reservation</span>
+  → <span class="nm">ReservationService</span>.startHold(reservation:)   <span class="cm">// begins 15-min countdown using server's expiration_time</span>
+  → Coordinator pushes <span class="ty">PaymentViewController</span>   <span class="cm">// reservation.reservationId injected via init</span></code></pre>
+
+  <h3>Payment</h3>
+<pre><code><span class="nm">PaymentViewModel</span>.pay()
+  → <span class="nm">PaymentService</span>  <span class="cm">// Domain Service — app-scoped singleton</span>
+      1. presents Stripe SDK UI → receives payment_token
+      2. → <span class="nm">ProcessPaymentUseCase</span>.execute(param: <span class="ty">PaymentParam</span>(token: payment_token))
+             → <span class="nm">PaymentRepository</span> (<span class="ty">PaymentRepositoryProtocol</span>)
+                 → <span class="nm">PaymentRemoteDataSource</span>.post(<span class="st">"/reservations/payment"</span>, body: { payment_token })
+      → returns success
+  → Coordinator navigates to confirmation screen</code></pre>
+
+  <div class="callout"><strong>Coordinator owns the handoff from Reservation → Payment.</strong> <code>reservation_id</code> from the POST response is passed via dependency injection when initializing <code>PaymentViewModel</code>. Neither ViewModel reaches into the other. Alternatively, <code>PaymentViewModel</code> can subscribe to <code>ReservationService</code> using the ID to track hold status — Coordinator owns the wiring either way.</div>
+</section>
+
+<!-- DEEP DIVES -->
+<section id="deepdives">
+  <h2>Deep Dives</h2>
+
+  <!-- 1. IMAGE CACHING -->
+  <h3 id="image-caching">1. Image Caching — Two-Tier Cache</h3>
+  <p><strong>Problem:</strong> Gallery images (thumbnails + full-size) are numerous and frequently accessed. URLSession default cache is not granular enough for TTL eviction or LRU size control.</p>
+
+  <h4>Cache lookup flow</h4>
+<pre><code>Image Request (via <span class="nm">ImageService</span>)
+     │
+     ▼
+<span class="nm">LocalFileDataSource</span> (disk)
+     │ hit? → serve immediately (zero network)
+     │ miss?
+     ▼
+<span class="nm">MediaRemoteDataSource</span> (S3 fetch)
+     │
+     ▼
+Write binary file to disk (<span class="nm">LocalFileDataSource</span>)
+Write metadata to CoreData (<span class="nm">ImageLocalDataSource</span>):
+  { url: <span class="ty">String</span>, filePath: <span class="ty">String</span>, savedAt: <span class="ty">Date</span> }</code></pre>
+
+  <h4>TTL eviction</h4>
+  <p>Runs on <code>DispatchQueue.global(qos: .background)</code> — triggered on app launch or periodic interval while the app is active. Queries CoreData for <code>savedAt &lt; now - TTL</code>, deletes matching files and records. Never touches the main thread.</p>
+  <div class="callout"><strong>Why not <code>BGTaskScheduler</code>?</strong> <code>BGTaskScheduler</code> runs when the app is suspended — useful for full background sync. For cache eviction triggered on launch or while the app is active, <code>DispatchQueue.global</code> is sufficient and significantly simpler. Reach for <code>BGTaskScheduler</code> only when the eviction must run without the user opening the app.</div>
+
+  <h4>LRU size cap</h4>
+  <p>Alongside TTL, a size threshold prevents disk bloat. When the cap is hit, oldest entries are pruned first (LRU-style) regardless of TTL. Thumbnails and full-size images are cached independently — both sizes available for their respective UIs without re-fetching.</p>
+
+  <div class="rule"><strong>CoreData as metadata index, not blob store.</strong> CoreData stores file paths and TTL data. Binary image files live on disk managed by <code>LocalFileDataSource</code>. Never shove binary data into a CoreData attribute — it degrades performance and defeats the purpose of file-level LRU eviction.</div>
+
+  <hr class="divider">
+
+  <!-- 2. OFFLINE RESERVATIONS -->
+  <h3 id="offline-reservations">2. Offline Reservation Storage</h3>
+  <p><strong>Scope:</strong> Read-only offline access — user can view existing booking details without network. Creating a reservation always requires a live server lock. No offline creation, no sync flow.</p>
+
+  <h4>When it's written</h4>
+  <p>Immediately after a successful <code>POST /reservations</code> response, before navigating to Payment:</p>
+<pre><code><span class="cm">// Inside ReservationRepository — after mapping to Domain model:</span>
+<span class="kw">let</span> reservation = <span class="ty">Mapper</span>.<span class="nm">toDomain</span>(dto)
+<span class="kw">await</span> <span class="nm">ReservationLocalDataSource</span>.<span class="nm">save</span>(dto)   <span class="cm">// write OfflineReservationDTO to CoreData</span>
+<span class="kw">return</span> reservation</code></pre>
+
+  <div class="callout"><strong>Why write before navigating to Payment?</strong> If the app crashes or is killed during the payment flow, the reservation record is already persisted. User can view the hold details offline and resume payment on re-launch.</div>
+
+  <hr class="divider">
+
+  <!-- 3. AUTOCOMPLETE -->
+  <h3 id="autocomplete">3. Search Autocomplete — Local-First</h3>
+  <p><strong>Problem:</strong> Real-time character-by-character fetching at 10M DAU is prohibitively expensive server-side. WebSockets were considered and rejected.</p>
+
+<pre><code>User types
+     │
+     ▼
+<span class="nm">AmenityLocalDataSource</span> / search cache
+<span class="cm">(prefetched popular destinations + hotel names on launch)</span>
+     │ hit? → show immediately (zero latency)
+     │ miss?
+     ▼
+<span class="nm">HotelRemoteDataSource</span>.get(<span class="st">"/hotels?destination=&lt;substring&gt;"</span>)
+<span class="cm">(debounced — does not fire on every keystroke)</span>
+     │
+     ▼
+Display results + cache response locally</code></pre>
+
+  <div class="rule"><strong>Prefetch on launch.</strong> Popular locations and high-traffic hotel names are fetched once at app start via <code>FetchAmenitiesUseCase</code> (or a dedicated prefetch use case), stored in local DB. Covers the majority of queries for free — zero network, zero latency.</div>
+  <div class="warn"><strong>Why not WebSockets?</strong> An open persistent connection per active user at 10M DAU is prohibitively expensive server-side. Local prefetch + debounced GET achieves the same UX at a fraction of the infrastructure cost. WebSockets are only justified when the server must push data to the client that the client cannot predict — autocomplete doesn't qualify.</div>
+
+  <hr class="divider">
+
+  <!-- 4. RESERVATION HOLDS -->
+  <h3 id="holds">4. Reservation Holds — Server-Owned Lock</h3>
+  <p><strong>Problem:</strong> Two users booking the same room simultaneously. 15-minute payment window must be enforced reliably.</p>
+
+<pre><code>Client: <span class="nm">CreateReservationUseCase</span> → <span class="gr">POST</span> /reservations
+     │
+     ▼
+Server: Lock room_id + hotel_id
+Server: Generate expiration_time (now + 15 min)
+     │
+     ▼
+Client: Receive reservation_id + expiration_time
+Client: <span class="nm">ReservationService</span>.startHold(reservation:)
+        → starts local countdown using server's expiration_time
+     │
+     ├── Payment completed before expiry → <span class="gr">POST</span> /reservations/payment ✓
+     │
+     └── Timer expires / concurrency conflict
+              │
+              ▼
+         HTTP <span class="st">409</span> Conflict → <span class="st">"room no longer available"</span> → redirect to Hotel Detail
+         HTTP <span class="st">5xx</span> / timeout → generic network error UX
+         <span class="cm">(two distinct paths — never conflate them)</span></code></pre>
+
+  <div class="rule"><strong>Client timer is cosmetic only.</strong> The server clock is authoritative. The client countdown tells the user how long they have — it has no bearing on the actual lock on the server. On network failure, the server decides whether the hold is still valid.</div>
+  <div class="warn"><strong>HTTP 409 ≠ 5xx.</strong> A 409 means a specific concurrency event — another user took the room. This requires a specific UX path ("room no longer available", redirect to Hotel Detail). A 5xx or timeout is a generic network failure — show a retry UI. Conflating them produces a confusing user experience.</div>
+
+  <hr class="divider">
+
+  <!-- 5. PAYMENT -->
+  <h3 id="payment">5. Payment Processing — Stripe Facade</h3>
+  <p><strong>Why Stripe?</strong> App must never handle raw card data. Stripe SDK collects card info, validates, and returns a token. The app passes the token to the backend — never the card number.</p>
+
+<pre><code>User enters card details → Stripe SDK UI
+     │
+     ▼
+Stripe SDK returns payment_token
+     │
+     ▼
+<span class="nm">PaymentService</span> → <span class="nm">ProcessPaymentUseCase</span>
+     → <span class="gr">POST</span> /reservations/payment { payment_token }
+     │
+     ▼
+BE charges card server-side via Stripe API</code></pre>
+
+  <div class="callout"><strong>Facade over SDK — always.</strong> <code>PaymentService</code> wraps the Stripe SDK. Rest of the app calls <code>PaymentServiceProtocol</code> — never the Stripe SDK directly. Swapping payment providers (Stripe → Adyen, Braintree) = one change in one file. No ViewModel knows which payment SDK is running.</div>
+  <div class="rule"><strong>In Clean Architecture terms:</strong> <code>PaymentService</code> (Domain Service) handles the Stripe SDK UI to collect a token, then delegates to <code>ProcessPaymentUseCase</code> → <code>PaymentRepository: PaymentRepositoryProtocol</code> → <code>PaymentRemoteDataSource</code> → API. <code>PaymentViewModel</code> calls <code>PaymentService</code> via <code>PaymentServiceProtocol</code> — nothing above the DataSource level knows which payment SDK is running.</div>
+</section>
+
+<!-- TRADE-OFFS -->
+<section id="tradeoffs">
+  <h2>Trade-off Summary</h2>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Decision</th><th>Chosen</th><th>Rejected</th><th>Why</th></tr>
+      <tr><td>Autocomplete</td><td>Prefetch + debounced HTTP GET</td><td>WebSocket streaming</td><td>Too expensive at 10M DAU</td></tr>
+      <tr><td>Reservation hold timer</td><td>Server timestamp + client countdown</td><td>WebSockets / long-poll</td><td>Simpler; server stays authoritative</td></tr>
+      <tr><td>Image caching</td><td>Manual <code>LocalFileDataSource</code> + CoreData TTL/LRU</td><td>URLSession default cache</td><td>Granular eviction control</td></tr>
+      <tr><td>Payment</td><td>Stripe SDK token</td><td>DIY card collection</td><td>PCI compliance; no raw card data on client</td></tr>
+      <tr><td>Pagination</td><td>Offset-limit</td><td>Cursor-based</td><td>Simpler; BE owns sort order; data stable mid-scroll</td></tr>
+      <tr><td>Idempotency</td><td>Client-generated <code>local_id</code> UUID</td><td>Server dedup</td><td>Handles network retry duplicates cheaply</td></tr>
+      <tr><td>DI</td><td>Swinject</td><td>Manual init injection</td><td>Manages graph complexity at scale</td></tr>
+      <tr><td>Hotel List UI</td><td>UIKit <code>UITableView</code></td><td>SwiftUI <code>List</code></td><td>Granular scroll + pagination lifecycle control</td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- KEY TAKEAWAYS -->
+<section id="feedback">
+  <h2>Key Takeaways</h2>
+  <div class="rule"><strong>Idempotency key — always client-generated</strong> for mutation requests that could be retried. UUID at the call site. Same ID on retry = server deduplicates = no double charge.</div>
+  <div class="rule"><strong>Server-authoritative timestamps</strong> — never trust the client clock for business-critical windows. Hold expiry, pricing windows, time-limited offers — all server-generated, client reads only.</div>
+  <div class="rule"><strong>Facade over third-party SDKs.</strong> <code>PaymentService</code> wraps Stripe. <code>ImageService</code> wraps caching logic. Rest of the app calls protocols. Swapping providers = one change.</div>
+  <div class="rule"><strong>Prefetch on launch</strong> for data expensive to fetch per-keystroke but bounded in size — autocomplete destinations, amenity icon library. Zero-latency lookup, fraction of the network cost.</div>
+  <div class="rule"><strong>CoreData as metadata index, not blob store.</strong> Store file paths and TTL timestamps. Binary files live on disk. Use CoreData for queryable metadata, not raw binary payloads.</div>
+  <div class="warn"><strong>Common gotcha — <code>ReservationService</code> scope.</strong> If owned by a ViewModel, it deallocates when the screen pops — the hold countdown stops and the reservation state is lost. Register it as a singleton in your DI container at app startup, not inside a ViewController.</div>
+  <div class="warn"><strong>Common gotcha — conflating 409 with 5xx.</strong> HTTP 409 Conflict is a specific concurrency event requiring a specific UX (room taken, go back). HTTP 5xx is a generic server error requiring a retry UI. Never conflate them — the user experience is completely different.</div>
+  <div class="callout"><strong>Interview verdict: Strong hire for Senior iOS.</strong> Candidate communicated trade-offs clearly, avoided over-engineering (rejected WebSockets twice), and kept complexity proportional to requirements.</div>
+</section>
+
+<div class="bottom-nav">
+  <a href="index.html">← Home</a>
+</div>
+
+</body>
+</html>

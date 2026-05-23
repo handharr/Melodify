@@ -282,6 +282,7 @@
   <a class="toc-sub" href="#failures">12. Common failure modes</a>
   <a class="toc-sub" href="#seeking">13. Seeking during streaming</a>
   <a class="toc-sub" href="#ownership">14. What you own vs AVPlayer</a>
+  <a href="#interviewer-feedback">Interviewer Feedback</a>
   <a href="#feedback">Key Takeaways</a>
 </div>
 
@@ -301,6 +302,10 @@
     <li><code>[weak self]</code> in all closures to avoid retain cycles</li>
     <li>Coordinator-based navigation, app-scoped services via manual init injection</li>
     <li>Mock-the-layer-below testing strategy</li>
+    <li><code>async/await</code> for I/O; Combine for reactive binding to <code>@Published</code> state</li>
+    <li><code>ThirdPartyDataSource</code> (SDK facade) — wraps third-party SDKs as a <code>RemoteDataSource</code>; app calls protocol, never SDK directly</li>
+    <li>Idempotency keys on mutations — client-generated UUID at <code>Param</code> call site for any retryable mutation</li>
+    <li>HTTP <code>409 ≠ 5xx</code> — concurrency conflicts and transient server errors must never share a code path</li>
   </ul>
 
   <h3>What this scenario adds</h3>
@@ -505,7 +510,7 @@ Each quality bucket → chunks:
              ├─ yes → <span class="st">file://</span> URL → <span class="nm">PlayerEngine</span> → AVPlayer
              └─ no  → <span class="nm">FetchStreamInfoUseCase</span> → <span class="nm">MediaRemoteDataSource</span> → HLS CDN
       3. delegate expiry to <span class="nm">StreamRefreshService</span>
-           near expiry? → background fetch new stream-info
+           near expiry? → <span class="nm">FetchStreamInfoUseCase</span> → <span class="nm">DownloadRepository</span> (<span class="ty">DownloadRepositoryProtocol</span>) → <span class="nm">MediaRemoteDataSource</span>
                           buffered chunks keep playing uninterrupted</code></pre>
 
   <h3>Concept Translation</h3>
@@ -556,7 +561,7 @@ Each quality bucket → chunks:
 <pre><code><span class="nm">PlayerService</span> triggers playback
   → <span class="nm">PlaybackAssetResolver</span> checks <span class="nm">DownloadRepository</span> (<span class="ty">DownloadRepositoryProtocol</span>)
       ├─ downloaded? → <span class="st">file://</span> URL → AVPlayer
-      └─ not downloaded? → <span class="nm">MediaRemoteDataSource</span> → HLS CDN
+      └─ not downloaded? → <span class="nm">FetchStreamInfoUseCase</span> → <span class="nm">DownloadRepository</span> (<span class="ty">DownloadRepositoryProtocol</span>) → <span class="nm">MediaRemoteDataSource</span> → HLS CDN
                              → manifest (.m3u8)
                              → quality buckets → chunks (2–10s each)
                              → AVPlayer streams chunks adaptively</code></pre>
@@ -720,7 +725,7 @@ player.play()</code></pre>
   <p><code>PlaybackAssetResolver</code> (inside <code>PlayerService</code>) makes the decision via <code>DownloadRepository</code> (injected as <code>DownloadRepositoryProtocol</code>):</p>
 <pre><code><span class="nm">DownloadRepository</span>.localFilePath(for: itemId)  <span class="cm">// protocol call — Domain knows nothing about DownloadLocalDataSource</span>
   ├─ found  → file:// URL  (offline)
-  └─ nil    → fetch stream-info → HLS manifest URL  (streaming)</code></pre>
+  └─ nil    → <span class="nm">FetchStreamInfoUseCase</span> → <span class="nm">DownloadRepository</span> → <span class="nm">MediaRemoteDataSource</span> → HLS manifest URL  (streaming)</code></pre>
   <div class="callout"><strong>Why <code>file://</code> URL over <code>AVAssetResourceLoadingDelegate</code>?</strong> <code>AVAssetResourceLoadingDelegate</code> lets you intercept every request AVPlayer makes and serve data yourself — useful for DRM, encryption, or proprietary chunk formats. But it adds significant complexity (manage loading requests, handle cancellation, byte-range requests). For standard downloaded audio files a plain <code>file://</code> URL is sufficient and far simpler. Use the delegate only when the file format or protection requires it.</div>
   <div class="callout"><strong>Advanced:</strong> if files are stored in a protected/chunked format, use a custom <code>AVAssetResourceLoadingDelegate</code> to intercept requests and serve local binary data. Default to the simple <code>file://</code> path first.</div>
 
@@ -894,6 +899,53 @@ player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { time <span
       <tr><td>Background audio session config</td><td><code>PlayerService</code> at app startup (your code)</td></tr>
     </table>
   </div>
+</section>
+
+<!-- INTERVIEWER FEEDBACK -->
+<section id="interviewer-feedback">
+  <h2>Interviewer Feedback</h2>
+  <div class="rule"><strong>Decision: Hire (Senior)</strong></div>
+
+  <h3>1. Problem Navigation ✅</h3>
+  <ul>
+    <li>Drives the discussion — yes</li>
+    <li>Asked questions to reduce ambiguity — yes</li>
+    <li>Identifies and focuses on main problems (playback, offline support) — yes</li>
+    <li>Good organisation of the problem space — yes</li>
+    <li>Timing — good for a 60-min interview</li>
+  </ul>
+
+  <h3>2. Solution Design ✅</h3>
+  <ul>
+    <li>Working solution — yes</li>
+    <li>Did well: REST API design</li>
+    <li>Did well: Adaptive streaming with HLS</li>
+    <li>Did well: High-level design principles</li>
+    <li>Did well: Authentication and download URLs (short-lived signed URLs)</li>
+    <li>✅ <strong>Store/Storage abstraction over DB</strong> — <code>LocalDataSource</code> is this abstraction; Repositories never touch UserDefaults/GRDB directly</li>
+    <li><strong>Can improve:</strong> Walk through the full data flow immediately after finishing the diagram — catches missing repo dependencies and edge cases</li>
+    <li>Proactively handles scalability — yes</li>
+    <li>Design with UX in mind — yes</li>
+    <li>Deploys needed architectural patterns — yes</li>
+  </ul>
+
+  <h3>3. Technical Proficiency ✅</h3>
+  <ul>
+    <li>Knows common frameworks and APIs — yes</li>
+    <li>Did well: SwiftUI details, <code>@Observable</code>, async streams</li>
+    <li>Knows modern frameworks — yes</li>
+    <li>Identifies alternative solutions — yes</li>
+    <li>Foresees potential points of failure — yes</li>
+  </ul>
+
+  <h3>4. Technical Communication ✅</h3>
+  <ul>
+    <li>Responds well to questions and feedback — yes</li>
+    <li>Explains ideas clearly and logically — yes</li>
+    <li>Shares trade-offs and design choices — yes</li>
+    <li>Brings relevant context — yes</li>
+    <li>Listens carefully and willing to fix mistakes — yes</li>
+  </ul>
 </section>
 
 <!-- KEY TAKEAWAYS -->

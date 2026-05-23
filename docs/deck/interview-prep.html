@@ -70,8 +70,12 @@
     border-bottom: 1px solid var(--border);
   }
   h3 { font-size: 15px; font-weight: 600; color: var(--orange); margin: 16px 0 8px; }
+  h4 { font-size: 13px; font-weight: 600; color: var(--text); margin: 12px 0 6px; }
   p { color: var(--muted); margin-bottom: 12px; line-height: 1.6; }
   p strong { color: var(--text); }
+  ul { padding-left: 16px; margin-bottom: 12px; }
+  ul li { color: var(--muted); font-size: 14px; margin-bottom: 4px; line-height: 1.5; }
+  ul li strong { color: var(--text); }
   .timeline {
     display: flex;
     flex-direction: column;
@@ -196,6 +200,18 @@
     padding: 1px 5px;
     color: var(--string);
   }
+  .mono-block {
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    color: var(--muted);
+    white-space: pre-line;
+    line-height: 1.8;
+    margin-bottom: 12px;
+  }
   .map-grid {
     display: grid;
     grid-template-columns: 1fr;
@@ -218,6 +234,24 @@
   }
   .map-card .comp { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
   .map-card .built { font-size: 13px; color: var(--muted); line-height: 1.4; }
+  .checklist { padding-left: 0; list-style: none; margin-bottom: 16px; }
+  .checklist li {
+    font-size: 13px;
+    color: var(--muted);
+    margin-bottom: 6px;
+    padding-left: 20px;
+    position: relative;
+    line-height: 1.5;
+  }
+  .checklist li::before {
+    content: "□";
+    position: absolute;
+    left: 0;
+    color: var(--border);
+    font-size: 13px;
+  }
+  .checklist-group { margin-bottom: 20px; }
+  .checklist-group h4 { color: var(--orange); font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px; }
   .bottom-nav {
     position: fixed;
     bottom: 0; left: 0; right: 0;
@@ -257,12 +291,27 @@
 <!-- FORMAT -->
 <section>
   <h2>Format</h2>
-  <ul style="padding-left:16px; margin-bottom:16px;">
-    <li style="color:var(--muted); margin-bottom:6px;">90 minutes, whiteboard design of a mobile feature</li>
-    <li style="color:var(--muted); margin-bottom:6px;">Tool: <strong style="color:var(--text);">Excalidraw</strong> — pick it and practice it tonight</li>
-    <li style="color:var(--muted); margin-bottom:6px;">Problem: Chat App / Music Streaming / Social Media Feed</li>
+  <ul>
+    <li style="margin-bottom:6px;">90 minutes, whiteboard design of a mobile feature</li>
+    <li style="margin-bottom:6px;">Tool: <strong>Excalidraw</strong> — pick it and practice it tonight</li>
+    <li style="margin-bottom:6px;">4 competencies: Clean Architecture · Design Patterns · Reasoning &amp; Trade-offs · Monitoring &amp; Observability</li>
   </ul>
   <div class="warn"><strong>Opening line (always the same):</strong> "Before I draw anything, let me clarify requirements and constraints — then I'll start with the hardest technical piece."</div>
+</section>
+
+<!-- WHAT THEY'RE EVALUATING -->
+<section>
+  <h2>What They're Actually Evaluating</h2>
+  <p>This interview is graded on a gradient to determine your level — not pass/fail. Three dimensions:</p>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Dimension</th><th>What they're watching for</th></tr>
+      <tr><td>Technical leadership</td><td>Can you break a fuzzy problem into coherent, scoped parts?</td></tr>
+      <tr><td>Architectural insight</td><td>Do you understand the trade-offs behind each decision?</td></tr>
+      <tr><td>Product sense</td><td>Do you think about the user, not just the system?</td></tr>
+    </table>
+  </div>
+  <div class="rule"><strong>Mindset: Tech Lead, not Developer.</strong> You are a Tech Lead talking to a Product Manager. A Tech Lead doesn't start coding — they ask clarifying questions, categorize the work, and scope the problem before touching a whiteboard. A strong candidate doesn't find "the correct answer." They demonstrate <em>how they think</em>.</div>
 </section>
 
 <!-- TIMELINE -->
@@ -270,22 +319,39 @@
   <h2>90-Minute Breakdown</h2>
   <div class="timeline">
 
+    <!-- 0–10 -->
     <div class="tl-item">
       <div class="tl-line"></div>
       <div class="tl-dot">0–10</div>
       <div class="tl-content">
-        <h3>Clarify Before Drawing</h3>
-        <p>Ask and write their answers on the board.</p>
+        <h3>Clarify First — Three Buckets</h3>
+        <p>Ask across three explicit buckets and write their answers on the board.</p>
+
+        <h4>Functional Requirements — what the app must <em>do</em></h4>
         <ul>
-          <li><strong>Functionality:</strong> Read-only or create/edit? Search or filtering? Real-time — WebSocket, polling, or push?</li>
-          <li><strong>Offline:</strong> Work offline with stale data, or connectivity required? Read-only offline or sync-on-reconnect?</li>
-          <li><strong>Scale:</strong> Pagination, infinite scroll, or bounded? Media — images, audio, video?</li>
-          <li><strong>Platform:</strong> iOS only? UIKit or SwiftUI preference?</li>
+          <li>Read-only or create/edit? Search or filtering?</li>
+          <li>How is the feed sorted — chronological or popularity?</li>
+          <li>Pull-to-refresh required? Can users act (like, comment) while offline?</li>
+          <li>Push notifications needed? Real-time — WebSocket, polling, or push?</li>
         </ul>
+
+        <h4>Non-Functional Requirements — how the app must <em>perform</em></h4>
+        <ul>
+          <li><strong>Scale:</strong> DAUs? Which regions?</li>
+          <li><strong>Performance:</strong> Target load speed, network budget, battery impact</li>
+          <li><strong>Consistency:</strong> Eventual (likes, feed) or strong (payments, inventory)?</li>
+          <li><strong>Offline:</strong> Stale data OK, or connectivity required? Read-only or sync-on-reconnect?</li>
+          <li><strong>Media:</strong> Images, audio, video? Pagination or bounded list?</li>
+        </ul>
+
+        <h4>Out of Scope</h4>
+        <p style="font-size:13px;">Explicitly name what you won't cover. This signals seniority and protects your time.</p>
+
         <blockquote>"I'm asking these because each answer changes which patterns I choose."</blockquote>
       </div>
     </div>
 
+    <!-- 10–25 -->
     <div class="tl-item">
       <div class="tl-line"></div>
       <div class="tl-dot">10–25</div>
@@ -293,58 +359,119 @@
         <h3>Draw the Layers First</h3>
         <p>Draw the architecture before the feature. Then say:</p>
         <blockquote>"Domain depends on nothing. That's the rule everything else flows from."</blockquote>
-        <p style="font-family:'SF Mono','Fira Code',monospace; font-size:12px; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:12px; color:var(--muted); white-space:pre-line; line-height:1.8;">Presentation  → ViewController + ViewModel (@Published)
-Domain        → UseCase + Protocol + Model + Param
-Data          → Repository + DataSource + DTO + Mapper
-Application   → AppDelegate + Coordinator + DI</p>
+        <div class="mono-block">Presentation  → ViewController + ViewModel (@Published)
+Domain        → UseCase + Protocol + Model + Param + FetchPolicy
+Data          → Repository + DataSource + DTO + Mapper + APIClient
+Application   → AppDelegate + Coordinator + DI wiring</div>
       </div>
     </div>
 
+    <!-- 25–50 -->
     <div class="tl-item">
       <div class="tl-line"></div>
       <div class="tl-dot">25–50</div>
       <div class="tl-content">
         <h3>Trace the Full Data Flow</h3>
         <p>Pick the hardest piece and walk it end-to-end out loud:</p>
-        <blockquote>"User opens the app. The coordinator or app entry point builds the dependency graph. The ViewModel calls FetchHomeDataUseCase with FetchPolicy.cached. The UseCase fires async let for tracks and playlists concurrently. Each repo checks policy: cache-first, fall back to network. Response comes back as a DTO, Mapper converts it to a Domain model, ViewModel maps it to a UIModel. UIModel is the only type that reaches the View layer. The View binds to published state — a HomeFeedItem enum — and switches on each case. Compiler enforces exhaustiveness, no casting."</blockquote>
+        <blockquote>"User opens the app. AppCoordinator builds the dependency graph — one APIClient, repositories injected into UseCases, UseCases injected into ViewModels. ViewModel calls FetchHomeDataUseCase with FetchPolicy.cached. UseCase fires async let for tracks and playlists concurrently. Each repo checks policy: cache-first, fall back to network. Response comes back as a DTO, Mapper converts it to a Domain model, ViewModel maps it to a UIModel. UIModel is the only type that reaches the ViewController. ViewController sinks on @Published feedItems — a HomeFeedItem enum — and switches on each case. Compiler enforces exhaustiveness, no casting."</blockquote>
       </div>
     </div>
 
+    <!-- 50–65 -->
     <div class="tl-item">
       <div class="tl-line"></div>
       <div class="tl-dot">50–65</div>
       <div class="tl-content">
         <h3>Add the Senior-Level Layers (Unprompted)</h3>
+
+        <p><strong>Mobile-specific constraints</strong> — call these out before being asked:</p>
+        <ul>
+          <li><strong>Battery:</strong> minimize background work and radio usage; batch network calls, avoid polling when push is viable</li>
+          <li><strong>Memory:</strong> handle large datasets without bloating RAM — cell reuse, image caching with eviction policies</li>
+          <li><strong>Network:</strong> be deliberate about what you fetch and when — delta sync, pagination, HTTP cache headers</li>
+        </ul>
+
         <p><strong>Observability</strong></p>
-        <blockquote>"I'd wire an AnalyticsServiceProtocol into the Domain layer. Events are typed enums with associated values — compiler catches typos. ConsoleAnalyticsService in Application layer — swap for Firebase or Segment without touching business logic."</blockquote>
+        <blockquote>"AnalyticsServiceProtocol lives in Domain so ViewModels can call it without a layer violation. Events are typed enums with associated values — compiler catches typos. Swap ConsoleAnalyticsService for Firebase or Amplitude without touching business logic."</blockquote>
+
         <p><strong>Error handling</strong></p>
-        <blockquote>"Repository errors are typed. ViewModel maps them to user-facing strings at the UIModel boundary. ViewController never sees a raw error."</blockquote>
+        <blockquote>"Repository errors are typed — PlaylistError.notFound, APIError.noNetwork. ViewModel maps them to user-facing strings at the UIModel boundary. ViewController never sees a raw error."</blockquote>
+
         <p><strong>Deep links + push notifications</strong></p>
-        <blockquote>"Both route through a single DeepLinkHandler on AppCoordinator. URL opens and push taps converge at one switch — one routing table. DeepLinkParser is a pure function, fully testable."</blockquote>
+        <blockquote>"Both route through a single DeepLinkHandler on AppCoordinator. URL opens and push taps converge at one switch — one routing table, not two. DeepLinkParser is a pure function, fully testable with no mocks."</blockquote>
+
         <p><strong>Testing</strong></p>
         <blockquote>"Every layer is tested against the layer below via mock protocols. I never mock the concrete type — I mock the protocol. That's what makes the architecture testable, not just tested."</blockquote>
       </div>
     </div>
 
+    <!-- 65–80 -->
     <div class="tl-item">
       <div class="tl-line"></div>
       <div class="tl-dot">65–80</div>
       <div class="tl-content">
         <h3>Handle Trade-off Questions</h3>
+        <p>The rule: <strong>name at least two options and state why you're picking one for this context.</strong> "I'll use X because Y, though Z would work if…" is a senior signal.</p>
+
+        <h4>Architecture &amp; UI</h4>
         <div class="table-wrap">
           <table>
             <tr><th>They ask</th><th>Your answer</th></tr>
-            <tr><td>"UIKit or SwiftUI?"</td><td>Both are valid — depends on team's stack and iOS version floor. SwiftUI is the modern default, faster for declarative state-driven UI. UIKit gives more control over custom layouts, cell reuse, and transitions. Worth asking before assuming.</td></tr>
-            <tr><td>"Combine or async/await?"</td><td>Both are valid and compose well together. async/await excels at sequential async work with structured cancellation. Combine excels when multiple UI elements react to the same state, or when you need operators like debounce or removeDuplicates. Many teams use both — the key is not mixing them for the same operation without a clear reason.</td></tr>
-            <tr><td>"Why UIModel instead of Domain model in ViewController?"</td><td>UIModel carries display-ready data — formatted strings, localized text. If Domain model reaches the ViewController, formatting logic leaks into business logic. That said, for simple screens a 1:1 mapping may not need a dedicated type — it's a trade-off between purity and ceremony.</td></tr>
-            <tr><td>"UserDefaults or Core Data?"</td><td>Depends on the data shape and access patterns. UserDefaults + Codable is simple and sufficient for read-through caching of flat API responses. Core Data is the right fit when you need relational queries, complex migrations, or large datasets. Neither is universally better.</td></tr>
-            <tr><td>"MVVM, MVP, or MVI?"</td><td>All three achieve separation of concerns — the meaningful difference is in how state flows. MVVM with @Published is reactive and familiar to iOS teams. MVP makes the Presenter easier to unit test without a framework. MVI gives strict unidirectional flow which helps in complex state scenarios. The best choice is often what the team already uses consistently.</td></tr>
-            <tr><td>"Why Coordinator?"</td><td>Coordinators remove navigation ownership from ViewControllers, making them independently reusable and testable. The trade-off is added indirection — for simple apps it can be unnecessary ceremony. Alternatives like flow controllers or enum-driven routing solve the same problem differently. Worth naming the trade-off before recommending one.</td></tr>
+            <tr><td>"UIKit or SwiftUI?"</td><td>SwiftUI is the modern default — faster for declarative state-driven UI. UIKit gives more control over cell reuse, custom layouts, and transitions. I'd ask which the team uses before assuming.</td></tr>
+            <tr><td>"Combine or async/await?"</td><td>@Published + sink for ViewModel state. async/await for one-shot sequential async work. Don't mix them for the same operation. Combine shines with debounce/removeDuplicates pipelines.</td></tr>
+            <tr><td>"Why UIModel?"</td><td>UIModel carries display-ready data — formatted strings, localized text. If Domain model reaches ViewController, formatting logic leaks into the View layer.</td></tr>
+            <tr><td>"UserDefaults or Core Data?"</td><td>UserDefaults + Codable is sufficient for read-through caching of flat API responses. Core Data is right for relational queries, complex migrations, or large datasets.</td></tr>
+            <tr><td>"MVVM, MVP, or MVI?"</td><td>MVVM with @Published is reactive and familiar to iOS teams. MVP makes the Presenter easier to unit test without a framework. MVI gives strict unidirectional flow for complex state. Best choice is often what the team already uses consistently.</td></tr>
+            <tr><td>"Why Coordinator?"</td><td>Coordinators remove navigation ownership from ViewControllers — reusable and independently testable. Trade-off: added indirection. For simple apps it can be unnecessary ceremony.</td></tr>
+          </table>
+        </div>
+
+        <h4>API Protocol Decisions</h4>
+        <div class="table-wrap">
+          <table>
+            <tr><th>Decision</th><th>Option A</th><th>Option B</th><th>When to pick A</th></tr>
+            <tr><td>Real-time updates</td><td>Short polling</td><td>WebSockets</td><td>MVP / simpler infra; polling is fine for low-frequency updates</td></tr>
+            <tr><td>API style</td><td>REST</td><td>GraphQL</td><td>REST for simple CRUD; GraphQL for flexible, nested or multi-resource queries</td></tr>
+            <tr><td>Binary protocol</td><td>REST/JSON</td><td>gRPC</td><td>gRPC for high-throughput, contract-first internal services</td></tr>
+            <tr><td>Pagination</td><td>Cursor-based</td><td>Offset-based</td><td>Cursor for infinite scroll feeds where rows shift between pages</td></tr>
+          </table>
+        </div>
+
+        <h4>Caching Stack</h4>
+        <p style="font-size:13px; color:var(--muted);">Name the full stack — don't just say "cache":</p>
+        <div class="mono-block">HTTP cache-control + ETag / Last-Modified  ← server collaboration, free freshness
+        ↓
+Memory cache (NSCache)                     ← fast, auto-evicted under memory pressure
+        ↓
+Disk cache                                 ← persists across sessions
+        ↓
+Custom invalidation strategy               ← TTL, version key, manual purge</div>
+
+        <h4>Offline Sync — if in scope, name these concerns</h4>
+        <ul>
+          <li><strong>Conflict resolution:</strong> last-write-wins, server-wins, or merge strategy?</li>
+          <li><strong>Request queuing:</strong> persist write ops locally until connectivity returns</li>
+          <li><strong>Background retries:</strong> exponential backoff, idempotency keys on mutations</li>
+          <li><strong>Delta sync:</strong> only fetch what changed since last sync (timestamp / cursor)</li>
+          <li><strong>Batched requests:</strong> coalesce queued ops into one call</li>
+          <li><strong>Resumable uploads/downloads:</strong> chunked transfer with local byte offset</li>
+        </ul>
+
+        <h4>Storage Options</h4>
+        <div class="table-wrap">
+          <table>
+            <tr><th>Storage</th><th>When to use</th></tr>
+            <tr><td>UserDefaults</td><td>Simple key-value, small payloads, preferences</td></tr>
+            <tr><td>Core Data</td><td>Relational data, relationships, migrations, complex queries</td></tr>
+            <tr><td>SQLite / GRDB</td><td>Lightweight relational without Core Data overhead</td></tr>
+            <tr><td>Keychain</td><td>Credentials, tokens — anything requiring secure storage</td></tr>
+            <tr><td>File system / disk cache</td><td>Large blobs — images, audio, downloaded tracks</td></tr>
           </table>
         </div>
       </div>
     </div>
 
+    <!-- 80–90 -->
     <div class="tl-item">
       <div class="tl-dot">80–90</div>
       <div class="tl-content">
@@ -352,13 +479,101 @@ Application   → AppDelegate + Coordinator + DI</p>
         <blockquote>"To recap — Domain is pure business logic with no dependencies. Data implements Domain protocols, network and cache are behind their own interfaces. Presentation only holds UIModels. Application wires the dependency graph at startup. Every boundary is a protocol — independently testable and swappable."</blockquote>
         <p>Then ask them (pick 1–2):</p>
         <ul>
-          <li>Is real-time sync a future requirement? That changes cache invalidation.</li>
-          <li>What does the existing analytics stack look like?</li>
+          <li>Is real-time sync a future requirement? That changes how I'd structure cache invalidation.</li>
+          <li>What does the existing analytics stack look like? I want to know what I'd be adapting to.</li>
           <li><strong>What's the biggest pain point in the current architecture that this redesign should address?</strong></li>
         </ul>
       </div>
     </div>
 
+  </div>
+</section>
+
+<!-- TIME MANAGEMENT WARNING -->
+<section>
+  <h2>Time Management Warning</h2>
+  <div class="warn"><strong>API design is the most likely bottleneck.</strong> Mobile engineers are consumers of APIs at work, not designers. This makes the API design phase the one most likely to run long. Practice it independently with a timer. When you notice you're going deep on one section, say explicitly: "I want to make sure we get to the high-level design — let me summarize and move on."</div>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Phase</th><th>Target</th><th>Risk</th></tr>
+      <tr><td>Requirements clarification</td><td>~10 min</td><td>Asking too many edge cases</td></tr>
+      <tr><td>API &amp; data modeling</td><td>10–15 min</td><td><strong style="color:var(--keyword);">Most common overrun</strong></td></tr>
+      <tr><td>High-level system design</td><td>10–15 min</td><td></td></tr>
+      <tr><td>Deep dives &amp; follow-ups</td><td>~10 min</td><td></td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- KNOWLEDGE TOPOLOGY -->
+<section>
+  <h2>Knowledge Topology — Study Checklist</h2>
+  <p>Know where your gaps are. Each cluster is a topic to master independently.</p>
+
+  <div class="checklist-group">
+    <h4>Mobile Domain</h4>
+    <ul class="checklist">
+      <li>UIKit vs SwiftUI trade-offs — when to use each</li>
+      <li>App lifecycle, view lifecycle, state restoration</li>
+      <li>iOS concurrency: GCD, OperationQueue, async/await — when to use which</li>
+      <li>Navigation: stack-based, tab-based, deep linking</li>
+    </ul>
+  </div>
+
+  <div class="checklist-group">
+    <h4>API Design &amp; Networking</h4>
+    <ul class="checklist">
+      <li>Can explain REST / WebSockets / GraphQL / gRPC — one use case each</li>
+      <li>Pagination: offset, cursor, page-token — and when cursor beats offset</li>
+      <li>Full caching stack: HTTP headers → NSCache → disk → custom invalidation</li>
+      <li>Offline sync strategy including conflict handling</li>
+      <li>Authentication patterns (token refresh, Keychain storage)</li>
+      <li>Retry policy + exponential backoff</li>
+    </ul>
+  </div>
+
+  <div class="checklist-group">
+    <h4>Architecture</h4>
+    <ul class="checklist">
+      <li>Can draw Clean Architecture layers from memory with correct dependency direction</li>
+      <li>MVVM vs MVC vs VIPER — pros, cons, when to reach for each</li>
+      <li>Dependency injection: constructor injection vs DI container</li>
+      <li>Repository pattern — what problem it solves</li>
+    </ul>
+  </div>
+
+  <div class="checklist-group">
+    <h4>Storage</h4>
+    <ul class="checklist">
+      <li>Know all storage options and trade-offs (UserDefaults / Core Data / SQLite / Keychain / disk)</li>
+      <li>Know when secure storage (Keychain) is required vs acceptable risk</li>
+    </ul>
+  </div>
+
+  <div class="checklist-group">
+    <h4>Performance</h4>
+    <ul class="checklist">
+      <li>Memory: common retain cycle patterns, how to detect with Instruments</li>
+      <li>Battery: what drains it (polling, location, background fetch), how to minimize</li>
+      <li>60 FPS: what blocks the main thread, how to profile</li>
+      <li>App startup: cold start vs warm start, what to defer</li>
+    </ul>
+  </div>
+
+  <div class="checklist-group">
+    <h4>Observability &amp; Testing</h4>
+    <ul class="checklist">
+      <li>Unit test structure: mock the layer below, assert on the layer you built</li>
+      <li>Crash reporting integration pattern (Sentry / Firebase Crashlytics)</li>
+    </ul>
+  </div>
+
+  <div class="checklist-group">
+    <h4>Privacy &amp; Security</h4>
+    <ul class="checklist">
+      <li>Encryption at rest vs in transit</li>
+      <li>iOS permissions model (when to ask, graceful degradation)</li>
+      <li>Certificate pinning — what it prevents, trade-off on update agility</li>
+    </ul>
   </div>
 </section>
 
@@ -375,11 +590,11 @@ Application   → AppDelegate + Coordinator + DI</p>
       <div class="built">Repository, Coordinator, Factory (UseCase init), Observer (Combine)</div>
     </div>
     <div class="map-card">
-      <div class="label">Reasoning & Trade-offs</div>
+      <div class="label">Reasoning &amp; Trade-offs</div>
       <div class="built">Typed Param structs, FetchPolicy, no BaseUseCase, no Mapper protocol</div>
     </div>
     <div class="map-card">
-      <div class="label">Monitoring & Observability</div>
+      <div class="label">Monitoring &amp; Observability</div>
       <div class="built">AnalyticsServiceProtocol in Domain, typed AnalyticsEvent enum</div>
     </div>
     <div class="map-card">
@@ -394,6 +609,16 @@ Application   → AppDelegate + Coordinator + DI</p>
       <div class="label">Concurrency</div>
       <div class="built">async let for 2 ops, withThrowingTaskGroup for N ops, @MainActor on ViewModel</div>
     </div>
+  </div>
+</section>
+
+<!-- THE ONE RULE -->
+<section>
+  <h2>The One Rule</h2>
+  <div class="rule">
+    <strong>Mid-level</strong> answers the question asked.<br>
+    <strong>Senior</strong> anticipates the next question and names the trade-off before the interviewer points it out.<br><br>
+    Every decision on the board: <em>"I'm choosing X over Y because…"</em> — before they ask.
   </div>
 </section>
 
