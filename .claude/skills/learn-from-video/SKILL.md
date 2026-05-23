@@ -123,6 +123,8 @@ Generate 6–10 questions. Format them as a numbered list with a brief rationale
 
 Copy-paste these to Gemini. Paste the answers back here when done.
 
+> Can you answer these questions based on the video? Only answer based on this video's content. If the answer is not covered in the video, reply "Out of this video's scope."
+
 1. <Question> *(rationale)*
 2. <Question> *(rationale)*
 ...
@@ -145,6 +147,7 @@ Read the current state of the notes file. For each Gemini answer:
 ### Step 2 — Enrich the doc
 
 Edit the notes file:
+- Skip any answer marked "Out of this video's scope" — do not enrich, invent, or fill gaps from outside the video
 - Fold new insights into existing sections — do not just append answers at the bottom
 - Add new sections if an answer surfaced a topic not covered at all
 - Fill in the `## Open Questions` section with any unresolved nuances or things worth exploring further
@@ -188,6 +191,7 @@ State the file path and which round this was (e.g., "Round 2 of 3"). Give a 2-se
 ## Constraints
 
 - Never invent facts not in the raw notes or Gemini answers. If something is unclear, write "(needs verification)" not a guess.
+- Only enrich the doc from Gemini answers that are within the video's scope. If Gemini replies "Out of this video's scope", treat that question as unanswerable and do not fill it with outside knowledge.
 - Keep the tone technical and direct — this is interview prep, not a blog post.
 - Preserve all code snippets exactly. Do not paraphrase code.
 - The final doc should be readable top-to-bottom in 10 minutes or less. Cut filler.
