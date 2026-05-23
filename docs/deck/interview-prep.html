@@ -296,7 +296,7 @@
     <li style="margin-bottom:6px;">Tool: <strong>Excalidraw</strong> — pick it and practice it tonight</li>
     <li style="margin-bottom:6px;">4 competencies: Clean Architecture · Design Patterns · Reasoning &amp; Trade-offs · Monitoring &amp; Observability</li>
   </ul>
-  <div class="warn"><strong>Opening line (always the same):</strong> "Before I draw anything, let me clarify requirements and constraints — then I'll start with the hardest technical piece."</div>
+  <div class="warn"><strong>Opening line (always the same):</strong> "Before I draw anything, let me clarify requirements and constraints — then I'll define the API contract before touching any architecture boxes."</div>
 </section>
 
 <!-- WHAT THEY'RE EVALUATING -->
@@ -311,7 +311,7 @@
       <tr><td>Product sense</td><td>Do you think about the user, not just the system?</td></tr>
     </table>
   </div>
-  <div class="rule"><strong>Mindset: Tech Lead, not Developer.</strong> You are a Tech Lead talking to a Product Manager. A Tech Lead doesn't start coding — they ask clarifying questions, categorize the work, and scope the problem before touching a whiteboard. A strong candidate doesn't find "the correct answer." They demonstrate <em>how they think</em>.</div>
+  <div class="rule"><strong>Mindset: Tech Lead, not Developer.</strong> You are a Tech Lead talking to a Product Manager. A Tech Lead doesn't start coding — they ask clarifying questions, categorize the work, and scope the problem before touching a whiteboard. A strong candidate doesn't find "the correct answer." They demonstrate <em>how they think</em>.<br><br><strong>Trade-offs are not a section — they are your voice throughout.</strong> State a trade-off at the moment you make the decision. A senior candidate doesn't wait to be asked — they name the alternative and explain the choice as each box hits the board.</div>
 </section>
 
 <!-- TIMELINE -->
@@ -356,33 +356,110 @@
       <div class="tl-line"></div>
       <div class="tl-dot">10–25</div>
       <div class="tl-content">
-        <h3>Draw the Layers First</h3>
-        <p>Draw the architecture before the feature. Then say:</p>
+        <h3>API Design &amp; Data Model</h3>
+        <p>Define the contract before drawing any architecture boxes. Say:</p>
+        <blockquote>"I'll sketch the endpoints and domain models first — that pins down what the layers need to move around."</blockquote>
+
+        <h4>Endpoints</h4>
+        <div class="mono-block">GET  /feed?cursor=&amp;limit=20    → { items: [...], nextCursor }
+GET  /tracks/{id}             → Track
+POST /playlists               → Playlist
+PUT  /playlists/{id}/tracks   → Playlist</div>
+
+        <h4>Domain Models — what the app cares about (not DTOs yet)</h4>
+        <div class="mono-block">Track    { id, title, artist, durationMs, artworkURL }
+Playlist { id, name, tracks: [Track], ownerID }
+FeedItem (enum) { .banner(Banner) | .track(Track) | .playlist(Playlist) }</div>
+
+        <h4>Trade-off — API style</h4>
+        <div class="table-wrap">
+          <table>
+            <tr><th>Option</th><th>Pick when</th></tr>
+            <tr><td>REST</td><td>Simple CRUD, well-defined resources — the default choice</td></tr>
+            <tr><td>GraphQL</td><td>Flexible, nested, or multi-resource queries; client-driven shape</td></tr>
+            <tr><td>gRPC</td><td>High-throughput, contract-first internal services</td></tr>
+          </table>
+        </div>
+
+        <h4>Trade-off — pagination</h4>
+        <div class="table-wrap">
+          <table>
+            <tr><th>Option</th><th>Pick when</th></tr>
+            <tr><td>Cursor-based</td><td>Infinite-scroll feeds — rows shift as new content is inserted between pages</td></tr>
+            <tr><td>Offset-based</td><td>Paginated lists where total count matters and order is stable</td></tr>
+          </table>
+        </div>
+
+        <h4>Trade-off — real-time updates</h4>
+        <p style="font-size:13px;">Polling is simpler infra and fine for low-frequency updates (social counts, feed refresh). WebSocket for live playback state, collaborative editing, or chat. State the choice and the reason.</p>
+      </div>
+    </div>
+
+    <!-- 25–40 -->
+    <div class="tl-item">
+      <div class="tl-line"></div>
+      <div class="tl-dot">25–40</div>
+      <div class="tl-content">
+        <h3>High-Level Architecture — Draw the Layers</h3>
+        <p>Draw the four-layer stack. As you place each layer, state the dependency rule and the decision that shaped it.</p>
         <blockquote>"Domain depends on nothing. That's the rule everything else flows from."</blockquote>
         <div class="mono-block">Presentation  → ViewController + ViewModel (@Published)
 Domain        → UseCase + Protocol + Model + Param + FetchPolicy
 Data          → Repository + DataSource + DTO + Mapper + APIClient
 Application   → AppDelegate + Coordinator + DI wiring</div>
+
+        <h4>Trade-offs — state these as you draw each layer</h4>
+        <div class="table-wrap">
+          <table>
+            <tr><th>Decision</th><th>Say this</th></tr>
+            <tr><td>UIKit vs SwiftUI</td><td>SwiftUI is the modern default — faster for declarative state-driven UI. UIKit gives more control over cell reuse, custom layouts, and transitions. I'd ask which the team uses before assuming.</td></tr>
+            <tr><td>MVVM vs MVP vs MVI</td><td>MVVM with @Published is reactive and familiar to iOS teams. MVP makes the Presenter easier to unit test without a framework. MVI gives strict unidirectional flow for complex state. Best choice is what the team uses consistently.</td></tr>
+            <tr><td>Combine vs async/await</td><td>@Published + sink for ViewModel state. async/await for one-shot sequential async work. I don't mix them for the same operation. Combine shines with debounce/removeDuplicates pipelines.</td></tr>
+            <tr><td>Coordinator</td><td>Removes navigation ownership from ViewControllers — reusable and independently testable. Trade-off: added indirection. For a simple app it can be unnecessary ceremony.</td></tr>
+            <tr><td>UIModel</td><td>Carries display-ready data — formatted strings, localized text. If the Domain model reaches ViewController, formatting logic leaks into the View layer.</td></tr>
+          </table>
+        </div>
       </div>
     </div>
 
-    <!-- 25–50 -->
+    <!-- 40–60 -->
     <div class="tl-item">
       <div class="tl-line"></div>
-      <div class="tl-dot">25–50</div>
+      <div class="tl-dot">40–60</div>
       <div class="tl-content">
         <h3>Trace the Full Data Flow</h3>
-        <p>Pick the hardest piece and walk it end-to-end out loud:</p>
+        <p>Pick the hardest path and walk it end-to-end out loud. Name trade-offs at the moment you reach each decision — not in a separate section later.</p>
         <blockquote>"User opens the app. AppCoordinator builds the dependency graph — one APIClient, repositories injected into UseCases, UseCases injected into ViewModels. ViewModel calls FetchHomeDataUseCase with FetchPolicy.cached. UseCase fires async let for tracks and playlists concurrently. Each repo checks policy: cache-first, fall back to network. Response comes back as a DTO, Mapper converts it to a Domain model, ViewModel maps it to a UIModel. UIModel is the only type that reaches the ViewController. ViewController sinks on @Published feedItems — a HomeFeedItem enum — and switches on each case. Compiler enforces exhaustiveness, no casting."</blockquote>
+
+        <h4>Trade-off — caching stack (name this as you trace the data path)</h4>
+        <div class="mono-block">HTTP cache-control + ETag / Last-Modified  ← server collaboration, free freshness
+        ↓
+Memory cache (NSCache)                     ← fast, auto-evicted under memory pressure
+        ↓
+Disk cache                                 ← persists across sessions
+        ↓
+Custom invalidation strategy               ← TTL, version key, manual purge</div>
+
+        <h4>Trade-off — storage (at the Data layer)</h4>
+        <div class="table-wrap">
+          <table>
+            <tr><th>Storage</th><th>When to use</th></tr>
+            <tr><td>UserDefaults</td><td>Simple key-value, small payloads, preferences, read-through cache of flat API responses</td></tr>
+            <tr><td>Core Data</td><td>Relational data, relationships, migrations, complex queries</td></tr>
+            <tr><td>SQLite / GRDB</td><td>Lightweight relational without Core Data overhead</td></tr>
+            <tr><td>Keychain</td><td>Credentials, tokens — anything requiring secure storage</td></tr>
+            <tr><td>File system / disk cache</td><td>Large blobs — images, audio, downloaded tracks</td></tr>
+          </table>
+        </div>
       </div>
     </div>
 
-    <!-- 50–65 -->
+    <!-- 60–75 -->
     <div class="tl-item">
       <div class="tl-line"></div>
-      <div class="tl-dot">50–65</div>
+      <div class="tl-dot">60–75</div>
       <div class="tl-content">
-        <h3>Add the Senior-Level Layers (Unprompted)</h3>
+        <h3>Senior-Level Deep Dives (Unprompted)</h3>
 
         <p><strong>Mobile-specific constraints</strong> — call these out before being asked:</p>
         <ul>
@@ -400,54 +477,7 @@ Application   → AppDelegate + Coordinator + DI wiring</div>
         <p><strong>Deep links + push notifications</strong></p>
         <blockquote>"Both route through a single DeepLinkHandler on AppCoordinator. URL opens and push taps converge at one switch — one routing table, not two. DeepLinkParser is a pure function, fully testable with no mocks."</blockquote>
 
-        <p><strong>Testing</strong></p>
-        <blockquote>"Every layer is tested against the layer below via mock protocols. I never mock the concrete type — I mock the protocol. That's what makes the architecture testable, not just tested."</blockquote>
-      </div>
-    </div>
-
-    <!-- 65–80 -->
-    <div class="tl-item">
-      <div class="tl-line"></div>
-      <div class="tl-dot">65–80</div>
-      <div class="tl-content">
-        <h3>Handle Trade-off Questions</h3>
-        <p>The rule: <strong>name at least two options and state why you're picking one for this context.</strong> "I'll use X because Y, though Z would work if…" is a senior signal.</p>
-
-        <h4>Architecture &amp; UI</h4>
-        <div class="table-wrap">
-          <table>
-            <tr><th>They ask</th><th>Your answer</th></tr>
-            <tr><td>"UIKit or SwiftUI?"</td><td>SwiftUI is the modern default — faster for declarative state-driven UI. UIKit gives more control over cell reuse, custom layouts, and transitions. I'd ask which the team uses before assuming.</td></tr>
-            <tr><td>"Combine or async/await?"</td><td>@Published + sink for ViewModel state. async/await for one-shot sequential async work. Don't mix them for the same operation. Combine shines with debounce/removeDuplicates pipelines.</td></tr>
-            <tr><td>"Why UIModel?"</td><td>UIModel carries display-ready data — formatted strings, localized text. If Domain model reaches ViewController, formatting logic leaks into the View layer.</td></tr>
-            <tr><td>"UserDefaults or Core Data?"</td><td>UserDefaults + Codable is sufficient for read-through caching of flat API responses. Core Data is right for relational queries, complex migrations, or large datasets.</td></tr>
-            <tr><td>"MVVM, MVP, or MVI?"</td><td>MVVM with @Published is reactive and familiar to iOS teams. MVP makes the Presenter easier to unit test without a framework. MVI gives strict unidirectional flow for complex state. Best choice is often what the team already uses consistently.</td></tr>
-            <tr><td>"Why Coordinator?"</td><td>Coordinators remove navigation ownership from ViewControllers — reusable and independently testable. Trade-off: added indirection. For simple apps it can be unnecessary ceremony.</td></tr>
-          </table>
-        </div>
-
-        <h4>API Protocol Decisions</h4>
-        <div class="table-wrap">
-          <table>
-            <tr><th>Decision</th><th>Option A</th><th>Option B</th><th>When to pick A</th></tr>
-            <tr><td>Real-time updates</td><td>Short polling</td><td>WebSockets</td><td>MVP / simpler infra; polling is fine for low-frequency updates</td></tr>
-            <tr><td>API style</td><td>REST</td><td>GraphQL</td><td>REST for simple CRUD; GraphQL for flexible, nested or multi-resource queries</td></tr>
-            <tr><td>Binary protocol</td><td>REST/JSON</td><td>gRPC</td><td>gRPC for high-throughput, contract-first internal services</td></tr>
-            <tr><td>Pagination</td><td>Cursor-based</td><td>Offset-based</td><td>Cursor for infinite scroll feeds where rows shift between pages</td></tr>
-          </table>
-        </div>
-
-        <h4>Caching Stack</h4>
-        <p style="font-size:13px; color:var(--muted);">Name the full stack — don't just say "cache":</p>
-        <div class="mono-block">HTTP cache-control + ETag / Last-Modified  ← server collaboration, free freshness
-        ↓
-Memory cache (NSCache)                     ← fast, auto-evicted under memory pressure
-        ↓
-Disk cache                                 ← persists across sessions
-        ↓
-Custom invalidation strategy               ← TTL, version key, manual purge</div>
-
-        <h4>Offline Sync — if in scope, name these concerns</h4>
+        <p><strong>Offline sync</strong> — if in scope, name these concerns:</p>
         <ul>
           <li><strong>Conflict resolution:</strong> last-write-wins, server-wins, or merge strategy?</li>
           <li><strong>Request queuing:</strong> persist write ops locally until connectivity returns</li>
@@ -457,23 +487,14 @@ Custom invalidation strategy               ← TTL, version key, manual purge</d
           <li><strong>Resumable uploads/downloads:</strong> chunked transfer with local byte offset</li>
         </ul>
 
-        <h4>Storage Options</h4>
-        <div class="table-wrap">
-          <table>
-            <tr><th>Storage</th><th>When to use</th></tr>
-            <tr><td>UserDefaults</td><td>Simple key-value, small payloads, preferences</td></tr>
-            <tr><td>Core Data</td><td>Relational data, relationships, migrations, complex queries</td></tr>
-            <tr><td>SQLite / GRDB</td><td>Lightweight relational without Core Data overhead</td></tr>
-            <tr><td>Keychain</td><td>Credentials, tokens — anything requiring secure storage</td></tr>
-            <tr><td>File system / disk cache</td><td>Large blobs — images, audio, downloaded tracks</td></tr>
-          </table>
-        </div>
+        <p><strong>Testing</strong></p>
+        <blockquote>"Every layer is tested against the layer below via mock protocols. I never mock the concrete type — I mock the protocol. That's what makes the architecture testable, not just tested."</blockquote>
       </div>
     </div>
 
-    <!-- 80–90 -->
+    <!-- 75–90 -->
     <div class="tl-item">
-      <div class="tl-dot">80–90</div>
+      <div class="tl-dot">75–90</div>
       <div class="tl-content">
         <h3>Close Strong</h3>
         <blockquote>"To recap — Domain is pure business logic with no dependencies. Data implements Domain protocols, network and cache are behind their own interfaces. Presentation only holds UIModels. Application wires the dependency graph at startup. Every boundary is a protocol — independently testable and swappable."</blockquote>
@@ -497,9 +518,11 @@ Custom invalidation strategy               ← TTL, version key, manual purge</d
     <table>
       <tr><th>Phase</th><th>Target</th><th>Risk</th></tr>
       <tr><td>Requirements clarification</td><td>~10 min</td><td>Asking too many edge cases</td></tr>
-      <tr><td>API &amp; data modeling</td><td>10–15 min</td><td><strong style="color:var(--keyword);">Most common overrun</strong></td></tr>
-      <tr><td>High-level system design</td><td>10–15 min</td><td></td></tr>
-      <tr><td>Deep dives &amp; follow-ups</td><td>~10 min</td><td></td></tr>
+      <tr><td>API &amp; data modeling</td><td>~15 min</td><td><strong style="color:var(--keyword);">Most common overrun</strong></td></tr>
+      <tr><td>High-level architecture</td><td>~15 min</td><td></td></tr>
+      <tr><td>Data flow</td><td>~20 min</td><td></td></tr>
+      <tr><td>Senior deep dives</td><td>~15 min</td><td></td></tr>
+      <tr><td>Close &amp; questions</td><td>~15 min</td><td></td></tr>
     </table>
   </div>
 </section>
