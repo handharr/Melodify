@@ -306,6 +306,18 @@
   .tradeoff-body .pick:first-child { margin-top: 0; }
   .pro { color: var(--green); font-size: 12px; display: block; }
   .con { color: var(--keyword); font-size: 12px; display: block; }
+  .rec {
+    display: block;
+    margin-top: 8px;
+    padding: 6px 10px;
+    background: rgba(188, 140, 255, 0.08);
+    border-left: 2px solid var(--purple);
+    border-radius: 0 4px 4px 0;
+    font-size: 12px;
+    color: var(--purple);
+    line-height: 1.5;
+  }
+  .rec strong { color: var(--purple); }
   .bottom-nav {
     position: fixed;
     bottom: 0; left: 0; right: 0;
@@ -597,7 +609,7 @@ Custom invalidation strategy               ← TTL, version key, manual purge</d
         <span class="pick">UIKit</span>
         <span class="pro">+ Battle-tested, full control over layout, transitions, and cell lifecycle</span>
         <span class="con">− Verbose; navigation logic bleeds into ViewController at scale</span>
-        <br><em>Ask which the team uses before assuming.</em>
+        <span class="rec"><strong>Recommended:</strong> SwiftUI for new greenfield screens. UIKit when joining an existing team or needing complex list performance. Always ask what the team uses first.</span>
       </div>
     </details>
     <details>
@@ -606,6 +618,7 @@ Custom invalidation strategy               ← TTL, version key, manual purge</d
         <strong>foreground</strong> — active, full CPU. <strong>background</strong> — limited CPU, no UI updates, ~30s to finish work. <strong>suspended</strong> — frozen in memory, killed without notice.<br><br>
         <span class="pro">+ Know what's safe in each state: network calls OK in background, UI mutations are not</span>
         <span class="con">− Background tasks not properly ended → app gets terminated by watchdog</span>
+        <span class="rec"><strong>Recommended:</strong> Use <code>beginBackgroundTask</code> to request extra time for critical work. Always call <code>endBackgroundTask</code> when done — even on failure.</span>
       </div>
     </details>
     <details>
@@ -620,6 +633,7 @@ Custom invalidation strategy               ← TTL, version key, manual purge</d
         <span class="pick">OperationQueue</span>
         <span class="pro">+ Built-in cancellation, task dependencies, max concurrency limit</span>
         <span class="con">− More boilerplate than the alternatives</span>
+        <span class="rec"><strong>Recommended:</strong> async/await for nearly everything new. GCD only for one-off background dispatch. OperationQueue when you need explicit cancellation or inter-task dependencies (e.g. image pipeline).</span>
       </div>
     </details>
     <details>
@@ -628,7 +642,7 @@ Custom invalidation strategy               ← TTL, version key, manual purge</d
         <strong>Stack</strong> — drill-down hierarchy. <strong>Tab</strong> — peer sections at the same level.<br><br>
         <span class="pro">+ Coordinator centralises routing: one routing table, independently testable, no nav logic in VCs</span>
         <span class="con">− Added indirection; over-engineering for a simple two-screen app</span>
-        <br><em>Deep links and push taps should both funnel through the same handler — one switch, not two.</em>
+        <span class="rec"><strong>Recommended:</strong> Coordinator for any app with deep linking, auth flows, or 3+ screens. Skip it for a simple demo with a single navigation path.</span>
       </div>
     </details>
   </div>
@@ -650,6 +664,7 @@ Custom invalidation strategy               ← TTL, version key, manual purge</d
         <span class="pick">gRPC</span>
         <span class="pro">+ Strongly typed contracts, efficient binary encoding, built-in streaming</span>
         <span class="con">− Not human-readable, overkill for most mobile-to-backend calls</span>
+        <span class="rec"><strong>Recommended:</strong> REST as the default. WebSockets when you need live push from server to client. GraphQL when the client drives query shape (BFF pattern). gRPC for internal high-throughput microservices.</span>
       </div>
     </details>
     <details>
@@ -661,6 +676,7 @@ Custom invalidation strategy               ← TTL, version key, manual purge</d
         <span class="pick">Offset-based</span>
         <span class="pro">+ Can jump to any page, easy to show total count and page numbers</span>
         <span class="con">− Rows shift between pages when data is inserted — causes skips and duplicates in feeds</span>
+        <span class="rec"><strong>Recommended:</strong> Cursor for any live feed (home, activity, search results). Offset for admin panels, static lists, or anywhere "go to page 5" is a real user need.</span>
       </div>
     </details>
     <details>
@@ -672,6 +688,7 @@ Custom invalidation strategy               ← TTL, version key, manual purge</d
         <strong>Custom invalidation</strong> — TTL, version key, or manual purge for cases the above can't handle<br><br>
         <span class="pro">+ Each layer handles a different freshness/speed trade-off — name all four to signal depth</span>
         <span class="con">− Stale data risk grows as you move down the stack; invalidation strategy must be explicit</span>
+        <span class="rec"><strong>Recommended:</strong> Start with HTTP headers (free). Add NSCache for images and repeated reads. Add disk only when offline support is required. Add custom invalidation only when TTL or versioning is needed.</span>
       </div>
     </details>
     <details>
@@ -686,6 +703,7 @@ Custom invalidation strategy               ← TTL, version key, manual purge</d
         <span class="pick">Merge strategy</span>
         <span class="pro">+ Fair — both sides' intent is preserved (e.g. collaborative doc editing)</span>
         <span class="con">− Complex to implement, hard to reason about edge cases</span>
+        <span class="rec"><strong>Recommended:</strong> Last-write-wins for social/preference data. Server-wins for anything financial or authoritative. Merge only if the feature explicitly requires preserving concurrent edits (notes, docs, whiteboards).</span>
       </div>
     </details>
     <details>
@@ -698,6 +716,7 @@ Custom invalidation strategy               ← TTL, version key, manual purge</d
         <span class="pick">UserDefaults</span>
         <span class="pro">+ Simple API, fine for non-sensitive preferences</span>
         <span class="con">− Unencrypted plist on disk — never store tokens here</span>
+        <span class="rec"><strong>Recommended:</strong> Always Keychain for tokens. Short-lived access token + long-lived refresh token. Refresh silently on 401 — the user should never see an auth error mid-session.</span>
       </div>
     </details>
     <details>
@@ -706,6 +725,7 @@ Custom invalidation strategy               ← TTL, version key, manual purge</d
         Retry on transient failures (5xx, timeout) with increasing delay: 1s → 2s → 4s → give up.<br><br>
         <span class="pro">+ Prevents thundering herd on the server; resilient to brief outages</span>
         <span class="con">− Delayed feedback to the user; mutations must carry idempotency keys to prevent duplicate writes on retry</span>
+        <span class="rec"><strong>Recommended:</strong> Always apply exponential backoff on network failures. Cap at 3–5 retries. Show a user-facing error after the last attempt — don't retry silently forever.</span>
       </div>
     </details>
   </div>
@@ -718,6 +738,7 @@ Custom invalidation strategy               ← TTL, version key, manual purge</d
         Presentation → Domain ← Data. The arrow always points inward.<br><br>
         <span class="pro">+ Domain has zero framework imports — fully testable with plain Swift, portable across platforms</span>
         <span class="con">− More files and interfaces than a flat structure; feels like overhead on small features</span>
+        <span class="rec"><strong>Recommended:</strong> Always enforce the dependency rule, even in small apps. The habit is cheap to build early and expensive to retrofit later.</span>
       </div>
     </details>
     <details>
@@ -732,6 +753,7 @@ Custom invalidation strategy               ← TTL, version key, manual purge</d
         <span class="pick">VIPER</span>
         <span class="pro">+ Strict role separation — every concern has one file, easy to enforce in large teams</span>
         <span class="con">− Very verbose; ceremony cost is too high for most features</span>
+        <span class="rec"><strong>Recommended:</strong> MVVM + Clean Architecture for most iOS work. MVC only for throwaway prototypes. VIPER only if the existing codebase already uses it or the team is very large with strict ownership boundaries.</span>
       </div>
     </details>
     <details>
@@ -743,6 +765,7 @@ Custom invalidation strategy               ← TTL, version key, manual purge</d
         <span class="pick">DI container (e.g. Swinject, Factory)</span>
         <span class="pro">+ Less boilerplate at scale, centralised registration</span>
         <span class="con">− Dependencies are implicit — harder to see what a type actually needs at a glance</span>
+        <span class="rec"><strong>Recommended:</strong> Constructor injection always. Only reach for a DI container when the wiring boilerplate across many modules becomes genuinely painful.</span>
       </div>
     </details>
     <details>
@@ -751,6 +774,7 @@ Custom invalidation strategy               ← TTL, version key, manual purge</d
         UseCase calls <code>repository.fetch()</code> — it doesn't know if that's network, cache, or disk.<br><br>
         <span class="pro">+ Swap data source (e.g. mock for tests) without touching business logic; single place to own caching strategy</span>
         <span class="con">− Extra abstraction layer; for a truly trivial data source it can feel like unnecessary indirection</span>
+        <span class="rec"><strong>Recommended:</strong> Always use Repository in Clean Architecture. It's the pattern that makes FetchPolicy and cache/network fallback clean to implement.</span>
       </div>
     </details>
   </div>
@@ -775,6 +799,7 @@ Custom invalidation strategy               ← TTL, version key, manual purge</d
         <span class="pick">Disk / file cache</span>
         <span class="pro">+ Right for large blobs: images, audio, downloaded tracks</span>
         <span class="con">− Manual eviction; must manage file paths and cache size yourself</span>
+        <span class="rec"><strong>Recommended:</strong> Match storage to data type — UserDefaults for settings, Core Data for relational, Keychain for secrets, disk for blobs. Never use UserDefaults as a general-purpose database.</span>
       </div>
     </details>
     <details>
@@ -784,6 +809,7 @@ Custom invalidation strategy               ← TTL, version key, manual purge</d
         <span class="pick">UserDefaults OK</span> — UI state, feature flags, preferences, non-sensitive read-through cache<br><br>
         <span class="pro">+ Keychain items are encrypted at rest and locked to the app's sandbox</span>
         <span class="con">− Using UserDefaults for tokens is a common security finding in audits — don't do it</span>
+        <span class="rec"><strong>Recommended:</strong> Default to Keychain for anything that grants access or identifies the user. If in doubt, ask: "would I be comfortable if this value appeared in a crash log?" If no — use Keychain.</span>
       </div>
     </details>
   </div>
@@ -800,7 +826,7 @@ Custom invalidation strategy               ← TTL, version key, manual purge</d
         <span class="pick">[unowned self]</span>
         <span class="pro">+ No optional unwrap needed</span>
         <span class="con">− Crashes if <code>self</code> is already deallocated — only safe when lifetimes are guaranteed equal</span>
-        <br><em>Detect with: Instruments → Leaks, or Debug Memory Graph in Xcode.</em>
+        <span class="rec"><strong>Recommended:</strong> Default to <code>[weak self]</code> everywhere. Use <code>[unowned self]</code> only when you can prove the closure cannot outlive the object (rare). Detect leaks with Instruments → Leaks or Xcode Memory Graph.</span>
       </div>
     </details>
     <details>
@@ -813,6 +839,7 @@ Custom invalidation strategy               ← TTL, version key, manual purge</d
         <span class="pick">Batch requests</span>
         <span class="pro">+ One radio wake-up for N calls instead of N wake-ups</span>
         <span class="con">− Adds latency if some calls are time-sensitive</span>
+        <span class="rec"><strong>Recommended:</strong> Push notifications over polling whenever the backend supports it. Batch non-urgent analytics and logging calls. Use significant-location-change instead of continuous GPS unless precision is critical.</span>
       </div>
     </details>
     <details>
@@ -821,7 +848,7 @@ Custom invalidation strategy               ← TTL, version key, manual purge</d
         Each frame has 16ms budget. Layout, drawing, and <code>@MainActor</code> state updates all run here.<br><br>
         <span class="pro">+ Moving image decoding, JSON parsing, and disk I/O to a background queue keeps the main thread free</span>
         <span class="con">− Forgetting to dispatch back to main for UI updates causes purple thread-checker warnings (and crashes)</span>
-        <br><em>Profile with: Instruments → Time Profiler. Look for long frames in the main thread lane.</em>
+        <span class="rec"><strong>Recommended:</strong> Mark ViewModels <code>@MainActor</code> — all state mutations automatically happen on main. Use <code>async</code> functions for background work and <code>await</code> back on the actor. Profile with Instruments → Time Profiler.</span>
       </div>
     </details>
     <details>
@@ -831,6 +858,7 @@ Custom invalidation strategy               ← TTL, version key, manual purge</d
         <span class="pick">Warm start</span> — app already in memory, brought to foreground. Very fast.<br><br>
         <span class="pro">+ Deferring analytics init, non-critical network calls, and heavy data loading until after first frame renders noticeably improves perceived startup</span>
         <span class="con">− Too much deferred work can cause a visible content "pop-in" after launch</span>
+        <span class="rec"><strong>Recommended:</strong> In <code>application(_:didFinishLaunching)</code> do only what's required for the first screen. Defer analytics, logging SDKs, and prefetch calls until after <code>viewDidAppear</code>.</span>
       </div>
     </details>
   </div>
@@ -843,6 +871,7 @@ Custom invalidation strategy               ← TTL, version key, manual purge</d
         UseCase test mocks <code>RepositoryProtocol</code>. ViewModel test mocks <code>UseCaseProtocol</code>.<br><br>
         <span class="pro">+ Implementation can change freely without breaking tests; each layer is tested in isolation</span>
         <span class="con">− Must maintain mock implementations alongside real ones (code-gen tools like Mockolo help)</span>
+        <span class="rec"><strong>Recommended:</strong> One mock per protocol, kept next to the test target. Never use <code>XCTestExpectation</code> with a hardcoded timeout — use async/await tests instead for deterministic results.</span>
       </div>
     </details>
     <details>
@@ -854,6 +883,7 @@ Custom invalidation strategy               ← TTL, version key, manual purge</d
         <span class="pick">Sentry</span>
         <span class="pro">+ Captures non-fatal errors, breadcrumbs, performance traces, and crashes in one SDK; self-hostable</span>
         <span class="con">− Paid beyond the free tier; slightly more integration work</span>
+        <span class="rec"><strong>Recommended:</strong> Crashlytics if you're already in the Firebase ecosystem. Sentry if you want non-crash error tracking and performance monitoring without adding multiple SDKs.</span>
       </div>
     </details>
   </div>
@@ -869,6 +899,7 @@ Custom invalidation strategy               ← TTL, version key, manual purge</d
         <span class="pick">At rest — iOS Data Protection</span>
         <span class="pro">+ Files with <code>.completeFileProtection</code> are encrypted when the device is locked; Keychain adds another layer for secrets</span>
         <span class="con">− Default file protection is <code>.completeUntilFirstUserAuthentication</code> — weaker; must opt up explicitly for sensitive files</span>
+        <span class="rec"><strong>Recommended:</strong> Enable <code>.completeFileProtection</code> for any file containing user data. Always use HTTPS — no exceptions. Store secrets in Keychain, not in files.</span>
       </div>
     </details>
     <details>
@@ -876,7 +907,7 @@ Custom invalidation strategy               ← TTL, version key, manual purge</d
       <div class="tradeoff-body">
         <span class="pro">+ Ask at the moment of use (contextual) — grant rates are significantly higher than asking on launch</span>
         <span class="con">− iOS gives only one native prompt per permission; if denied, the user must go to Settings manually</span>
-        <br><em>Always degrade gracefully — disable the feature, don't block the core flow.</em>
+        <span class="rec"><strong>Recommended:</strong> Show a pre-prompt explaining why you need the permission before triggering the system dialog — you only get one shot. Always degrade gracefully if denied; never block the core flow.</span>
       </div>
     </details>
     <details>
@@ -885,6 +916,7 @@ Custom invalidation strategy               ← TTL, version key, manual purge</d
         Rejects any TLS cert not matching the pinned one — even a cert from a trusted CA is blocked.<br><br>
         <span class="pro">+ Prevents MITM attacks even if a CA is compromised; strong guarantee for sensitive data in transit</span>
         <span class="con">− If the cert rotates and the pinned build is still in the wild, those users get network failures until they update. Requires a cert rotation plan and a grace-period fallback.</span>
+        <span class="rec"><strong>Recommended:</strong> Use certificate pinning only for high-security apps (banking, healthcare). For most apps, HTTPS + ATS is sufficient. If you pin, pin the public key (not the full cert) and support multiple pins simultaneously to allow rotation.</span>
       </div>
     </details>
   </div>
