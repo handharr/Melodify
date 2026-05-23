@@ -1,0 +1,350 @@
+# iOS App System Design — Generic Architecture
+
+My default architecture for any iOS app. Carry this into every interview.  
+Scenario-specific docs extend this — they describe the delta, not a replacement.
+
+---
+
+## Architecture Pattern
+
+**Clean Architecture + MVVM + UIKit**
+
+```
+Presentation  →  ViewController + ViewModel (Combine @Published)
+Domain        →  UseCase + Protocol + Model + Param + FetchPolicy
+Data          →  Repository + DataSource + DTO + Mapper + APIClient
+Application   →  AppDelegate + Coordinator + DI (manual init injection)
+```
+
+**Layer dependency rule: Presentation → Domain ← Data. Domain depends on nothing.**
+
+The Data layer knows Domain models (via Mapper). The Presentation layer knows Domain models (via UseCase). Neither knows the other exists.
+
+---
+
+## Why These Choices
+
+### Clean Architecture over MVC
+MVC in iOS degrades to Massive ViewController — business logic, networking, and layout all end up in one file. Clean Architecture enforces the dependency rule so each layer is independently testable and replaceable. Cost: more files. Benefit: every layer can be tested without the others.
+
+### MVVM over MVP
+In MVP the Presenter holds a reference back to the View via protocol — two-way coupling. MVVM breaks that: ViewModel exposes `@Published` state and has no reference to the View. ViewModels are easier to test (no mock View needed) and work naturally with Combine.
+
+### MVVM over VIPER
+VIPER splits a screen into 5 objects. The overhead is justified for very large teams where each layer is owned by a different person. For a small team, MVVM + UseCase gives the same testability with half the files.
+
+### UIKit over SwiftUI
+UIKit gives fine-grained control over scroll performance, custom transitions, and `AVPlayerViewController` integration. SwiftUI is the right choice for new simple screens; UIKit is still preferred when you need full control over performance and native framework integration.
+
+---
+
+## Layer Breakdown
+
+### Presentation
+
+```
+ViewController
+  └─ owns ViewModel (strong ref)
+  └─ binds to @Published state via Combine sink
+  └─ calls ViewModel methods on user actions
+  └─ never calls UseCases or Repositories directly
+
+ViewModel
+  └─ @MainActor — all state on main thread, no DispatchQueue.main.async
+  └─ @Published properties (tracks, isLoading, errorMessage)
+  └─ calls UseCases
+  └─ owns UIModel mappers (Domain → display model)
+  └─ [weak self] in all closures
+  └─ defer { isLoading = false } — guaranteed cleanup on success and failure
+```
+
+**UIModel** — a flat, display-ready struct. Never pass Domain models to the View directly. The ViewModel maps Domain → UIModel so the View has no knowledge of business types.
+
+### Domain
+
+```
+UseCase
+  └─ one public method: execute(policy:param:) async throws → Output
+  └─ stateless — created per call or injected
+  └─ orchestrates one business action
+  └─ calls one or more Repository methods
+  └─ never touches networking or storage directly
+
+Domain Service
+  └─ stateful or long-lived logic not tied to a single user action
+  └─ injected and lives as long as needed (often app-scoped)
+  └─ examples: PlayerService, SessionService, AuthService
+
+Model
+  └─ pure Swift structs — no import UIKit, no import Foundation networking
+  └─ the only type that crosses all layers
+
+Param
+  └─ typed struct for every UseCase input
+  └─ split into path: and query: sub-structs
+  └─ adding a field doesn't break existing call sites
+
+FetchPolicy
+  └─ .fresh   — always hit network, update cache
+  └─ .cached  — return cache if available, else network
+  └─ .strict  — cache only, throw on miss
+  └─ travels from ViewModel → UseCase → Repository
+  └─ Repository is the only place that interprets it
+```
+
+**UseCase vs Domain Service — when to use which:**
+
+| | UseCase | Domain Service |
+|---|---|---|
+| Triggered by | User action | Another component |
+| State | Stateless | Can be stateful |
+| Lifetime | Per call | Injected, lives as needed |
+
+### Data
+
+```
+Repository
+  └─ implements RepositoryProtocol (Domain interface)
+  └─ coordinates RemoteDataSource and LocalDataSource
+  └─ applies FetchPolicy: check local → fetch remote → write local
+  └─ converts DTO → Domain Model via Mapper
+  └─ never exposed to Presentation or Domain UseCases directly (only via protocol)
+
+RemoteDataSource
+  └─ wraps APIClient
+  └─ builds request URLs and decodes responses
+  └─ returns DTOs — never Domain models
+
+LocalDataSource
+  └─ wraps persistence (UserDefaults / SQLite / GRDB / Core Data)
+  └─ returns DTOs — never Domain models
+  └─ Repository never touches the storage backend directly
+
+DTO (Data Transfer Object)
+  └─ mirrors the API or DB schema exactly
+  └─ Codable — conforms to external shape, not business shape
+  └─ disposable: only lives between the network/DB and the Mapper
+
+Mapper
+  └─ the only type that knows both DTO and Domain model
+  └─ static function: toDomain(_ dto: DTO) -> Model?
+  └─ returns Optional — invalid data is silently dropped, never crashes
+
+APIClient
+  └─ generic HTTP client: get/post/put/delete
+  └─ lives at Data/Network/ — not a separate layer
+  └─ no domain knowledge
+```
+
+**DTO → Mapper → Domain Model flow:**
+
+```
+RemoteDataSource fetches JSON
+  → decoded as DTO (Codable, mirrors API shape)
+  → Mapper.toDomain(dto) → Domain Model (or nil if invalid)
+  → Repository returns [Model] to UseCase
+  → UseCase returns [Model] to ViewModel
+  → ViewModel maps Model → UIModel for the View
+```
+
+Mapper is the seam between external data and your business logic. Keep it the only crossing point.
+
+### Application
+
+```
+AppDelegate
+  └─ entry point — wires window and root coordinator
+  └─ registers app-scoped services (analytics, player, auth)
+
+Coordinator
+  └─ owns navigation logic — ViewControllers never push/present directly
+  └─ creates UseCases and ViewModels (DI composition root)
+  └─ one coordinator per flow
+
+DI (manual init injection)
+  └─ no DI framework — dependencies passed through init
+  └─ no default concrete arguments on Repository or UseCase inits
+  └─ DataSources and APIClient composed at Coordinator level
+```
+
+---
+
+## Dependency Injection — The Rule
+
+Dependencies flow inward. Each layer receives its dependencies via init. No layer constructs its own dependencies.
+
+```swift
+// Coordinator (composition root) — builds the full graph
+let client = APIClient()
+let remoteDataSource = TrackRemoteDataSource(client: client)
+let localDataSource = TrackLocalDataSource()
+let repository = TrackRepository(remote: remoteDataSource, local: localDataSource)
+let useCase = SearchTracksUseCase(repository: repository)
+let viewModel = TrackListViewModel(searchTracks: useCase)
+```
+
+**No default concrete args in Repository inits.** The default should come from the DI registration, not the init signature. Default args that instantiate concrete types hide dependencies and make testing harder.
+
+---
+
+## Generic Data Flows
+
+### Read flow (e.g. load a screen)
+
+```
+ViewController.viewDidLoad()
+  → ViewModel.load()
+      → isLoading = true
+      → UseCase.execute(policy: .cached, param:)
+          → Repository.fetch(policy: .cached, param:)
+              → LocalDataSource.fetch() → cached DTO? → Mapper → Model (fast return)
+              → RemoteDataSource.fetch() → DTO → Mapper → Model (background)
+              → LocalDataSource.save(dto)
+          → returns [Model]
+      → ViewModel maps Model → UIModel
+      → @Published state updated → View re-renders
+      → defer: isLoading = false
+```
+
+### Mutation flow (e.g. create / update)
+
+```
+ViewController sends user input
+  → ViewModel.submit(input)
+      → isLoading = true
+      → UseCase.execute(param:)
+          → (validates param — throws if invalid)
+          → Repository.create/update(param:)
+              → RemoteDataSource.post/put() → DTO → Mapper → Model
+          → returns Model
+      → ViewModel maps Model → UIModel → updates @Published state
+      → defer: isLoading = false
+```
+
+---
+
+## Networking
+
+```
+APIClient
+  └─ URLSession-based generic HTTP client
+  └─ func get<T: Decodable>(_ url: URL) async throws -> T
+  └─ func post<T: Decodable, B: Encodable>(_ url: URL, body: B) async throws -> T
+
+Request structs
+  └─ one per endpoint: TrackSearchRequest, CreatePlaylistRequest, etc.
+  └─ carries the fields needed to build the URL and body
+  └─ lives at Data/Network/Requests/
+
+Error handling
+  └─ typed APIError enum: .invalidURL, .notFound, .networkError, .decodingError
+  └─ propagates async throws up to ViewModel
+  └─ ViewModel catches and sets errorMessage: String?
+```
+
+**APIClient lives inside the Data layer, not a separate Network layer.** It's an implementation detail of RemoteDataSources. Nothing in Domain or Presentation touches it.
+
+---
+
+## Persistence
+
+```
+LocalDataSource
+  └─ wraps the storage backend (UserDefaults / GRDB / Core Data)
+  └─ Repositories never touch the backend directly — always through LocalDataSource
+  └─ stores and retrieves DTOs, not Domain models
+  └─ keyed by request parameters for cache lookup
+
+Storage backend choice:
+  └─ UserDefaults   — simple key-value cache, small payloads
+  └─ GRDB (SQLite)  — relational queries, Combine publishers, no magic
+  └─ Core Data      — only if CloudKit sync or existing stack required
+```
+
+**Why wrap storage in LocalDataSource?**
+The Repository doesn't know or care what's underneath. Swapping UserDefaults for GRDB touches one file — `LocalDataSource` — and nothing else.
+
+---
+
+## Navigation
+
+```
+Coordinator pattern
+  └─ AppCoordinator — root, owns tab bar, handles deep links
+  └─ FeatureCoordinator (e.g. SearchCoordinator, HomeCoordinator) — one per flow
+  └─ ViewControllers never call push/present directly
+  └─ deep links handled at AppCoordinator level, delegated to feature coordinators
+
+Deep link flow:
+  NotificationCenter.post(.handleDeepLink, object: link)
+    → AppCoordinator.handle(link)
+        → selects correct tab
+        → delegates to feature coordinator
+        → feature coordinator creates ViewModel + ViewController and pushes
+```
+
+App-scoped services (e.g. PlayerService) must be registered at AppCoordinator level — not owned by any ViewController. If owned by a ViewController, they deallocate when that screen is popped.
+
+---
+
+## Concurrency
+
+```
+@MainActor on ViewModel — all state mutations on main thread
+async/await throughout — no completion handlers
+async let — two concurrent fetches
+withThrowingTaskGroup — N concurrent fetches
+[weak self] — all closures that capture self
+defer { isLoading = false } — cleanup on any exit path
+```
+
+**`async let` vs `withThrowingTaskGroup`:**
+
+| | `async let` | `withThrowingTaskGroup` |
+|---|---|---|
+| Use when | Fixed small N (2–3) | Dynamic N |
+| Syntax | Cleaner | More explicit |
+| Example | Fetch tracks + playlists | Fetch detail for each item in a list |
+
+---
+
+## Testing Strategy
+
+**Rule: mock the layer below, assert on the layer you just built.**
+
+| Layer | What to mock | What to assert |
+|---|---|---|
+| ViewModel | MockUseCase | @Published state after action |
+| UseCase | MockRepository | Return value, thrown error |
+| Repository | MockRemoteDataSource + MockLocalDataSource | FetchPolicy logic, Mapper output |
+| DataSource | MockAPIClient / in-memory DB | Request shape, response decoding |
+
+```
+MockUseCase
+  └─ var stubbedResult: Result<Output, Error>
+  └─ private(set) var lastParam: Param?
+  └─ func execute(...) async throws → returns stubbedResult
+
+Test pattern:
+  1. Arrange: set stubbed result on mock
+  2. Act: call ViewModel/UseCase method
+  3. Assert: check @Published state or return value
+```
+
+No mocking of concrete types. Every dependency is injected via a protocol — replace with mock in tests, real impl in production.
+
+---
+
+## Adapting to a Scenario
+
+When given an interview problem, map it onto this architecture:
+
+1. **Identify the domain** — what are the entities? (Track, Playlist, User, Order…)
+2. **Name the Repositories** — one per domain entity or aggregate
+3. **Name the UseCases** — one per user action or screen load
+4. **Identify Domain Services** — anything stateful, long-lived, or shared across screens
+5. **Apply FetchPolicy** — does this screen need fresh data? Can it show stale?
+6. **Identify the local storage need** — cache only, or offline-first with user-controlled saves?
+7. **Draw the data flow** — top to bottom, out loud, immediately after the diagram
+
+The scenario doc fills in the specifics. This doc is the skeleton.

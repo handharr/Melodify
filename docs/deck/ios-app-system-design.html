@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>iOS App System Design — Generic Architecture</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --border: #30363d;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --accent: #58a6ff;
+    --green: #3fb950;
+    --orange: #d29922;
+    --purple: #bc8cff;
+    --red: #f85149;
+    --keyword: #ff7b72;
+    --string: #a5d6ff;
+    --type: #ffa657;
+    --comment: #8b949e;
+  }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 15px;
+    line-height: 1.6;
+    padding-bottom: 100px;
+  }
+  nav {
+    position: sticky;
+    top: 0;
+    background: rgba(13,17,23,0.92);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    z-index: 100;
+  }
+  nav a { color: var(--muted); text-decoration: none; font-size: 13px; }
+  nav a:hover { color: var(--text); }
+  nav .sep { color: var(--border); }
+  nav .current { color: var(--accent); font-weight: 600; }
+  header {
+    padding: 32px 20px 24px;
+    border-bottom: 1px solid var(--border);
+  }
+  header .tag {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 8px;
+  }
+  header h1 { font-size: 26px; font-weight: 700; }
+  header p { color: var(--muted); font-size: 14px; margin-top: 6px; }
+
+  .toc {
+    margin: 20px 20px 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+  }
+  .toc-title {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 10px;
+  }
+  .toc a {
+    display: block;
+    color: var(--accent);
+    text-decoration: none;
+    font-size: 13px;
+    padding: 3px 0;
+  }
+  .toc a:hover { color: var(--text); }
+  .toc .toc-sub { padding-left: 14px; color: var(--muted); font-size: 12px; }
+  .toc .toc-sub:hover { color: var(--text); }
+
+  section { padding: 28px 20px 0; }
+  h2 {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  h3 {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--orange);
+    margin: 24px 0 10px;
+  }
+  h3:first-child { margin-top: 0; }
+  h4 {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    margin: 16px 0 8px;
+  }
+  p { color: var(--muted); margin-bottom: 12px; line-height: 1.6; }
+  p strong { color: var(--text); }
+  ul, ol { color: var(--muted); padding-left: 20px; margin-bottom: 12px; }
+  li { margin-bottom: 4px; line-height: 1.5; }
+  li strong { color: var(--text); }
+
+  .stack {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 16px;
+  }
+  .stack-row {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .stack-row:last-child { border-bottom: none; }
+  .arrow { color: var(--border); font-size: 16px; margin-top: 1px; flex-shrink: 0; }
+  .stack-name { font-weight: 600; font-size: 14px; color: var(--text); min-width: 160px; flex-shrink: 0; }
+  .stack-desc { font-size: 13px; color: var(--muted); line-height: 1.4; }
+
+  code {
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 5px;
+    color: var(--string);
+  }
+  pre {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    overflow-x: auto;
+    margin-bottom: 16px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 12px;
+    line-height: 1.7;
+    color: var(--text);
+  }
+  .kw { color: var(--keyword); }
+  .ty { color: var(--type); }
+  .st { color: var(--string); }
+  .cm { color: var(--comment); font-style: italic; }
+  .nm { color: var(--accent); }
+  .gr { color: var(--green); }
+
+  table { width: 100%; border-collapse: collapse; margin-bottom: 16px; font-size: 13px; }
+  th {
+    background: var(--surface);
+    color: var(--muted);
+    font-weight: 600;
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    color: var(--muted);
+    vertical-align: top;
+  }
+  td:first-child { color: var(--text); font-weight: 500; }
+  tr:last-child td { border-bottom: none; }
+  .table-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 16px;
+  }
+  .callout {
+    background: rgba(88,166,255,0.08);
+    border: 1px solid rgba(88,166,255,0.3);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    font-size: 13px;
+    color: var(--text);
+    line-height: 1.5;
+  }
+  .callout strong { color: var(--accent); }
+  .rule {
+    background: rgba(63,185,80,0.08);
+    border: 1px solid rgba(63,185,80,0.3);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    font-size: 13px;
+    color: var(--text);
+    line-height: 1.5;
+  }
+  .rule strong { color: var(--green); }
+  .warn {
+    background: rgba(210,153,34,0.08);
+    border: 1px solid rgba(210,153,34,0.3);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    font-size: 13px;
+    color: var(--text);
+    line-height: 1.5;
+  }
+  .warn strong { color: var(--orange); }
+  .divider { border: none; border-top: 1px solid var(--border); margin: 28px 0 0; }
+  .bottom-nav {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: rgba(13,17,23,0.95);
+    backdrop-filter: blur(8px);
+    border-top: 1px solid var(--border);
+    padding: 12px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .bottom-nav a { color: var(--accent); text-decoration: none; font-size: 14px; font-weight: 500; }
+  .bottom-nav a.right { text-align: right; }
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="index.html">Home</a>
+  <span class="sep">›</span>
+  <span class="current">iOS App System Design</span>
+</nav>
+
+<header>
+  <div class="tag">Architecture Base</div>
+  <h1>iOS App System Design</h1>
+  <p>Generic architecture — carry this into every interview. Scenario docs extend it.</p>
+</header>
+
+<div class="toc">
+  <div class="toc-title">Contents</div>
+  <a href="#pattern">Architecture Pattern</a>
+  <a href="#why">Why These Choices</a>
+  <a href="#layers">Layer Breakdown</a>
+  <a class="toc-sub" href="#presentation">Presentation</a>
+  <a class="toc-sub" href="#domain">Domain</a>
+  <a class="toc-sub" href="#data">Data</a>
+  <a class="toc-sub" href="#application">Application</a>
+  <a href="#di">Dependency Injection</a>
+  <a href="#flows">Generic Data Flows</a>
+  <a class="toc-sub" href="#read-flow">Read flow</a>
+  <a class="toc-sub" href="#mutation-flow">Mutation flow</a>
+  <a href="#networking">Networking</a>
+  <a href="#persistence">Persistence</a>
+  <a href="#navigation">Navigation</a>
+  <a href="#concurrency">Concurrency</a>
+  <a href="#testing">Testing Strategy</a>
+  <a href="#adapting">Adapting to a Scenario</a>
+</div>
+
+<!-- ARCHITECTURE PATTERN -->
+<section id="pattern">
+  <h2>Architecture Pattern</h2>
+  <p><strong>Clean Architecture + MVVM + UIKit</strong></p>
+  <div class="stack">
+    <div class="stack-row"><div class="stack-name">Presentation</div><div class="stack-desc">ViewController + ViewModel (Combine <code>@Published</code>)</div></div>
+    <div class="stack-row"><div class="stack-name">Domain</div><div class="stack-desc">UseCase + Protocol + Model + Param + FetchPolicy</div></div>
+    <div class="stack-row"><div class="stack-name">Data</div><div class="stack-desc">Repository + DataSource + DTO + Mapper + APIClient</div></div>
+    <div class="stack-row"><div class="stack-name">Application</div><div class="stack-desc">AppDelegate + Coordinator + DI (manual init injection)</div></div>
+  </div>
+  <div class="rule"><strong>Layer dependency rule: Presentation → Domain ← Data. Domain depends on nothing.</strong> Data knows Domain models (via Mapper). Presentation knows Domain models (via UseCase). Neither knows the other exists.</div>
+</section>
+
+<!-- WHY THESE CHOICES -->
+<section id="why">
+  <h2>Why These Choices</h2>
+  <div class="callout"><strong>Clean Architecture over MVC</strong> — MVC in iOS degrades to Massive ViewController: business logic, networking, and layout all end up in one file. Clean Architecture enforces the dependency rule so each layer is independently testable and replaceable. Cost: more files. Benefit: every layer can be tested without the others.</div>
+  <div class="callout"><strong>MVVM over MVP</strong> — In MVP the Presenter holds a reference back to the View via protocol — two-way coupling. MVVM breaks that: ViewModel exposes <code>@Published</code> state and has no reference to the View. ViewModels are easier to test (no mock View needed) and bind naturally with Combine.</div>
+  <div class="callout"><strong>MVVM over VIPER</strong> — VIPER splits a screen into 5 objects. The overhead is justified for very large teams where each layer is owned by a different person. For a small team, MVVM + UseCase gives the same testability with half the files.</div>
+  <div class="callout"><strong>UIKit over SwiftUI</strong> — UIKit gives fine-grained control over scroll performance, custom transitions, and <code>AVPlayerViewController</code> integration. SwiftUI is right for simple new screens; UIKit is preferred when you need full control over performance and native framework integration.</div>
+</section>
+
+<!-- LAYER BREAKDOWN -->
+<section id="layers">
+  <h2>Layer Breakdown</h2>
+
+  <h3 id="presentation">Presentation</h3>
+  <div class="stack">
+    <div class="stack-row"><div class="stack-name">ViewController</div><div class="stack-desc">Owns ViewModel (strong ref). Binds to <code>@Published</code> state via Combine sink. Calls ViewModel methods on user actions. Never calls UseCases or Repositories directly.</div></div>
+    <div class="stack-row"><div class="stack-name">ViewModel</div><div class="stack-desc"><code>@MainActor</code> — all state on main thread. <code>@Published</code> properties (tracks, isLoading, errorMessage). Calls UseCases. Maps Domain → UIModel. <code>[weak self]</code> in all closures. <code>defer { isLoading = false }</code> on every exit path.</div></div>
+    <div class="stack-row"><div class="stack-name">UIModel</div><div class="stack-desc">Flat, display-ready struct. Never pass Domain models to the View directly — the ViewModel maps Domain → UIModel so the View has zero knowledge of business types.</div></div>
+  </div>
+  <div class="rule"><strong>defer { isLoading = false }</strong> — guaranteed cleanup on success and failure. Place it immediately after setting <code>isLoading = true</code>. Never rely on individual return paths to reset state.</div>
+
+  <hr class="divider">
+
+  <h3 id="domain">Domain</h3>
+  <div class="stack">
+    <div class="stack-row"><div class="stack-name">UseCase</div><div class="stack-desc">One public method: <code>execute(policy:param:) async throws → Output</code>. Stateless — created per call or injected. Orchestrates one business action. Calls Repository methods. Never touches networking or storage directly.</div></div>
+    <div class="stack-row"><div class="stack-name">Domain Service</div><div class="stack-desc">Stateful or long-lived logic not tied to a single user action. Injected, lives as long as needed (often app-scoped). Examples: PlayerService, SessionService, AuthService.</div></div>
+    <div class="stack-row"><div class="stack-name">Model</div><div class="stack-desc">Pure Swift structs — no <code>import UIKit</code>, no Foundation networking types. The only type that crosses all layers.</div></div>
+    <div class="stack-row"><div class="stack-name">Param</div><div class="stack-desc">Typed struct for every UseCase input. Split into <code>path:</code> and <code>query:</code> sub-structs. Adding a field never breaks existing call sites.</div></div>
+    <div class="stack-row"><div class="stack-name">FetchPolicy</div><div class="stack-desc"><code>.fresh</code> always hits network. <code>.cached</code> returns cache if available, else network. <code>.strict</code> cache only, throws on miss. Travels ViewModel → UseCase → Repository. Repository is the only place that interprets it.</div></div>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <tr><th></th><th>UseCase</th><th>Domain Service</th></tr>
+      <tr><td>Triggered by</td><td>User action</td><td>Another component</td></tr>
+      <tr><td>State</td><td>Stateless</td><td>Can be stateful</td></tr>
+      <tr><td>Lifetime</td><td>Per call</td><td>Injected, lives as needed</td></tr>
+      <tr><td>Example</td><td><code>SearchTracksUseCase</code></td><td><code>PlayerService</code>, <code>SessionService</code></td></tr>
+    </table>
+  </div>
+
+  <div class="callout"><strong>Why FetchPolicy over hardcoding cache logic per ViewModel?</strong> Without a policy, every ViewModel independently decides whether to hit the network — leading to inconsistent behaviour and duplicated cache logic. FetchPolicy centralises the decision into a typed value. The caller declares intent, the Repository enforces it. Easy to test, easy to change globally.</div>
+
+  <hr class="divider">
+
+  <h3 id="data">Data</h3>
+  <div class="stack">
+    <div class="stack-row"><div class="stack-name">Repository</div><div class="stack-desc">Implements <code>RepositoryProtocol</code> (Domain interface). Coordinates <code>RemoteDataSource</code> and <code>LocalDataSource</code>. Applies FetchPolicy. Converts DTO → Domain Model via Mapper. Never exposed directly to Presentation.</div></div>
+    <div class="stack-row"><div class="stack-name">RemoteDataSource</div><div class="stack-desc">Wraps <code>APIClient</code>. Builds request URLs and decodes responses. Returns DTOs — never Domain models.</div></div>
+    <div class="stack-row"><div class="stack-name">LocalDataSource</div><div class="stack-desc">Wraps persistence backend (UserDefaults / SQLite / GRDB). Returns DTOs — never Domain models. Repository never touches the storage backend directly.</div></div>
+    <div class="stack-row"><div class="stack-name">DTO</div><div class="stack-desc">Mirrors the API or DB schema exactly. <code>Codable</code>. Disposable — only lives between the network/DB and the Mapper.</div></div>
+    <div class="stack-row"><div class="stack-name">Mapper</div><div class="stack-desc">The only type that knows both DTO and Domain model. <code>static func toDomain(_ dto: DTO) -> Model?</code> Returns Optional — invalid data is silently dropped, never crashes.</div></div>
+  </div>
+
+  <h4>DTO → Mapper → Domain Model flow</h4>
+<pre><code><span class="nm">RemoteDataSource</span> fetches JSON
+  → decoded as <span class="ty">DTO</span>               <span class="cm">// Codable, mirrors API shape</span>
+  → <span class="ty">Mapper</span>.toDomain(dto)         <span class="cm">// Domain Model, or nil if invalid</span>
+  → <span class="ty">Repository</span> returns [<span class="ty">Model</span>]   <span class="cm">// to UseCase</span>
+  → <span class="ty">UseCase</span> returns [<span class="ty">Model</span>]      <span class="cm">// to ViewModel</span>
+  → <span class="ty">ViewModel</span> maps → <span class="ty">UIModel</span>    <span class="cm">// for the View</span></code></pre>
+
+  <div class="rule"><strong>Mapper is the seam between external data and your business logic.</strong> Keep it the only crossing point. If you find yourself converting DTOs anywhere else, move it to the Mapper.</div>
+
+  <hr class="divider">
+
+  <h3 id="application">Application</h3>
+  <div class="stack">
+    <div class="stack-row"><div class="stack-name">AppDelegate</div><div class="stack-desc">Entry point. Wires window and root Coordinator. Registers app-scoped services (analytics, player, auth).</div></div>
+    <div class="stack-row"><div class="stack-name">Coordinator</div><div class="stack-desc">Owns navigation logic — ViewControllers never push/present directly. Creates UseCases and ViewModels (DI composition root). One Coordinator per flow.</div></div>
+    <div class="stack-row"><div class="stack-name">DI (manual init injection)</div><div class="stack-desc">No DI framework. Dependencies passed through <code>init</code>. No default concrete arguments on Repository or UseCase inits. DataSources and APIClient composed at Coordinator level.</div></div>
+  </div>
+</section>
+
+<!-- DEPENDENCY INJECTION -->
+<section id="di">
+  <h2>Dependency Injection</h2>
+  <p>Dependencies flow inward. Each layer receives its dependencies via <code>init</code>. No layer constructs its own dependencies.</p>
+<pre><code><span class="cm">// Coordinator — composition root, builds the full graph</span>
+<span class="kw">let</span> client           = <span class="ty">APIClient</span>()
+<span class="kw">let</span> remoteDataSource = <span class="ty">TrackRemoteDataSource</span>(client: client)
+<span class="kw">let</span> localDataSource  = <span class="ty">TrackLocalDataSource</span>()
+<span class="kw">let</span> repository       = <span class="ty">TrackRepository</span>(remote: remoteDataSource, local: localDataSource)
+<span class="kw">let</span> useCase          = <span class="ty">SearchTracksUseCase</span>(repository: repository)
+<span class="kw">let</span> viewModel        = <span class="ty">TrackListViewModel</span>(searchTracks: useCase)</code></pre>
+
+  <div class="warn"><strong>No default concrete args in Repository inits.</strong> A default argument that instantiates a concrete type (<code>= TrackLocalDataSource()</code>) hides the dependency and breaks testability. The default belongs in the DI composition root, not the <code>init</code> signature.</div>
+  <div class="rule"><strong>Protocol at every boundary.</strong> <code>TrackRemoteDataSourceProtocol</code>, <code>TrackLocalDataSourceProtocol</code>, <code>TrackRepositoryProtocol</code> — replace with mock in tests, real impl in production. No mocking of concrete types.</div>
+</section>
+
+<!-- GENERIC DATA FLOWS -->
+<section id="flows">
+  <h2>Generic Data Flows</h2>
+
+  <h3 id="read-flow">Read flow — loading a screen</h3>
+<pre><code><span class="nm">ViewController</span>.viewDidLoad()
+  → <span class="nm">ViewModel</span>.load()
+      → isLoading = <span class="kw">true</span>
+      → <span class="ty">UseCase</span>.execute(policy: .cached, param:)
+          → <span class="ty">Repository</span>.fetch(policy: .cached, param:)
+              → <span class="nm">LocalDataSource</span>.fetch()  <span class="cm">// cached DTO → fast return</span>
+              → <span class="nm">RemoteDataSource</span>.fetch() <span class="cm">// background network call</span>
+              → <span class="nm">LocalDataSource</span>.save(dto) <span class="cm">// write fresh data to cache</span>
+          → returns [<span class="ty">Model</span>]
+      → maps <span class="ty">Model</span> → <span class="ty">UIModel</span>
+      → @Published state updated → View re-renders
+      → <span class="kw">defer</span>: isLoading = <span class="kw">false</span></code></pre>
+
+  <h3 id="mutation-flow">Mutation flow — create / update</h3>
+<pre><code><span class="nm">ViewController</span> sends user input
+  → <span class="nm">ViewModel</span>.submit(input)
+      → isLoading = <span class="kw">true</span>
+      → <span class="ty">UseCase</span>.execute(param:)
+          → validates param  <span class="cm">// throws if invalid — before any network call</span>
+          → <span class="ty">Repository</span>.create/update(param:)
+              → <span class="nm">RemoteDataSource</span>.post/put() → <span class="ty">DTO</span> → <span class="ty">Mapper</span> → <span class="ty">Model</span>
+          → returns <span class="ty">Model</span>
+      → maps <span class="ty">Model</span> → <span class="ty">UIModel</span> → updates @Published state
+      → <span class="kw">defer</span>: isLoading = <span class="kw">false</span></code></pre>
+
+  <div class="rule"><strong>Validate in the UseCase, before the Repository call.</strong> The Repository assumes its input is valid — it shouldn't know what "valid" means for the business. The UseCase is the gatekeeper.</div>
+</section>
+
+<!-- NETWORKING -->
+<section id="networking">
+  <h2>Networking</h2>
+  <div class="stack">
+    <div class="stack-row"><div class="stack-name">APIClient</div><div class="stack-desc">Generic <code>URLSession</code>-based HTTP client. <code>get&lt;T: Decodable&gt;(_ url:)</code>, <code>post&lt;T, B: Encodable&gt;(_ url:, body:)</code>, etc. No domain knowledge.</div></div>
+    <div class="stack-row"><div class="stack-name">Request structs</div><div class="stack-desc">One per endpoint: <code>TrackSearchRequest</code>, <code>CreatePlaylistRequest</code>. Carries the fields needed to build the URL and body. Lives at <code>Data/Network/Requests/</code>.</div></div>
+    <div class="stack-row"><div class="stack-name">APIError</div><div class="stack-desc">Typed enum: <code>.invalidURL</code>, <code>.notFound</code>, <code>.networkError</code>, <code>.decodingError</code>. Propagates <code>async throws</code> up to ViewModel. ViewModel catches and sets <code>errorMessage: String?</code>.</div></div>
+  </div>
+  <div class="rule"><strong>APIClient lives inside Data/Network/ — not a separate layer.</strong> It's an implementation detail of RemoteDataSources. Nothing in Domain or Presentation ever touches it.</div>
+</section>
+
+<!-- PERSISTENCE -->
+<section id="persistence">
+  <h2>Persistence</h2>
+  <div class="stack">
+    <div class="stack-row"><div class="stack-name">LocalDataSource</div><div class="stack-desc">Wraps the storage backend. Repositories never touch the backend directly — always through LocalDataSource. Stores and retrieves DTOs, not Domain models. Keyed by request parameters for cache lookup.</div></div>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <tr><th>Backend</th><th>Use when</th></tr>
+      <tr><td>UserDefaults</td><td>Simple key-value cache, small payloads, no relational queries needed</td></tr>
+      <tr><td>GRDB (SQLite)</td><td>Relational queries, Combine publishers, no magic — preferred for greenfield</td></tr>
+      <tr><td>Core Data</td><td>Only if CloudKit sync required or an existing stack already exists</td></tr>
+    </table>
+  </div>
+
+  <div class="callout"><strong>Why wrap storage in LocalDataSource?</strong> The Repository doesn't know or care what's underneath. Swapping UserDefaults for GRDB touches one file — <code>LocalDataSource</code> — and nothing else. The Repository, UseCase, and ViewModel are completely unaffected.</div>
+</section>
+
+<!-- NAVIGATION -->
+<section id="navigation">
+  <h2>Navigation</h2>
+  <div class="stack">
+    <div class="stack-row"><div class="stack-name">AppCoordinator</div><div class="stack-desc">Root coordinator. Owns tab bar. Handles deep links. Routes to feature coordinators.</div></div>
+    <div class="stack-row"><div class="stack-name">FeatureCoordinator</div><div class="stack-desc">One per flow (e.g. <code>SearchCoordinator</code>, <code>HomeCoordinator</code>). Creates ViewModels and ViewControllers. ViewControllers never call push/present directly.</div></div>
+  </div>
+
+<pre><code><span class="cm">// Deep link flow</span>
+<span class="ty">NotificationCenter</span>.default.post(.handleDeepLink, object: link)
+  → <span class="nm">AppCoordinator</span>.handle(link)
+      → selects correct tab
+      → delegates to feature coordinator
+      → coordinator creates <span class="ty">ViewModel</span> + <span class="ty">ViewController</span> and pushes</code></pre>
+
+  <div class="warn"><strong>App-scoped services (e.g. PlayerService) must be registered at AppCoordinator level</strong> — not owned by any ViewController. If owned by a ViewController, they deallocate when that screen is popped.</div>
+</section>
+
+<!-- CONCURRENCY -->
+<section id="concurrency">
+  <h2>Concurrency</h2>
+  <div class="stack">
+    <div class="stack-row"><div class="stack-name">@MainActor on ViewModel</div><div class="stack-desc">All state mutations on main thread. No <code>DispatchQueue.main.async</code> needed.</div></div>
+    <div class="stack-row"><div class="stack-name">async/await throughout</div><div class="stack-desc">No completion handlers. Clean call stack, propagates throws naturally.</div></div>
+    <div class="stack-row"><div class="stack-name">async let</div><div class="stack-desc">Two concurrent fetches with fixed known count.</div></div>
+    <div class="stack-row"><div class="stack-name">withThrowingTaskGroup</div><div class="stack-desc">N concurrent fetches with dynamic count (e.g. fetch detail for each item in a list).</div></div>
+    <div class="stack-row"><div class="stack-name">[weak self]</div><div class="stack-desc">All closures that capture self. Prevents retain cycles between ViewController and ViewModel.</div></div>
+    <div class="stack-row"><div class="stack-name">defer { isLoading = false }</div><div class="stack-desc">Cleanup on any exit path — success, throw, or early return. Place immediately after <code>isLoading = true</code>.</div></div>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <tr><th></th><th>async let</th><th>withThrowingTaskGroup</th></tr>
+      <tr><td>Use when</td><td>Fixed small N (2–3 concurrent)</td><td>Dynamic N</td></tr>
+      <tr><td>Syntax</td><td>Cleaner, inline</td><td>More explicit, loop-based</td></tr>
+      <tr><td>Example</td><td>Fetch tracks + playlists in parallel</td><td>Fetch detail for each item in a list</td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- TESTING STRATEGY -->
+<section id="testing">
+  <h2>Testing Strategy</h2>
+  <div class="rule"><strong>Rule: mock the layer below, assert on the layer you just built.</strong></div>
+
+  <div class="table-wrap">
+    <table>
+      <tr><th>Layer</th><th>What to mock</th><th>What to assert</th></tr>
+      <tr><td>ViewModel</td><td>MockUseCase</td><td><code>@Published</code> state after user action</td></tr>
+      <tr><td>UseCase</td><td>MockRepository</td><td>Return value, thrown error, param forwarding</td></tr>
+      <tr><td>Repository</td><td>MockRemoteDataSource + MockLocalDataSource</td><td>FetchPolicy logic, Mapper output, cache read/write order</td></tr>
+      <tr><td>DataSource</td><td>MockAPIClient / in-memory store</td><td>Request shape, URL construction, response decoding</td></tr>
+    </table>
+  </div>
+
+<pre><code><span class="cm">// Mock pattern — same shape for every layer</span>
+<span class="kw">final class</span> <span class="ty">MockSearchTracksUseCase</span>: <span class="ty">SearchTracksUseCaseProtocol</span> {
+    <span class="kw">var</span> stubbedResult: <span class="ty">Result</span>&lt;[<span class="ty">Track</span>], <span class="ty">Error</span>&gt; = .success([])
+    <span class="kw">private(set) var</span> lastParam: <span class="ty">SearchTracksParam</span>?
+
+    <span class="kw">func</span> <span class="nm">execute</span>(policy: <span class="ty">FetchPolicy</span>, param: <span class="ty">SearchTracksParam</span>) <span class="kw">async throws</span> -> [<span class="ty">Track</span>] {
+        lastParam = param
+        <span class="kw">return try</span> stubbedResult.get()
+    }
+}</code></pre>
+
+  <div class="callout"><strong>No mocking of concrete types.</strong> Every dependency is injected via a protocol — replace with mock in tests, real impl in production. If you can't swap it, the DI is wrong.</div>
+</section>
+
+<!-- ADAPTING TO A SCENARIO -->
+<section id="adapting">
+  <h2>Adapting to a Scenario</h2>
+  <p>When given an interview problem, map it onto this architecture in order:</p>
+
+  <div class="stack">
+    <div class="stack-row"><div class="stack-name">1. Identify the domain</div><div class="stack-desc">What are the entities? (Track, Playlist, User, Order, Ride…)</div></div>
+    <div class="stack-row"><div class="stack-name">2. Name the Repositories</div><div class="stack-desc">One per domain entity or aggregate. Each gets a Remote + Local DataSource.</div></div>
+    <div class="stack-row"><div class="stack-name">3. Name the UseCases</div><div class="stack-desc">One per user action or screen load. Stateless, single execute method.</div></div>
+    <div class="stack-row"><div class="stack-name">4. Identify Domain Services</div><div class="stack-desc">Anything stateful, long-lived, or shared across screens. App-scoped.</div></div>
+    <div class="stack-row"><div class="stack-name">5. Apply FetchPolicy</div><div class="stack-desc">Does this screen need fresh data? Can it show stale? Offline-first?</div></div>
+    <div class="stack-row"><div class="stack-name">6. Identify local storage need</div><div class="stack-desc">Cache only? Offline-first with user-controlled saves? File storage? LRU eviction?</div></div>
+    <div class="stack-row"><div class="stack-name">7. Draw the data flow</div><div class="stack-desc">Top to bottom, out loud, immediately after the diagram. Catches missing dependencies and edge cases live.</div></div>
+  </div>
+
+  <div class="rule"><strong>State your principles first, then draw.</strong> Before touching the whiteboard: "I'll use Clean Architecture — Presentation → Domain ← Data. Domain depends on nothing. Let me name the layers for this scenario." One sentence. Then draw.</div>
+  <div class="callout"><strong>The scenario doc fills in the specifics.</strong> This is the skeleton. See <code>docs/scenarios/</code> for worked examples of how this maps onto specific interview problems.</div>
+</section>
+
+<div class="bottom-nav">
+  <a href="index.html">← Home</a>
+  <a class="right" href="music-streaming-system-design.html">Music Streaming →</a>
+</div>
+
+</body>
+</html>
