@@ -258,6 +258,7 @@
 <!-- TOC -->
 <div class="toc">
   <div class="toc-title">Contents</div>
+  <a href="#delta">Delta — What This Scenario Adds</a>
   <a href="#requirements">Requirements</a>
   <a href="#api">API Design</a>
   <a href="#model">Data Model</a>
@@ -280,6 +281,42 @@
   <a class="toc-sub" href="#ownership">14. What you own vs AVPlayer</a>
   <a href="#feedback">Key Takeaways</a>
 </div>
+
+<!-- DELTA -->
+<section id="delta">
+  <h2>Delta — What This Scenario Adds</h2>
+  <p>Scenario extension of the generic iOS architecture. Read this first — it describes what's the same and what this problem adds on top.</p>
+
+  <h3>Same as generic architecture</h3>
+  <ul>
+    <li>Clean Architecture + MVVM + UIKit</li>
+    <li>DTO → Mapper → Domain Model</li>
+    <li><code>FetchPolicy</code> (.fresh / .cached / .strict) on all Repository reads</li>
+    <li>Typed <code>Param</code> structs on every UseCase</li>
+    <li>Coordinator-based navigation, app-scoped services via init injection</li>
+    <li>Mock-the-layer-below testing strategy</li>
+  </ul>
+
+  <h3>What this scenario adds</h3>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Concept</th><th>Generic</th><th>Music Streaming</th></tr>
+      <tr><td>Local storage</td><td>LocalDataSource (cache)</td><td>Two tiers: metadata cache (GRDB) + file storage (LRU disk cache)</td></tr>
+      <tr><td>File storage</td><td>Not in generic</td><td><code>LocalFileDataSource</code> — binary audio files on disk, LRU 5 GB cap</td></tr>
+      <tr><td>Offline saves</td><td>Not in generic</td><td><code>DownloadLocalDataSource</code> — maps <code>itemId → localFilePath</code></td></tr>
+      <tr><td>Domain Services</td><td>Generic concept only</td><td><code>PlayerService</code> (app-scoped, owns queue + playback state) · <code>StreamRefreshService</code> (manifest expiry logic)</td></tr>
+      <tr><td>Streaming</td><td>Not in generic</td><td>HLS via <code>AVPlayer</code> — adaptive bitrate, chunk-based, short-lived signed URLs</td></tr>
+      <tr><td>Pagination</td><td>Not in generic</td><td>Cursor-based (not offset) — library syncs live across devices</td></tr>
+      <tr><td>Playback asset resolution</td><td>Not in generic</td><td>Offline file → HLS manifest → <code>AVPlayer</code>, decided inside <code>PlayerService</code></td></tr>
+    </table>
+  </div>
+
+  <h3>Key decisions unique to this scenario</h3>
+  <div class="rule"><strong><code>PlayerService</code> must be app-scoped.</strong> If owned by <code>PlayerViewModel</code>, it deallocates when the Player screen pops — music stops. Register at app startup in the DI composition root.</div>
+  <div class="rule"><strong>Two separate <code>LocalFileDataSource</code> instances.</strong> Streaming LRU cache and explicit offline saves must never share storage — cache pressure must not evict user-saved tracks.</div>
+  <div class="callout"><strong><code>stream-info</code> is a separate endpoint.</strong> Manifest URL is short-lived. Decoupled from item metadata so it can be refreshed without invalidating the rest of the model.</div>
+  <div class="callout"><strong>Queue is client-owned.</strong> Built locally from <code>PlayableItemLocalDataSource</code> — no server round-trip on every playback action.</div>
+</section>
 
 <!-- REQUIREMENTS -->
 <section id="requirements">
@@ -785,7 +822,7 @@ player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { time <span
   <h2>Key Takeaways</h2>
   <div class="rule"><strong>State principles first, then draw</strong> — architecture rationale before the diagram.</div>
   <div class="rule"><strong>Walk the data flow end-to-end after drawing</strong> — out loud, top to bottom. Catches missing repo dependencies and edge cases live.</div>
-  <div class="rule"><strong>Always wrap the DB</strong> — never let repos talk directly to GRDB types. Add a Store/abstraction layer on top.</div>
+  <div class="rule"><strong>Always wrap the DB</strong> — <code>LocalDataSource</code> is this abstraction. Repositories never touch UserDefaults/GRDB directly. ✅</div>
   <div class="rule"><strong>Go deep on complex topics proactively</strong> — don't wait to be asked. Signed URL expiry, offline edge cases, stall vs error distinction.</div>
   <div class="callout"><strong>The two things most people get wrong:</strong> (1) <code>PlayerService</code> scoped to a ViewController instead of app-level — music stops when screen pops. (2) Conflating a network stall with a playback error — they require completely different handling.</div>
 </section>
