@@ -252,6 +252,39 @@
   }
   .checklist-group { margin-bottom: 20px; }
   .checklist-group h4 { color: var(--orange); font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px; }
+  details { margin-bottom: 6px; }
+  details summary {
+    font-size: 13px;
+    color: var(--muted);
+    cursor: pointer;
+    padding-left: 20px;
+    position: relative;
+    line-height: 1.5;
+    list-style: none;
+    user-select: none;
+  }
+  details summary::-webkit-details-marker { display: none; }
+  details summary::before {
+    content: "□";
+    position: absolute;
+    left: 0;
+    color: var(--border);
+    font-size: 13px;
+  }
+  details[open] summary::before { content: "▾"; color: var(--green); }
+  details summary strong { color: var(--text); }
+  .tradeoff-body {
+    margin: 6px 0 4px 20px;
+    padding: 10px 12px;
+    background: var(--surface);
+    border-left: 2px solid var(--border);
+    border-radius: 0 6px 6px 0;
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+  .tradeoff-body strong { color: var(--text); }
+  .tradeoff-body .pick { color: var(--green); font-weight: 600; }
   .bottom-nav {
     position: fixed;
     bottom: 0; left: 0; right: 0;
@@ -534,69 +567,217 @@ Custom invalidation strategy               ← TTL, version key, manual purge</d
 
   <div class="checklist-group">
     <h4>Mobile Domain</h4>
-    <ul class="checklist">
-      <li>UIKit vs SwiftUI trade-offs — when to use each</li>
-      <li>App lifecycle, view lifecycle, state restoration</li>
-      <li>iOS concurrency: GCD, OperationQueue, async/await — when to use which</li>
-      <li>Navigation: stack-based, tab-based, deep linking</li>
-    </ul>
+    <details>
+      <summary><strong>UIKit vs SwiftUI</strong></summary>
+      <div class="tradeoff-body">
+        <span class="pick">SwiftUI</span> — declarative, faster to build, great for state-driven screens.<br>
+        <span class="pick">UIKit</span> — full control over cell reuse, transitions, complex layouts. Still the safe pick for teams on existing codebases.<br>
+        Ask which the team uses before assuming.
+      </div>
+    </details>
+    <details>
+      <summary><strong>App lifecycle</strong></summary>
+      <div class="tradeoff-body">
+        foreground → active user interaction. background → limited CPU, no UI. suspended → frozen, may be killed.<br>
+        Know what code is safe to run in each state and what must be deferred or cancelled.
+      </div>
+    </details>
+    <details>
+      <summary><strong>GCD vs OperationQueue vs async/await</strong></summary>
+      <div class="tradeoff-body">
+        <span class="pick">async/await</span> — readable sequential async, use for most new code.<br>
+        <span class="pick">GCD</span> — low-level fire-and-forget dispatch, fine for simple background work.<br>
+        <span class="pick">OperationQueue</span> — when you need cancellation, dependencies between tasks, or max concurrency.
+      </div>
+    </details>
+    <details>
+      <summary><strong>Navigation: stack, tab, deep link</strong></summary>
+      <div class="tradeoff-body">
+        Stack → drill-down hierarchy. Tab → peer sections at the same level.<br>
+        Deep link always routes through one handler (Coordinator) — not scattered across ViewControllers. One routing table beats two.
+      </div>
+    </details>
   </div>
 
   <div class="checklist-group">
     <h4>API Design &amp; Networking</h4>
-    <ul class="checklist">
-      <li>Can explain REST / WebSockets / GraphQL / gRPC — one use case each</li>
-      <li>Pagination: offset, cursor, page-token — and when cursor beats offset</li>
-      <li>Full caching stack: HTTP headers → NSCache → disk → custom invalidation</li>
-      <li>Offline sync strategy including conflict handling</li>
-      <li>Authentication patterns (token refresh, Keychain storage)</li>
-      <li>Retry policy + exponential backoff</li>
-    </ul>
+    <details>
+      <summary><strong>REST vs WebSockets vs GraphQL vs gRPC</strong></summary>
+      <div class="tradeoff-body">
+        <span class="pick">REST</span> — simple CRUD over well-defined resources. Default choice.<br>
+        <span class="pick">WebSockets</span> — persistent connection for real-time (live playback state, chat, collaboration).<br>
+        <span class="pick">GraphQL</span> — client-driven shape, flexible nested queries. Avoids over/under-fetching.<br>
+        <span class="pick">gRPC</span> — typed contracts, high-throughput, internal service-to-service.
+      </div>
+    </details>
+    <details>
+      <summary><strong>Cursor vs offset pagination</strong></summary>
+      <div class="tradeoff-body">
+        <span class="pick">Cursor</span> — for infinite-scroll feeds. Rows shift as new items are inserted, so offset skips or repeats items.<br>
+        <span class="pick">Offset</span> — for stable lists where total count matters (search results, admin tables).
+      </div>
+    </details>
+    <details>
+      <summary><strong>Full caching stack</strong></summary>
+      <div class="tradeoff-body">
+        HTTP cache-control + ETag → free freshness via server collaboration.<br>
+        NSCache (memory) → fast, auto-evicted under memory pressure.<br>
+        Disk cache → survives app restarts.<br>
+        Custom invalidation → TTL, version key, or manual purge when the above aren't enough.
+      </div>
+    </details>
+    <details>
+      <summary><strong>Offline sync conflict resolution</strong></summary>
+      <div class="tradeoff-body">
+        <span class="pick">Last-write-wins</span> — simple, good enough for most social data (likes, play counts).<br>
+        <span class="pick">Server-wins</span> — authoritative, safe for inventory or financial data.<br>
+        <span class="pick">Merge strategy</span> — complex but fair; needed for collaborative editing.
+      </div>
+    </details>
+    <details>
+      <summary><strong>Authentication: token refresh + storage</strong></summary>
+      <div class="tradeoff-body">
+        Short-lived access token + long-lived refresh token. Refresh silently when access token expires.<br>
+        Always store tokens in Keychain — never UserDefaults. UserDefaults is unencrypted and readable.
+      </div>
+    </details>
+    <details>
+      <summary><strong>Retry policy + exponential backoff</strong></summary>
+      <div class="tradeoff-body">
+        Retry failed requests with increasing delay (1s → 2s → 4s…) to avoid thundering herd on the server.<br>
+        Add idempotency key on mutations so a retried write doesn't create duplicates.
+      </div>
+    </details>
   </div>
 
   <div class="checklist-group">
     <h4>Architecture</h4>
-    <ul class="checklist">
-      <li>Can draw Clean Architecture layers from memory with correct dependency direction</li>
-      <li>MVVM vs MVC vs VIPER — pros, cons, when to reach for each</li>
-      <li>Dependency injection: constructor injection vs DI container</li>
-      <li>Repository pattern — what problem it solves</li>
-    </ul>
+    <details>
+      <summary><strong>Clean Architecture layer direction</strong></summary>
+      <div class="tradeoff-body">
+        Dependency arrow always points inward: Presentation → Domain ← Data.<br>
+        Domain knows nothing about UIKit, URLSession, or any framework. That's what makes it testable and portable.
+      </div>
+    </details>
+    <details>
+      <summary><strong>MVVM vs MVC vs VIPER</strong></summary>
+      <div class="tradeoff-body">
+        <span class="pick">MVVM</span> — testable ViewModel, reactive with Combine. iOS teams default.<br>
+        <span class="pick">MVC</span> — simple, fast to write. Navigation logic bleeds into ViewController at scale.<br>
+        <span class="pick">VIPER</span> — fully separated, every role has one file. Very verbose; justified only for large teams with strict boundaries.
+      </div>
+    </details>
+    <details>
+      <summary><strong>Constructor injection vs DI container</strong></summary>
+      <div class="tradeoff-body">
+        <span class="pick">Constructor injection</span> — explicit, easy to trace, easier to test. Preferred for most cases.<br>
+        <span class="pick">DI container</span> — less boilerplate at scale, but harder to see what depends on what. Worth it in large modular apps.
+      </div>
+    </details>
+    <details>
+      <summary><strong>Repository pattern</strong></summary>
+      <div class="tradeoff-body">
+        Hides where data comes from (network vs cache vs disk) behind a single interface.<br>
+        UseCase calls <code>repository.fetch()</code> — it doesn't know or care if that hits the network or a local cache.
+      </div>
+    </details>
   </div>
 
   <div class="checklist-group">
     <h4>Storage</h4>
-    <ul class="checklist">
-      <li>Know all storage options and trade-offs (UserDefaults / Core Data / SQLite / Keychain / disk)</li>
-      <li>Know when secure storage (Keychain) is required vs acceptable risk</li>
-    </ul>
+    <details>
+      <summary><strong>UserDefaults vs Core Data vs SQLite vs Keychain vs disk</strong></summary>
+      <div class="tradeoff-body">
+        <span class="pick">UserDefaults</span> — preferences, feature flags, small flat payloads. Not for secrets.<br>
+        <span class="pick">Core Data</span> — relational data with relationships, migrations, complex queries.<br>
+        <span class="pick">SQLite / GRDB</span> — relational without Core Data ceremony. Good middle ground.<br>
+        <span class="pick">Keychain</span> — tokens, passwords, anything sensitive. Survives app reinstall.<br>
+        <span class="pick">Disk / file cache</span> — large blobs: images, audio files, downloaded tracks.
+      </div>
+    </details>
+    <details>
+      <summary><strong>When Keychain is required vs acceptable risk</strong></summary>
+      <div class="tradeoff-body">
+        <span class="pick">Keychain required</span> — auth tokens, passwords, biometric keys, PII.<br>
+        <span class="pick">UserDefaults OK</span> — preferences, UI state, feature flags, non-sensitive cache. Unencrypted, so anything readable by the user is fine here.
+      </div>
+    </details>
   </div>
 
   <div class="checklist-group">
     <h4>Performance</h4>
-    <ul class="checklist">
-      <li>Memory: common retain cycle patterns, how to detect with Instruments</li>
-      <li>Battery: what drains it (polling, location, background fetch), how to minimize</li>
-      <li>60 FPS: what blocks the main thread, how to profile</li>
-      <li>App startup: cold start vs warm start, what to defer</li>
-    </ul>
+    <details>
+      <summary><strong>Memory: retain cycles</strong></summary>
+      <div class="tradeoff-body">
+        Closures capture <code>self</code> strongly by default → cycle if the object also holds the closure.<br>
+        Fix: <code>[weak self]</code>. Detect: Instruments → Leaks / Memory Graph Debugger.
+      </div>
+    </details>
+    <details>
+      <summary><strong>Battery drain</strong></summary>
+      <div class="tradeoff-body">
+        Main culprits: polling, GPS, background fetch, keeping the radio alive with frequent small requests.<br>
+        Fix: push over polling, batch requests, use significant-location-change instead of continuous GPS.
+      </div>
+    </details>
+    <details>
+      <summary><strong>60 FPS / main thread</strong></summary>
+      <div class="tradeoff-body">
+        Layout and drawing must complete in 16ms per frame. Anything slow on the main thread drops frames.<br>
+        Move image decoding, JSON parsing, and disk I/O to a background queue. Profile with Instruments → Time Profiler.
+      </div>
+    </details>
+    <details>
+      <summary><strong>Cold start vs warm start</strong></summary>
+      <div class="tradeoff-body">
+        <span class="pick">Cold</span> — process launched from scratch. Everything loads. Most expensive.<br>
+        <span class="pick">Warm</span> — app already in memory, just brought to foreground. Fast.<br>
+        Defer analytics init, non-critical network calls, and heavy data loading until after first frame.
+      </div>
+    </details>
   </div>
 
   <div class="checklist-group">
     <h4>Observability &amp; Testing</h4>
-    <ul class="checklist">
-      <li>Unit test structure: mock the layer below, assert on the layer you built</li>
-      <li>Crash reporting integration pattern (Sentry / Firebase Crashlytics)</li>
-    </ul>
+    <details>
+      <summary><strong>Unit test structure</strong></summary>
+      <div class="tradeoff-body">
+        Mock the layer directly below the one you're testing — never the concrete type, always the protocol.<br>
+        This means a UseCase test mocks the Repository protocol. A ViewModel test mocks the UseCase protocol.
+      </div>
+    </details>
+    <details>
+      <summary><strong>Sentry vs Firebase Crashlytics</strong></summary>
+      <div class="tradeoff-body">
+        <span class="pick">Crashlytics</span> — tight Firebase integration, simpler setup, free.<br>
+        <span class="pick">Sentry</span> — more control, self-hostable, richer error context, better for non-crash errors. Better choice if you care about performance monitoring too.
+      </div>
+    </details>
   </div>
 
   <div class="checklist-group">
     <h4>Privacy &amp; Security</h4>
-    <ul class="checklist">
-      <li>Encryption at rest vs in transit</li>
-      <li>iOS permissions model (when to ask, graceful degradation)</li>
-      <li>Certificate pinning — what it prevents, trade-off on update agility</li>
-    </ul>
+    <details>
+      <summary><strong>Encryption at rest vs in transit</strong></summary>
+      <div class="tradeoff-body">
+        <span class="pick">In transit</span> — TLS. All network calls must use HTTPS. Non-negotiable.<br>
+        <span class="pick">At rest</span> — iOS Data Protection encrypts files when the device is locked. Use <code>.completeFileProtection</code> for sensitive data. Keychain adds an extra layer for secrets.
+      </div>
+    </details>
+    <details>
+      <summary><strong>iOS permissions model</strong></summary>
+      <div class="tradeoff-body">
+        Ask at the moment of use — contextual requests have far higher grant rates than asking on launch.<br>
+        Always degrade gracefully if denied: don't crash or block the core flow, just disable the feature that needs it.
+      </div>
+    </details>
+    <details>
+      <summary><strong>Certificate pinning</strong></summary>
+      <div class="tradeoff-body">
+        Prevents MITM attacks by rejecting any cert not matching the pinned one — even if issued by a trusted CA.<br>
+        Trade-off: if the cert rotates and you ship a pinned build, the app breaks until users update. Requires a rotation plan.
+      </div>
+    </details>
   </div>
 </section>
 
