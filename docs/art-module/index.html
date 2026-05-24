@@ -1,0 +1,1900 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Art Teacher Interview — Learning Module</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #0d0f14;
+  --surface: #161820;
+  --surface2: #1d1f2e;
+  --border: #2e3040;
+  --text: #e8e6f0;
+  --muted: #8b8fa8;
+  --accent: #a78bfa;
+  --gold: #f6c94e;
+  --rose: #f87171;
+  --teal: #34d399;
+  --sky: #7dd3fc;
+  --warm: #fb923c;
+  --sidebar-w: 228px;
+}
+
+/* ── BASE ── */
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+}
+a { color: inherit; text-decoration: none; }
+
+/* ── LAYOUT ── */
+.sidebar {
+  position: fixed;
+  top: 0; left: 0; bottom: 0;
+  width: var(--sidebar-w);
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+}
+.sidebar::-webkit-scrollbar { width: 4px; }
+.sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.sidebar-header {
+  padding: 20px 16px 14px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.sidebar-header .badge {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent);
+  border: 1px solid rgba(167,139,250,0.3);
+  border-radius: 20px;
+  padding: 2px 8px;
+  display: inline-block;
+  margin-bottom: 8px;
+}
+.sidebar-header h1 {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.3;
+}
+
+.nav-group { padding: 14px 0 4px; }
+.nav-group-label {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 0 16px 6px;
+  display: block;
+  opacity: 0.6;
+}
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 16px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--muted);
+  border-left: 2px solid transparent;
+  transition: all 0.15s;
+  user-select: none;
+  line-height: 1.3;
+}
+.nav-item:hover { color: var(--text); background: rgba(255,255,255,0.03); }
+.nav-item.active {
+  color: var(--accent);
+  border-left-color: var(--accent);
+  background: rgba(167,139,250,0.07);
+  font-weight: 600;
+}
+.nav-item .icon { font-size: 13px; flex-shrink: 0; width: 16px; text-align: center; }
+
+/* ── MAIN ── */
+.main {
+  margin-left: var(--sidebar-w);
+  min-height: 100vh;
+  padding: 36px 32px 80px;
+  max-width: calc(var(--sidebar-w) + 760px);
+}
+
+/* ── SECTION PAGE ── */
+.section-page { display: none; max-width: 720px; }
+.section-page.active { display: block; }
+
+/* ── SECTION HEADER ── */
+.section-head { margin-bottom: 28px; }
+.section-head .tag {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--gold);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.section-head h2 {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--text);
+  line-height: 1.25;
+  margin-bottom: 8px;
+}
+.section-head p { color: var(--muted); font-size: 14px; }
+
+/* ── TYPOGRAPHY ── */
+h3 { font-size: 14px; font-weight: 700; color: var(--accent); margin: 24px 0 10px; display: flex; align-items: center; gap: 6px; }
+h3::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+h4 { font-size: 13px; font-weight: 600; color: var(--warm); margin: 14px 0 6px; }
+p { color: var(--muted); margin-bottom: 12px; line-height: 1.65; font-size: 14px; }
+p strong { color: var(--text); }
+ul { padding-left: 0; list-style: none; margin-bottom: 14px; }
+ul li {
+  color: var(--muted);
+  font-size: 14px;
+  margin-bottom: 6px;
+  line-height: 1.55;
+  padding-left: 18px;
+  position: relative;
+}
+ul li::before { content: "–"; position: absolute; left: 0; color: var(--border); }
+ul li strong { color: var(--text); }
+
+/* ── TIMELINE ── */
+.timeline { display: flex; flex-direction: column; margin-bottom: 16px; }
+.tl-item { display: flex; gap: 16px; position: relative; }
+.tl-item:not(:last-child) .tl-line {
+  position: absolute; left: 24px; top: 38px; bottom: 0;
+  width: 2px; background: var(--border);
+}
+.tl-dot {
+  min-width: 48px; height: 28px; border-radius: 14px; padding: 0 8px;
+  background: var(--surface); border: 2px solid var(--gold);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; font-weight: 700; color: var(--gold);
+  flex-shrink: 0; z-index: 1; white-space: nowrap; margin-top: 8px;
+}
+.tl-content { padding: 6px 0 28px; flex: 1; }
+.tl-content h3 { margin-top: 4px; font-size: 14px; }
+.tl-content h3::after { display: none; }
+.tl-content p, .tl-content li { font-size: 13px; }
+
+/* ── CARDS ── */
+.card-grid { display: grid; gap: 10px; margin-bottom: 16px; }
+.card-grid.cols-2 { grid-template-columns: 1fr 1fr; }
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+.card .card-label {
+  font-size: 9px; font-weight: 700; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--muted); margin-bottom: 6px;
+}
+.card h4 { color: var(--accent); margin: 0 0 6px; font-size: 13px; }
+.card p { font-size: 13px; margin-bottom: 0; }
+.card ul { margin-bottom: 0; }
+.card li { font-size: 13px; }
+
+/* ── STAR BOX ── */
+.star-box { margin-bottom: 24px; }
+.star-title { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+.star-row {
+  display: flex; gap: 0; margin-bottom: 2px;
+  border-radius: 10px; overflow: hidden; border: 1px solid var(--border);
+}
+.star-label {
+  min-width: 34px; background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex; align-items: flex-start; justify-content: center;
+  padding-top: 12px; font-size: 10px; font-weight: 800;
+  letter-spacing: 0.06em; text-transform: uppercase; flex-shrink: 0;
+}
+.star-label.s { color: var(--sky); }
+.star-label.t { color: var(--gold); }
+.star-label.a { color: var(--teal); }
+.star-label.r { color: var(--rose); }
+.star-content { padding: 12px 14px; font-size: 13px; color: var(--muted); line-height: 1.6; }
+.star-content strong { color: var(--text); }
+
+/* ── CALLOUTS ── */
+.callout {
+  background: rgba(167,139,250,0.07); border: 1px solid rgba(167,139,250,0.28);
+  border-radius: 8px; padding: 12px 16px; margin-bottom: 14px;
+  font-size: 13px; color: var(--text); line-height: 1.6;
+}
+.callout strong { color: var(--accent); }
+.rule {
+  background: rgba(52,211,153,0.07); border: 1px solid rgba(52,211,153,0.28);
+  border-radius: 8px; padding: 12px 16px; margin-bottom: 14px;
+  font-size: 13px; color: var(--text); line-height: 1.6;
+}
+.rule strong { color: var(--teal); }
+.warn {
+  background: rgba(246,201,78,0.07); border: 1px solid rgba(246,201,78,0.28);
+  border-radius: 8px; padding: 12px 16px; margin-bottom: 14px;
+  font-size: 13px; color: var(--text); line-height: 1.6;
+}
+.warn strong { color: var(--gold); }
+.danger {
+  background: rgba(248,113,113,0.07); border: 1px solid rgba(248,113,113,0.28);
+  border-radius: 8px; padding: 12px 16px; margin-bottom: 14px;
+  font-size: 13px; color: var(--text); line-height: 1.6;
+}
+.danger strong { color: var(--rose); }
+
+/* ── BLOCKQUOTE ── */
+blockquote {
+  background: var(--surface); border-left: 3px solid var(--accent);
+  border-radius: 0 8px 8px 0; padding: 12px 16px; margin: 10px 0 14px;
+  font-size: 14px; color: var(--text); font-style: italic; line-height: 1.6;
+}
+
+/* ── DETAILS / EXPANDABLE ── */
+details { margin-bottom: 6px; }
+details summary {
+  font-size: 13px; color: var(--text); cursor: pointer;
+  padding: 9px 14px; list-style: none; user-select: none;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; display: flex; align-items: center;
+  gap: 8px; transition: border-color 0.15s;
+}
+details[open] summary { border-color: var(--accent); border-radius: 8px 8px 0 0; }
+details summary:hover { border-color: var(--accent); }
+details summary::-webkit-details-marker { display: none; }
+details summary::before {
+  content: "›"; font-size: 16px; font-weight: 700; color: var(--accent);
+  flex-shrink: 0; transition: transform 0.15s; display: inline-block;
+}
+details[open] summary::before { transform: rotate(90deg); }
+.detail-body {
+  margin: 0 0 8px; padding: 12px 16px;
+  background: rgba(167,139,250,0.04);
+  border: 1px solid var(--accent); border-top: none;
+  border-radius: 0 0 8px 8px;
+  font-size: 13px; color: var(--muted); line-height: 1.65;
+}
+.detail-body strong { color: var(--text); }
+.detail-body ul { margin: 6px 0 0; }
+
+/* ── TABLE ── */
+.table-wrap {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; overflow: hidden; margin-bottom: 16px;
+}
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th {
+  background: var(--surface); color: var(--muted); font-weight: 700;
+  text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--border);
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.07em;
+}
+td {
+  padding: 10px 14px; border-bottom: 1px solid var(--border);
+  color: var(--muted); vertical-align: top; line-height: 1.5;
+}
+td:first-child { color: var(--text); font-weight: 600; font-size: 12px; }
+tr:last-child td { border-bottom: none; }
+
+/* ── PILLARS ── */
+.pillars { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+.pillar {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; padding: 14px 16px; border-top: 3px solid transparent;
+}
+.pillar.p1 { border-top-color: var(--accent); }
+.pillar.p2 { border-top-color: var(--gold); }
+.pillar.p3 { border-top-color: var(--teal); }
+.pillar.p4 { border-top-color: var(--rose); }
+.pillar .num { font-size: 9px; font-weight: 800; color: var(--muted); letter-spacing: 0.08em; margin-bottom: 4px; }
+.pillar h4 { color: var(--text); font-size: 13px; margin: 0 0 6px; }
+.pillar p { font-size: 12px; margin: 0; }
+
+/* ── TAG CHIPS ── */
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+.chip {
+  font-size: 11px; font-weight: 600; padding: 3px 10px;
+  border-radius: 20px; border: 1px solid;
+}
+.chip.purple { color: var(--accent); border-color: rgba(167,139,250,0.35); background: rgba(167,139,250,0.08); }
+.chip.gold { color: var(--gold); border-color: rgba(246,201,78,0.35); background: rgba(246,201,78,0.08); }
+.chip.teal { color: var(--teal); border-color: rgba(52,211,153,0.35); background: rgba(52,211,153,0.08); }
+.chip.rose { color: var(--rose); border-color: rgba(248,113,113,0.35); background: rgba(248,113,113,0.08); }
+.chip.sky { color: var(--sky); border-color: rgba(125,211,252,0.35); background: rgba(125,211,252,0.08); }
+.chip.warm { color: var(--warm); border-color: rgba(251,146,60,0.35); background: rgba(251,146,60,0.08); }
+
+/* ── PRINCIPLE GRID (elements) ── */
+.principle-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 16px; }
+.principle-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; padding: 12px 14px;
+}
+.principle-card .p-name { font-size: 12px; font-weight: 700; color: var(--text); margin-bottom: 3px; }
+.principle-card .p-def { font-size: 12px; color: var(--muted); line-height: 1.5; }
+.principle-card .p-teach { font-size: 11px; color: var(--accent); margin-top: 5px; font-style: italic; }
+
+/* ── ARTIST REF ── */
+.artist-grid { display: grid; gap: 10px; margin-bottom: 16px; }
+.artist-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; padding: 14px 16px;
+}
+.artist-card .a-theme {
+  font-size: 9px; font-weight: 800; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--gold); margin-bottom: 8px;
+}
+.artist-card .a-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.artist-card .a-name {
+  font-size: 12px; color: var(--text); background: var(--surface2);
+  border: 1px solid var(--border); border-radius: 6px;
+  padding: 3px 9px; font-weight: 500;
+}
+.artist-card .a-note { font-size: 12px; color: var(--muted); margin-top: 8px; line-height: 1.5; }
+
+/* ── SCENARIO BOX ── */
+.scenario {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; margin-bottom: 10px; overflow: hidden;
+}
+.scenario-q {
+  padding: 13px 16px; font-size: 13px; font-weight: 600; color: var(--text);
+  border-bottom: 1px solid var(--border); background: var(--surface2);
+  display: flex; gap: 10px; align-items: flex-start;
+}
+.scenario-q .sq-icon { color: var(--rose); flex-shrink: 0; margin-top: 1px; }
+.scenario-a { padding: 13px 16px; font-size: 13px; color: var(--muted); line-height: 1.65; }
+.scenario-a strong { color: var(--text); }
+
+/* ── CHECKLIST ── */
+.checklist { padding-left: 0; list-style: none; margin-bottom: 16px; }
+.checklist li {
+  font-size: 13px; color: var(--muted); margin-bottom: 8px;
+  padding-left: 24px; position: relative; line-height: 1.5;
+}
+.checklist li::before {
+  content: "□"; position: absolute; left: 0;
+  color: var(--border); font-size: 14px;
+}
+.checklist li strong { color: var(--text); }
+
+/* ── MOBILE NAV ── */
+.mobile-nav-btn {
+  display: none;
+  position: fixed; top: 12px; left: 12px; z-index: 300;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; padding: 8px 12px;
+  font-size: 12px; color: var(--text); cursor: pointer;
+  gap: 6px; align-items: center;
+}
+.sidebar-overlay {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.6);
+  z-index: 150;
+}
+
+@media (max-width: 860px) {
+  .sidebar {
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+  }
+  .sidebar.open {
+    transform: translateX(0);
+  }
+  .sidebar-overlay.open { display: block; }
+  .main {
+    margin-left: 0;
+    padding: 56px 18px 60px;
+  }
+  .mobile-nav-btn { display: flex; }
+  .pillars { grid-template-columns: 1fr; }
+  .card-grid.cols-2 { grid-template-columns: 1fr; }
+  .principle-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<!-- MOBILE TOGGLE -->
+<button class="mobile-nav-btn" onclick="toggleSidebar()">☰ Sections</button>
+<div class="sidebar-overlay" id="overlay" onclick="closeSidebar()"></div>
+
+<!-- SIDEBAR -->
+<nav class="sidebar" id="sidebar">
+  <div class="sidebar-header">
+    <div class="badge">Learning Module</div>
+    <h1>Art Teacher<br>Interview Prep</h1>
+  </div>
+
+  <div class="nav-group">
+    <span class="nav-group-label">Identity</span>
+    <div class="nav-item active" data-target="self" onclick="show('self')">
+      <span class="icon">🎨</span> Tell Me About Yourself
+    </div>
+    <div class="nav-item" data-target="why" onclick="show('why')">
+      <span class="icon">💡</span> Why Art Teaching
+    </div>
+    <div class="nav-item" data-target="artistic-identity" onclick="show('artistic-identity')">
+      <span class="icon">🖼️</span> Your Artistic Identity
+    </div>
+  </div>
+
+  <div class="nav-group">
+    <span class="nav-group-label">Philosophy</span>
+    <div class="nav-item" data-target="philosophy" onclick="show('philosophy')">
+      <span class="icon">🏛</span> Teaching Philosophy
+    </div>
+    <div class="nav-item" data-target="curriculum" onclick="show('curriculum')">
+      <span class="icon">📐</span> Curriculum Design
+    </div>
+  </div>
+
+  <div class="nav-group">
+    <span class="nav-group-label">Practice</span>
+    <div class="nav-item" data-target="practice" onclick="show('practice')">
+      <span class="icon">🖌️</span> Classroom Practice
+    </div>
+    <div class="nav-item" data-target="engagement" onclick="show('engagement')">
+      <span class="icon">🔥</span> Student Engagement
+    </div>
+    <div class="nav-item" data-target="differentiation" onclick="show('differentiation')">
+      <span class="icon">🌱</span> Differentiation
+    </div>
+    <div class="nav-item" data-target="assessment" onclick="show('assessment')">
+      <span class="icon">📊</span> Assessment
+    </div>
+    <div class="nav-item" data-target="gradebands" onclick="show('gradebands')">
+      <span class="icon">🎓</span> Grade Bands K–12
+    </div>
+  </div>
+
+  <div class="nav-group">
+    <span class="nav-group-label">Knowledge</span>
+    <div class="nav-item" data-target="elements" onclick="show('elements')">
+      <span class="icon">🔺</span> Elements &amp; Principles
+    </div>
+    <div class="nav-item" data-target="artists" onclick="show('artists')">
+      <span class="icon">👁</span> Artist Reference Bank
+    </div>
+    <div class="nav-item" data-target="tech" onclick="show('tech')">
+      <span class="icon">💻</span> Tech in the Art Room
+    </div>
+  </div>
+
+  <div class="nav-group">
+    <span class="nav-group-label">Stories</span>
+    <div class="nav-item" data-target="star" onclick="show('star')">
+      <span class="icon">⭐</span> STAR Stories
+    </div>
+    <div class="nav-item" data-target="tough" onclick="show('tough')">
+      <span class="icon">⚡</span> Tough Scenarios
+    </div>
+  </div>
+
+  <div class="nav-group">
+    <span class="nav-group-label">Prep</span>
+    <div class="nav-item" data-target="portfolio" onclick="show('portfolio')">
+      <span class="icon">📁</span> Teacher Portfolio
+    </div>
+    <div class="nav-item" data-target="questions" onclick="show('questions')">
+      <span class="icon">🔍</span> Questions to Ask
+    </div>
+    <div class="nav-item" data-target="cheatsheet" onclick="show('cheatsheet')">
+      <span class="icon">⚡</span> Cheat Sheet
+    </div>
+  </div>
+</nav>
+
+<!-- MAIN -->
+<main class="main">
+
+<!-- ════════════════════════════════════════════
+     1. TELL ME ABOUT YOURSELF
+     ════════════════════════════════════════════ -->
+<div class="section-page active" id="self">
+  <div class="section-head">
+    <div class="tag">🎨 Identity</div>
+    <h2>Tell Me About Yourself</h2>
+    <p>Past → Present → Future. Under 90 seconds. End on why <em>this</em> school specifically excites you.</p>
+  </div>
+
+  <div class="callout">
+    <strong>Frame the arc:</strong> You aren't summarizing a résumé — you're telling a story about someone who was always moving toward this room.
+  </div>
+
+  <div class="timeline">
+    <div class="tl-item">
+      <div class="tl-dot">Past</div>
+      <div class="tl-line"></div>
+      <div class="tl-content">
+        <h3>Origin &amp; Training</h3>
+        <ul>
+          <li>Studied Fine Arts / Visual Communication Design at [University] — built a strong foundation in drawing, painting, and design thinking across multiple mediums</li>
+          <li>Explored oil, watercolor, printmaking, digital illustration — learned early that <strong>medium is a tool, not an identity</strong></li>
+          <li>First teaching experience: [student teaching / community workshop / tutoring] — discovered that teaching art is its own creative act</li>
+          <li>Art history and criticism courses gave me the language to talk about work rigorously, not just emotionally</li>
+        </ul>
+      </div>
+    </div>
+    <div class="tl-item">
+      <div class="tl-dot">Now</div>
+      <div class="tl-line"></div>
+      <div class="tl-content">
+        <h3>Current Work</h3>
+        <ul>
+          <li>Art educator at [School / Studio] — teaching [grades/age group], focused on [drawing fundamentals / mixed media / contemporary art appreciation]</li>
+          <li>Consistently building a classroom culture where <strong>taking creative risks is celebrated, not feared</strong></li>
+          <li>Run student exhibitions each semester — giving learners a real audience and a growing artistic identity</li>
+          <li>Stay active as a practicing artist — currently working in [medium] — because I can't teach creative courage if I'm not exercising it myself</li>
+        </ul>
+      </div>
+    </div>
+    <div class="tl-item">
+      <div class="tl-dot">Next</div>
+      <div class="tl-content">
+        <h3>Why This Role</h3>
+        <ul>
+          <li>I'm drawn to [this school] specifically because of [its arts integration program / community-centered approach / commitment to project-based learning]</li>
+          <li>I want to grow beyond single classrooms — toward building an art <em>culture</em> within a school, not just running classes</li>
+          <li>I believe every student has a visual language waiting to be developed. This role is where I can do that at scale, with depth.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <h3>Talking Points to Weave In</h3>
+  <div class="card-grid cols-2">
+    <div class="card">
+      <div class="card-label">On Your Practice</div>
+      <p>Staying active as an artist keeps you honest. You can't ask students to take risks you won't take yourself.</p>
+    </div>
+    <div class="card">
+      <div class="card-label">On Your Journey</div>
+      <p>Name the moment art became serious for you — a teacher, a work, a failure that taught you something. Specificity is memorable.</p>
+    </div>
+    <div class="card">
+      <div class="card-label">On Students</div>
+      <p>Circle back to them. The best "tell me about yourself" answers end with what you want for students — not what you want for yourself.</p>
+    </div>
+    <div class="card">
+      <div class="card-label">On This School</div>
+      <p>Research one specific thing about this school's art program or community and name it. Generic enthusiasm is forgettable. Specific curiosity is not.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════
+     2. WHY ART TEACHING
+     ════════════════════════════════════════════ -->
+<div class="section-page" id="why">
+  <div class="section-head">
+    <div class="tag">💡 Identity</div>
+    <h2>Why Do You Want to Be an Art Teacher?</h2>
+    <p>This is a values question disguised as a career question. Answer from conviction, not resume logic.</p>
+  </div>
+
+  <blockquote>
+    "Art was the first place where I felt genuinely capable of expressing something true — before I had the words for it. I became an art teacher because I want every student to find that same feeling before they leave school."
+  </blockquote>
+
+  <h3>Core Talking Points</h3>
+  <ul>
+    <li>Art is the one subject where <strong>the process is the lesson</strong> — observation, iteration, and revision are the transferable skills, not just the output</li>
+    <li>I've watched students who struggle everywhere else come alive in an art room. That reframes their entire identity as a learner — which ripples outward</li>
+    <li><strong>Visual literacy is increasingly essential:</strong> design, media, communication, data visualization — art education is foundational infrastructure, not enrichment</li>
+    <li>Teaching keeps me a student. Every time I explain something, I understand it more deeply myself</li>
+    <li>Art class is often the only space in a school day where students are asked: <em>what do you think? What do you see? What do you want to say?</em> That matters enormously for development</li>
+  </ul>
+
+  <h3>Elevate the Answer — Go Deeper</h3>
+  <div class="card-grid">
+    <details>
+      <summary><strong>Beyond "I love art" — what does that actually mean?</strong></summary>
+      <div class="detail-body">
+        Loving art and being called to teach it are different things. The answer should show you've thought about <em>why teaching specifically</em> — not just why art. What is it about the act of watching someone else learn to see that pulls you back every day?
+      </div>
+    </details>
+    <details>
+      <summary><strong>What would be lost if art disappeared from schools?</strong></summary>
+      <div class="detail-body">
+        Students would lose: the ability to sit with ambiguity, the experience of making something from nothing, the practice of giving and receiving honest feedback, exposure to how other cultures and eras have made meaning. These are not decorative skills.
+      </div>
+    </details>
+    <details>
+      <summary><strong>What does your ideal art student look like at the end of a year?</strong></summary>
+      <div class="detail-body">
+        Not necessarily someone who draws well. Someone who <strong>looks more carefully</strong>, who can articulate what they see and why they made the choices they made, who has a small but real sense of their own visual voice.
+      </div>
+    </details>
+  </div>
+
+  <div class="rule">
+    <strong>Anchor line to memorize:</strong> Art isn't a break from learning. It <em>is</em> learning — in a different language, with different tools, asking different questions.
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════
+     3. YOUR ARTISTIC IDENTITY
+     ════════════════════════════════════════════ -->
+<div class="section-page" id="artistic-identity">
+  <div class="section-head">
+    <div class="tag">🖼️ Identity</div>
+    <h2>Your Artistic Identity</h2>
+    <p>Interviewers will ask about your own practice. Being a working artist — even a quiet one — is a teaching credential.</p>
+  </div>
+
+  <div class="callout">
+    <strong>Why it matters:</strong> A teacher who practices what they teach models the very vulnerability they ask students to have. You can't ask students to take creative risks from behind a desk.
+  </div>
+
+  <h3>Articulate Your Practice</h3>
+  <div class="card-grid">
+    <div class="card">
+      <div class="card-label">What You Work In</div>
+      <h4>Medium &amp; Method</h4>
+      <p>Name your primary medium and one thing that draws you to it specifically — not generically. "I work in watercolor because the drying time forces a kind of letting go" is better than "I enjoy painting."</p>
+    </div>
+    <div class="card">
+      <div class="card-label">What You're Exploring</div>
+      <h4>Current Questions</h4>
+      <p>Artists work from questions, not answers. What is your current work circling around? Memory, place, body, abstraction, community? A question makes you interesting. A technique doesn't.</p>
+    </div>
+    <div class="card">
+      <div class="card-label">Who You Look At</div>
+      <h4>Influences</h4>
+      <p>Name 2–3 artists you actively return to and why. Not just who you admire — who genuinely affects how you see or work. (See Artist Reference Bank for options.)</p>
+    </div>
+    <div class="card">
+      <div class="card-label">How It Connects</div>
+      <h4>Practice → Teaching</h4>
+      <p>Show the link explicitly: your own experience of creative struggle, revision, or breakthrough directly informs how you hold space for students in that same place.</p>
+    </div>
+  </div>
+
+  <h3>Writing Your Artist Statement (Interview Version)</h3>
+  <p>Keep it to 3–4 sentences. Structure: <strong>what you make → why → what you hope it does</strong>.</p>
+  <blockquote>
+    "I make [medium]-based work that investigates [theme/question]. I'm drawn to [specific quality of the medium] because it [why it suits the work]. The work is interested in [what it tries to do for a viewer or community]. Teaching and studio practice feed each other — the questions I sit with in my own work are the same ones I bring into the classroom."
+  </blockquote>
+
+  <h3>Common Questions About Your Practice</h3>
+  <details>
+    <summary><strong>Do you still make art outside of teaching?</strong></summary>
+    <div class="detail-body">
+      Yes — and explain briefly what that looks like. It doesn't need to be daily or exhibition-ready. Sketchbook practice, personal projects, community commissions all count. The point is that art-making isn't something you've given up — it's something you do alongside teaching.
+    </div>
+  </details>
+  <details>
+    <summary><strong>Have you ever exhibited your work?</strong></summary>
+    <div class="detail-body">
+      If yes — name it briefly and what the experience taught you. If no — frame it honestly: "I work mostly for personal growth and as a way to stay connected to the process I ask students to be in." That's a legitimate answer. Formal exhibition isn't the only proof of practice.
+    </div>
+  </details>
+  <details>
+    <summary><strong>Which artists most influence your teaching?</strong></summary>
+    <div class="detail-body">
+      Answer with two registers: <strong>artists who influence your practice</strong> (personal), and <strong>artists you use pedagogically</strong> (instructional). "In my own work, I keep returning to [X] because of [specific quality]. In the classroom, I use [Y] to show students what [specific concept] looks like when it's fully committed to."
+    </div>
+  </details>
+</div>
+
+<!-- ════════════════════════════════════════════
+     4. TEACHING PHILOSOPHY
+     ════════════════════════════════════════════ -->
+<div class="section-page" id="philosophy">
+  <div class="section-head">
+    <div class="tag">🏛 Philosophy</div>
+    <h2>Teaching Philosophy</h2>
+    <p>Your philosophy is the "why" behind every classroom decision. Be able to name your pillars and give a concrete example for each.</p>
+  </div>
+
+  <div class="pillars">
+    <div class="pillar p1">
+      <div class="num">01 — PROCESS OVER PRODUCT</div>
+      <h4>The journey is the learning</h4>
+      <p>I evaluate how a student observes, experiments, and revises — not just the final piece. A failed painting with strong decision-making is worth more than a polished one made by following instructions.</p>
+    </div>
+    <div class="pillar p2">
+      <div class="num">02 — VISUAL THINKING</div>
+      <h4>Art teaches a way of seeing</h4>
+      <p>I teach students to slow down and truly observe: proportion, light, negative space, color relationships. These skills transfer well beyond the art room.</p>
+    </div>
+    <div class="pillar p3">
+      <div class="num">03 — CULTURAL CONTEXT</div>
+      <h4>Art is never created in a vacuum</h4>
+      <p>Every project is connected to art history, contemporary artists, and diverse cultural traditions. Students learn to situate their own work within a bigger conversation.</p>
+    </div>
+    <div class="pillar p4">
+      <div class="num">04 — SAFE TO FAIL</div>
+      <h4>Risk-taking is the engine of creativity</h4>
+      <p>My classroom norms are built around critique that is specific and kind — not vague praise. Students learn to give and receive feedback that actually improves work.</p>
+    </div>
+  </div>
+
+  <h3>Additional Beliefs Worth Naming</h3>
+  <ul>
+    <li><strong>Student voice is central</strong> — I don't assign subjects and walk away. I ask: "What do you want to say? What matters to you?" The project brief is a frame, not a script.</li>
+    <li><strong>Representation in exemplars is not optional</strong> — If the only artists students see look nothing like them, art feels like someone else's world. Curriculum diversity is equity work.</li>
+    <li><strong>Critique is a skill, not an event</strong> — I teach feedback protocols explicitly. Students practice looking closely and speaking precisely. It doesn't happen naturally.</li>
+    <li><strong>The art room belongs to students</strong> — Display their work prominently. Let them arrange the space. Ownership of the room is ownership of the learning.</li>
+    <li><strong>Assessment should honor the medium</strong> — Art has craft <em>and</em> meaning. Rubrics that only score technique miss half the work. Rubrics that only score intent miss the other half.</li>
+  </ul>
+
+  <h3>Connecting Philosophy to Action</h3>
+  <div class="rule">
+    <strong>Interview tip:</strong> For each pillar you name, have a one-sentence concrete example ready. "Process over product — I grade sketchbooks on evidence of thinking: crossed-out ideas, revision notes, dead ends. Not on how pretty they look."
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════
+     5. CURRICULUM DESIGN
+     ════════════════════════════════════════════ -->
+<div class="section-page" id="curriculum">
+  <div class="section-head">
+    <div class="tag">📐 Philosophy</div>
+    <h2>Curriculum Design &amp; Unit Planning</h2>
+    <p>Show that you design with intention — from Big Idea down to daily pacing — not unit-by-unit as an afterthought.</p>
+  </div>
+
+  <h3>Unit Design Framework</h3>
+  <div class="card-grid">
+    <div class="card">
+      <div class="card-label">Step 1</div>
+      <h4>Start with the Big Idea</h4>
+      <p>Not "we're doing portraits." — but <em>"How does an artist reveal interiority through a face?"</em> A conceptual anchor connects technique to meaning and gives students something to argue about.</p>
+    </div>
+    <div class="card">
+      <div class="card-label">Step 2</div>
+      <h4>Identify Essential Skills</h4>
+      <p>What technical knowledge must be introduced? What do students need to practice before the main project is possible? Sequence these — don't front-load everything.</p>
+    </div>
+    <div class="card">
+      <div class="card-label">Step 3</div>
+      <h4>Build in Artist Exemplars</h4>
+      <p>At least 3–5 artists per unit — diverse by era, culture, and medium — showing different responses to the same conceptual question. Not just "famous artwork of the week."</p>
+    </div>
+    <div class="card">
+      <div class="card-label">Step 4</div>
+      <h4>Design the Critique</h4>
+      <p>Plan backwards from the discussion you want. What vocabulary should students be using by the end? What protocol — I notice / I wonder / What if — will structure the conversation?</p>
+    </div>
+    <div class="card">
+      <div class="card-label">Step 5</div>
+      <h4>Assessment Alignment</h4>
+      <p>The rubric should reflect what you actually taught. If you emphasized process, process is on the rubric. If you emphasized cultural context, students can articulate that connection.</p>
+    </div>
+    <div class="card">
+      <div class="card-label">Step 6</div>
+      <h4>Leave Room for Emergence</h4>
+      <p>The best art units have planned flexibility. If something unexpected becomes fascinating, follow it. Over-scripted curriculum produces over-scripted students.</p>
+    </div>
+  </div>
+
+  <h3>Mediums I Teach</h3>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Medium</th><th>Key Skills</th><th>Best Used For</th></tr>
+      <tr><td>Drawing — pencil, charcoal, ink</td><td>Observation, value, proportion, line quality</td><td>Foundation for all other mediums; universal entry point</td></tr>
+      <tr><td>Painting — watercolor, acrylic, gouache</td><td>Color mixing, layering, edge control, opacity</td><td>Teaching color relationships and letting go of control</td></tr>
+      <tr><td>Printmaking — linocut, monoprint</td><td>Reversal thinking, repetition, edition-making</td><td>Process-heavy; great for students who freeze in front of blank paper</td></tr>
+      <tr><td>Collage &amp; Mixed Media</td><td>Composition, juxtaposition, material thinking</td><td>Accessible entry; conceptually rich; great for differentiation</td></tr>
+      <tr><td>Digital Illustration</td><td>Layer logic, color systems, design thinking</td><td>High engagement; connects to contemporary culture and careers</td></tr>
+      <tr><td>Sculpture &amp; 3D</td><td>Spatial reasoning, materiality, structural thinking</td><td>Challenges 2D-strong students; reveals different intelligences</td></tr>
+      <tr><td>Photography</td><td>Composition, light reading, editing eye</td><td>Immediate feedback loop; connects to how students already see the world</td></tr>
+    </table>
+  </div>
+
+  <h3>Standards Alignment</h3>
+  <div class="chips">
+    <span class="chip purple">Creating</span>
+    <span class="chip gold">Presenting</span>
+    <span class="chip teal">Responding</span>
+    <span class="chip rose">Connecting</span>
+  </div>
+  <ul>
+    <li><strong>Creating</strong> — conceiving, developing, and realizing works of art and design</li>
+    <li><strong>Presenting</strong> — sharing, curating, and interpreting artistic work for an audience</li>
+    <li><strong>Responding</strong> — analyzing and interpreting art; developing aesthetic criteria</li>
+    <li><strong>Connecting</strong> — relating art to personal experience, society, history, and other disciplines</li>
+  </ul>
+
+  <h3>Interdisciplinary Connections</h3>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Subject</th><th>Connection</th><th>Example</th></tr>
+      <tr><td>Mathematics</td><td>Perspective, symmetry, proportion, tessellations, fractals</td><td>Escher + geometry unit; golden ratio in composition</td></tr>
+      <tr><td>Science</td><td>Color theory (light vs. pigment), anatomy, nature drawing, scientific illustration</td><td>Botanical illustration unit; physics of color mixing</td></tr>
+      <tr><td>History / Social Studies</td><td>Art as primary source; propaganda, symbolism, social commentary</td><td>WW2 poster analysis; reading political cartoons</td></tr>
+      <tr><td>Language Arts</td><td>Ekphrasis, artist statements, narrative art, visual storytelling</td><td>Writing from a painting; graphic novel unit</td></tr>
+      <tr><td>Cultural Studies</td><td>Textile traditions, ceramics, architecture, ceremony</td><td>Pattern unit from West African Kente to Indonesian batik</td></tr>
+    </table>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════
+     6. CLASSROOM PRACTICE
+     ════════════════════════════════════════════ -->
+<div class="section-page" id="practice">
+  <div class="section-head">
+    <div class="tag">🖌️ Practice</div>
+    <h2>Classroom Practice &amp; Management</h2>
+    <p>The art room has unique management challenges: wet materials, open-ended time, and the emotional weight of creative work. Show you've solved these.</p>
+  </div>
+
+  <h3>Class Structure Template</h3>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Phase</th><th>Duration</th><th>What Happens</th><th>Why</th></tr>
+      <tr><td>Warm-up</td><td>5 min</td><td>Quick observational sketch or visual prompt projected</td><td>Gets hands moving before brains overthink</td></tr>
+      <tr><td>Anchor</td><td>8–12 min</td><td>Mini-lesson: technique demo, artist spotlight, or critique model</td><td>Grounds the session in skill or context</td></tr>
+      <tr><td>Studio Time</td><td>25–30 min</td><td>Independent or collaborative project work</td><td>The heart of every class — actual making</td></tr>
+      <tr><td>Critique / Reflect</td><td>5–8 min</td><td>Pair share, gallery walk, or whole-class debrief</td><td>Builds vocabulary, reflection, and artistic community</td></tr>
+      <tr><td>Clean-up</td><td>3–5 min</td><td>Material care routines, tools back in place</td><td>Teaches ownership; protects materials and time next class</td></tr>
+    </table>
+  </div>
+
+  <h3>Management Scenarios</h3>
+  <div class="card-grid">
+    <details>
+      <summary><strong>Material distribution without chaos</strong></summary>
+      <div class="detail-body">
+        Designated material stations with clear labels. <strong>Table captains rotate weekly</strong> — giving students ownership of distribution and clean-up. Reduces interruptions by ~70% once routines are internalized. Never hand out individually to 30 students.
+      </div>
+    </details>
+    <details>
+      <summary><strong>Noise management during studio time</strong></summary>
+      <div class="detail-body">
+        I use volume levels: <strong>Level 0</strong> (silent observation), <strong>Level 1</strong> (whisper with your neighbor), <strong>Level 2</strong> (studio hum — quiet conversation). Students self-regulate once the levels are practiced. I remind by holding up a number, not raising my voice.
+      </div>
+    </details>
+    <details>
+      <summary><strong>The "I'm done" student who finished in 10 minutes</strong></summary>
+      <div class="detail-body">
+        I never let "done" mean "finished thinking." I build extension challenges into every project: add a limitation, work in a different medium, write an artist statement, start a sketchbook page exploring a related idea. The work expands to fill the student, not the clock.
+      </div>
+    </details>
+    <details>
+      <summary><strong>The "I can't draw" student</strong></summary>
+      <div class="detail-body">
+        I reframe immediately: <em>"Drawing is a skill, not a talent. Talent is just practice made invisible."</em> I start with exercises where looking is the point — contour drawing, blind drawing, gesture — so there's no "wrong" result, only observation. Their first success in these exercises usually cracks the belief.
+      </div>
+    </details>
+    <details>
+      <summary><strong>Student who refuses to start</strong></summary>
+      <div class="detail-body">
+        I sit nearby quietly. Sometimes I start sketching something in front of them without comment. Then: <em>"What's the first mark you could make that wouldn't ruin anything?"</em> Usually that one question is enough to unlock movement. The blank page is the real obstacle — not the assignment.
+      </div>
+    </details>
+    <details>
+      <summary><strong>Off-task phone use during studio time</strong></summary>
+      <div class="detail-body">
+        My rule: phones can be used <strong>as reference tools</strong> (looking up color palettes, reference images, artist work) — but must be face-down otherwise. I redirect once, then address privately. I also design projects that make reference-gathering a legitimate use of devices so the line is clear.
+      </div>
+    </details>
+  </div>
+
+  <h3>Building Critique Culture</h3>
+  <p>Critique is the highest-leverage skill in an art room — and the one most art classes skip. Build it from day one.</p>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Protocol</th><th>Use When</th><th>Structure</th></tr>
+      <tr><td>I Notice / I Wonder / What If</td><td>General critique, any age</td><td>Observe → Question → Suggest (no evaluating)</td></tr>
+      <tr><td>Warm / Cool</td><td>Formative check-ins</td><td>One thing working well, one thing to develop</td></tr>
+      <tr><td>Gallery Walk</td><td>Whole-class sharing</td><td>Sticky notes on work, then artist responds to notes</td></tr>
+      <tr><td>Fishbowl</td><td>Deep dive on one work</td><td>4 students discuss; rest observe; rotate</td></tr>
+      <tr><td>Artist Statement + Q&amp;A</td><td>End of unit</td><td>Student presents intent; peers ask genuine questions</td></tr>
+    </table>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════
+     7. STUDENT ENGAGEMENT
+     ════════════════════════════════════════════ -->
+<div class="section-page" id="engagement">
+  <div class="section-head">
+    <div class="tag">🔥 Practice</div>
+    <h2>Engaging Students Who Aren't "Art People"</h2>
+    <p>Disengagement is almost always a mismatch problem — not a motivation problem. Meet them where their interests already live, then show them art was always there.</p>
+  </div>
+
+  <div class="rule">
+    <strong>Reframe the room:</strong> The student who says "I hate art" is usually someone who's never seen themselves in art, never had a choice in what they made, or was told once they weren't good at it and believed it.
+  </div>
+
+  <h3>Engagement Strategies</h3>
+  <div class="card-grid">
+    <div class="card">
+      <div class="card-label">Meet Them There</div>
+      <h4>Connect to culture they already love</h4>
+      <p>Sneaker design, anime character sheets, video game concept art, social media aesthetics, album covers — these are art. Starting there earns credibility before expanding their frame.</p>
+    </div>
+    <div class="card">
+      <div class="card-label">Agency</div>
+      <h4>Give choice within structure</h4>
+      <p>The learning goal stays the same; the medium or subject is theirs. A student who chooses their own topic will outwork one who was assigned every time.</p>
+    </div>
+    <div class="card">
+      <div class="card-label">Real Stakes</div>
+      <h4>Make the audience real</h4>
+      <p>Exhibitions, murals, community commissions, published zines — when work goes public, students care differently. Audience transforms effort. "Will be graded" is not a real audience.</p>
+    </div>
+    <div class="card">
+      <div class="card-label">Representation</div>
+      <h4>Show a wide range of artists</h4>
+      <p>If the only artists students encounter look nothing like them or care about nothing they care about, art feels like someone else's world. Representation in exemplars is engagement strategy.</p>
+    </div>
+    <div class="card">
+      <div class="card-label">Reframe Identity</div>
+      <h4>"I'm not creative" is a belief, not a fact</h4>
+      <p>Creativity is a practice, not a personality trait. Design exercises that prove this — constrained problems where everyone surprises themselves. Make the proof visible.</p>
+    </div>
+    <div class="card">
+      <div class="card-label">Collaborative Work</div>
+      <h4>Give reluctant learners a role</h4>
+      <p>Group projects where one student is the "art director" — making decisions, directing others — can open doors that individual work doesn't. Some students need a functional role before an expressive one.</p>
+    </div>
+  </div>
+
+  <h3>The Reluctant Learner — What Not to Do</h3>
+  <div class="danger">
+    <strong>Avoid:</strong> Calling out their reluctance publicly. Lowering expectations to avoid conflict. Giving free time as "accommodating their learning style." These communicate that you don't believe they can grow — which confirms their belief about themselves.
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════
+     8. DIFFERENTIATION
+     ════════════════════════════════════════════ -->
+<div class="section-page" id="differentiation">
+  <div class="section-head">
+    <div class="tag">🌱 Practice</div>
+    <h2>Differentiated Instruction</h2>
+    <p>An art room naturally attracts wide skill ranges and diverse learning needs. Show that you design for this, rather than managing around it.</p>
+  </div>
+
+  <div class="callout">
+    <strong>Core principle:</strong> The learning goal stays the same for everyone. What changes is how students access it, express it, or how deeply they go.
+  </div>
+
+  <h3>Differentiation Levers in Art</h3>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Lever</th><th>How It Works</th><th>Example</th></tr>
+      <tr><td>Open-ended prompts</td><td>The same prompt can yield simple or sophisticated work</td><td>"Make a self-portrait" — pencil sketch to layered mixed media</td></tr>
+      <tr><td>Tiered complexity</td><td>Same concept, different technical demands</td><td>Value scale: 3-value vs 5-value vs full gradient</td></tr>
+      <tr><td>Medium choice</td><td>Different materials demand different motor skills &amp; cognition</td><td>Allow collage, digital, or paint for the same composition brief</td></tr>
+      <tr><td>Extension challenges</td><td>Optional deeper work for early finishers</td><td>Add a formal constraint, work at larger scale, write an artist statement</td></tr>
+      <tr><td>Scaffolded instruction</td><td>Step-by-step guides for students who need structure</td><td>Visual instruction cards at each table station</td></tr>
+      <tr><td>Peer mentorship</td><td>Advanced students deepen learning by teaching</td><td>Pair a strong technician with a strong conceptual thinker</td></tr>
+    </table>
+  </div>
+
+  <h3>Supporting Specific Needs</h3>
+  <details>
+    <summary><strong>Students with fine motor challenges</strong></summary>
+    <div class="detail-body">
+      Offer large-scale, low-precision mediums alongside detail work: collage, sponge painting, printmaking, digital tools with stylus. Modify rubrics to emphasize compositional and conceptual goals over fine motor precision. Bring the whole class into the modified medium for one unit to normalize it.
+    </div>
+  </details>
+  <details>
+    <summary><strong>Students with anxiety around "being wrong" in art</strong></summary>
+    <div class="detail-body">
+      Start with exercises where there is no wrong result by design — gesture drawing (speed prevents perfectionism), blind contour drawing (you can't "fix" what you can't see), monotype printing (the accident is the point). Build a track record of success before introducing more evaluative work.
+    </div>
+  </details>
+  <details>
+    <summary><strong>Advanced students who are bored</strong></summary>
+    <div class="detail-body">
+      The solution is never more of the same work — it's deeper complexity. Introduce formal constraints ("do this project with only two colors"), ask them to work at an unfamiliar scale, or have them research and present an artist they've never encountered. Advanced skill doesn't mean advanced conceptual sophistication — push in that direction.
+    </div>
+  </details>
+  <details>
+    <summary><strong>ELL / multilingual learners</strong></summary>
+    <div class="detail-body">
+      Art class is often a high-access environment for multilingual learners because the primary communication is visual. Lean into this: allow visual artist statements, accept work as communication, use image-based vocabulary walls. Art history conversations can use image pairs rather than text-heavy explanations.
+    </div>
+  </details>
+  <details>
+    <summary><strong>Students with IEPs or accommodation plans</strong></summary>
+    <div class="detail-body">
+      Consult with the resource teacher <em>before</em> the unit — not after the student is struggling. Build flexibility into project design proactively. Often, accommodations in art are naturally embedded (extended time, flexible submission formats, reduced output expectations) without needing to single anyone out.
+    </div>
+  </details>
+</div>
+
+<!-- ════════════════════════════════════════════
+     9. ASSESSMENT
+     ════════════════════════════════════════════ -->
+<div class="section-page" id="assessment">
+  <div class="section-head">
+    <div class="tag">📊 Practice</div>
+    <h2>Assessment Without Subjectivity as an Excuse</h2>
+    <p>Art is not assessed by whether it's beautiful. It's assessed by whether students are learning. Know the difference — and be able to explain it.</p>
+  </div>
+
+  <div class="callout">
+    <strong>Key insight:</strong> We assess the <em>learnable</em>, not the <em>tasteable</em>. Aesthetic preference is subjective — but observation accuracy, technique application, creative decision-making, revision, and artistic intent are all measurable.
+  </div>
+
+  <h3>What I Actually Assess</h3>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Dimension</th><th>What It Looks Like</th><th>Evidence</th></tr>
+      <tr><td>Technical skill</td><td>Proper use of medium; command of elements and principles</td><td>Finished work, technique exercises</td></tr>
+      <tr><td>Creative intent</td><td>Did the student make intentional choices? Can they articulate why?</td><td>Artist statement, verbal explanation</td></tr>
+      <tr><td>Process</td><td>Evidence of thinking over time: drafts, revisions, dead ends</td><td>Sketchbook, work-in-progress documentation</td></tr>
+      <tr><td>Critique participation</td><td>Quality of feedback given and openness to feedback received</td><td>Observation, sticky notes, verbal contribution</td></tr>
+      <tr><td>Growth</td><td>The delta from start to finish — not where they land, but how far they traveled</td><td>Portfolio comparison, teacher notes over time</td></tr>
+    </table>
+  </div>
+
+  <h3>Assessment Tools</h3>
+  <div class="card-grid">
+    <div class="card">
+      <div class="card-label">Tool</div>
+      <h4>Co-created Rubrics</h4>
+      <p>Students help define success criteria at the start of a project. Increases buy-in and metacognitive clarity. They know what "strong" looks like before they start.</p>
+    </div>
+    <div class="card">
+      <div class="card-label">Tool</div>
+      <h4>Artist Statements</h4>
+      <p>A short written or verbal reflection forces metacognition: "What were you trying to do? What would you change? What surprised you?" 3–5 sentences is enough.</p>
+    </div>
+    <div class="card">
+      <div class="card-label">Tool</div>
+      <h4>Portfolio Reviews</h4>
+      <p>Collect work across the semester. Review growth across multiple projects, not just isolated pieces. Students select their strongest work and explain the choice.</p>
+    </div>
+    <div class="card">
+      <div class="card-label">Tool</div>
+      <h4>Sketchbook Grades</h4>
+      <p>Grade sketchbooks on <em>quantity of thinking</em>: crossed-out ideas, questions, references, failed experiments. Not on how polished the drawings are.</p>
+    </div>
+    <div class="card">
+      <div class="card-label">Tool</div>
+      <h4>Peer Critique Protocols</h4>
+      <p>Structured (I notice / I wonder / What if?) so feedback is specific — not "I like it." Students practice giving useful, kind, honest observations.</p>
+    </div>
+    <div class="card">
+      <div class="card-label">Tool</div>
+      <h4>Exit Tickets</h4>
+      <p>"One decision I made today" or "One question I still have" — low-stakes formative insight into where students are in the process.</p>
+    </div>
+  </div>
+
+  <h3>Handling the Subjectivity Question</h3>
+  <blockquote>
+    "I don't grade taste. I grade learning. The two are different — and once you separate them, assessment becomes much more honest."
+  </blockquote>
+  <p>When a student says <em>"that's not fair — art is subjective"</em>: agree that aesthetic preference is subjective, then pivot to what the rubric actually measures. They may not like the color choices they made — but did they understand the color theory they applied? That's what's being graded.</p>
+</div>
+
+<!-- ════════════════════════════════════════════
+     10. ELEMENTS & PRINCIPLES
+     ════════════════════════════════════════════ -->
+<div class="section-page" id="elements">
+  <div class="section-head">
+    <div class="tag">🔺 Knowledge</div>
+    <h2>Elements &amp; Principles Quick Reference</h2>
+    <p>The foundational vocabulary of visual art. Know these cold — and know how to teach each one, not just define it.</p>
+  </div>
+
+  <h3>7 Elements of Art</h3>
+  <div class="principle-grid">
+    <div class="principle-card">
+      <div class="p-name">Line</div>
+      <div class="p-def">A mark with length and direction. The most basic element — every drawing starts here.</div>
+      <div class="p-teach">Teach via: contour drawing, gesture, line quality variation exercises</div>
+    </div>
+    <div class="principle-card">
+      <div class="p-name">Shape</div>
+      <div class="p-def">A 2D enclosed area. Geometric (precise) or organic (natural, free-form).</div>
+      <div class="p-teach">Teach via: positive/negative space, Matisse cut-outs, shape silhouette studies</div>
+    </div>
+    <div class="principle-card">
+      <div class="p-name">Form</div>
+      <div class="p-def">3D shape with volume — height, width, and depth. Implied in 2D through shading.</div>
+      <div class="p-teach">Teach via: sphere value studies, sculpture, observational still life</div>
+    </div>
+    <div class="principle-card">
+      <div class="p-name">Value</div>
+      <div class="p-def">The lightness or darkness of a color. Creates the illusion of form and depth.</div>
+      <div class="p-teach">Teach via: value scale exercises, monochromatic painting, chiaroscuro study</div>
+    </div>
+    <div class="principle-card">
+      <div class="p-name">Color</div>
+      <div class="p-def">Hue, saturation, and value. Warm vs. cool, complementary, analogous, triadic.</div>
+      <div class="p-teach">Teach via: color wheel mixing, Albers color interaction, limited palette painting</div>
+    </div>
+    <div class="principle-card">
+      <div class="p-name">Texture</div>
+      <div class="p-def">The surface quality — actual (tactile) or implied (visual). Adds sensory dimension.</div>
+      <div class="p-teach">Teach via: rubbings, impasto painting, collage with varied materials</div>
+    </div>
+    <div class="principle-card">
+      <div class="p-name">Space</div>
+      <div class="p-def">The area around, within, or between objects. Positive/negative, foreground/background.</div>
+      <div class="p-teach">Teach via: horizon line exercises, atmospheric perspective, negative space drawing</div>
+    </div>
+  </div>
+
+  <h3>8 Principles of Design</h3>
+  <div class="principle-grid">
+    <div class="principle-card">
+      <div class="p-name">Balance</div>
+      <div class="p-def">Symmetrical, asymmetrical, or radial — how visual weight is distributed.</div>
+      <div class="p-teach">Teach via: cutting compositions apart and weighing them optically</div>
+    </div>
+    <div class="principle-card">
+      <div class="p-name">Contrast</div>
+      <div class="p-def">Difference between elements — light/dark, large/small, rough/smooth. Creates visual interest.</div>
+      <div class="p-teach">Teach via: black &amp; white design studies, Caravaggio analysis</div>
+    </div>
+    <div class="principle-card">
+      <div class="p-name">Emphasis</div>
+      <div class="p-def">The focal point — where the eye goes first and why. Hierarchy of attention.</div>
+      <div class="p-teach">Teach via: composition planning, eye-tracking exercises on existing art</div>
+    </div>
+    <div class="principle-card">
+      <div class="p-name">Movement</div>
+      <div class="p-def">How the eye travels through a composition. Line, pattern, and repetition guide this.</div>
+      <div class="p-teach">Teach via: tracing the eye path on famous works; sequential art</div>
+    </div>
+    <div class="principle-card">
+      <div class="p-name">Pattern &amp; Repetition</div>
+      <div class="p-def">Repeated elements create rhythm and visual texture. Found in all cultures.</div>
+      <div class="p-teach">Teach via: textile analysis, Zentangle, Islamic geometric art study</div>
+    </div>
+    <div class="principle-card">
+      <div class="p-name">Rhythm</div>
+      <div class="p-def">Regular or irregular recurrence of elements that creates a sense of movement or flow.</div>
+      <div class="p-teach">Teach via: comparing musical rhythm to visual rhythm; Mondrian grids</div>
+    </div>
+    <div class="principle-card">
+      <div class="p-name">Unity</div>
+      <div class="p-def">The sense that all parts belong together — coherence of the whole.</div>
+      <div class="p-teach">Teach via: limited palette rule; style consistency critiques</div>
+    </div>
+    <div class="principle-card">
+      <div class="p-name">Variety</div>
+      <div class="p-def">Difference and diversity within unity. Prevents monotony; creates visual interest.</div>
+      <div class="p-teach">Teach via: the tension between unity and variety in composition exercises</div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════
+     11. ARTIST REFERENCE BANK
+     ════════════════════════════════════════════ -->
+<div class="section-page" id="artists">
+  <div class="section-head">
+    <div class="tag">👁 Knowledge</div>
+    <h2>Artist Reference Bank</h2>
+    <p>Artists to know cold — organized by pedagogical use. Name-dropping alone doesn't impress; linking artists to <em>specific teaching moments</em> does.</p>
+  </div>
+
+  <div class="callout">
+    <strong>How to use this:</strong> For each artist you name in an interview, have one sentence ready: what you use their work to teach and why it's effective. "I use Kara Walker's silhouettes when teaching negative space and historical narrative simultaneously" is a teaching credential.
+  </div>
+
+  <div class="artist-grid">
+    <div class="artist-card">
+      <div class="a-theme">Observation &amp; Drawing Fundamentals</div>
+      <div class="a-list">
+        <span class="a-name">Leonardo da Vinci</span>
+        <span class="a-name">Albrecht Dürer</span>
+        <span class="a-name">George Bridgman</span>
+        <span class="a-name">Andrew Wyeth</span>
+        <span class="a-name">Egon Schiele</span>
+      </div>
+      <div class="a-note">Use for: demonstrating that careful observation produces technical mastery. Da Vinci's notebooks show drawing as thinking, not performance.</div>
+    </div>
+    <div class="artist-card">
+      <div class="a-theme">Color Theory &amp; Color Relationships</div>
+      <div class="a-list">
+        <span class="a-name">Josef Albers</span>
+        <span class="a-name">Paul Cézanne</span>
+        <span class="a-name">Sonia Delaunay</span>
+        <span class="a-name">Mark Rothko</span>
+        <span class="a-name">Wayne Thiebaud</span>
+      </div>
+      <div class="a-note">Use for: teaching simultaneous contrast, emotional color, warm/cool shifts. Albers' Interaction of Color is a foundational text for any color unit.</div>
+    </div>
+    <div class="artist-card">
+      <div class="a-theme">Identity, Culture &amp; Social Commentary</div>
+      <div class="a-list">
+        <span class="a-name">Frida Kahlo</span>
+        <span class="a-name">Kara Walker</span>
+        <span class="a-name">Jean-Michel Basquiat</span>
+        <span class="a-name">Kerry James Marshall</span>
+        <span class="a-name">Faith Ringgold</span>
+        <span class="a-name">El Anatsui</span>
+      </div>
+      <div class="a-note">Use for: personal narrative projects, social justice units, connecting art to lived experience. Marshall is essential for discussing who gets to be in paintings and who doesn't.</div>
+    </div>
+    <div class="artist-card">
+      <div class="a-theme">Contemporary &amp; High-Engagement Artists</div>
+      <div class="a-list">
+        <span class="a-name">Yayoi Kusama</span>
+        <span class="a-name">Banksy</span>
+        <span class="a-name">Kehinde Wiley</span>
+        <span class="a-name">Takashi Murakami</span>
+        <span class="a-name">JR</span>
+        <span class="a-name">Shepard Fairey</span>
+      </div>
+      <div class="a-note">Use for: unlocking reluctant students. These artists live in popular culture — graffiti, muralism, anime influence, portrait photography — giving disengaged students an immediate entry point.</div>
+    </div>
+    <div class="artist-card">
+      <div class="a-theme">Abstract &amp; Non-Representational</div>
+      <div class="a-list">
+        <span class="a-name">Wassily Kandinsky</span>
+        <span class="a-name">Piet Mondrian</span>
+        <span class="a-name">Helen Frankenthaler</span>
+        <span class="a-name">Lee Krasner</span>
+        <span class="a-name">Agnes Martin</span>
+      </div>
+      <div class="a-note">Use for: teaching that meaning can exist without recognizable imagery. Helps students who say "I can't draw" — abstraction removes the technical barrier and foregrounds intention.</div>
+    </div>
+    <div class="artist-card">
+      <div class="a-theme">Global &amp; Non-Western Traditions</div>
+      <div class="a-list">
+        <span class="a-name">Hokusai (Japan)</span>
+        <span class="a-name">Fatimah Al-Fihri (Islamic art)</span>
+        <span class="a-name">Ndebele artists (South Africa)</span>
+        <span class="a-name">Tarsila do Amaral (Brazil)</span>
+        <span class="a-name">Raden Saleh (Indonesia)</span>
+      </div>
+      <div class="a-note">Use for: expanding what counts as art history. Teach students that art history is global, not a European timeline with occasional diversity footnotes.</div>
+    </div>
+    <div class="artist-card">
+      <div class="a-theme">Process Art &amp; Experimentation</div>
+      <div class="a-list">
+        <span class="a-name">Jackson Pollock</span>
+        <span class="a-name">Robert Rauschenberg</span>
+        <span class="a-name">Louise Nevelson</span>
+        <span class="a-name">Ana Mendieta</span>
+        <span class="a-name">Cy Twombly</span>
+      </div>
+      <div class="a-note">Use for: teaching that the act of making is as important as the result. Process artists make excellent permission-givers for students who are afraid to commit to a decision.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════
+     12. TECH IN THE ART ROOM
+     ════════════════════════════════════════════ -->
+<div class="section-page" id="tech">
+  <div class="section-head">
+    <div class="tag">💻 Knowledge</div>
+    <h2>Technology in the Art Room</h2>
+    <p>Technology expands what's possible without replacing what's essential. Know which tools you use, why, and what they're not a substitute for.</p>
+  </div>
+
+  <div class="rule">
+    <strong>Principle:</strong> Tech is a medium, not a shortcut. A student who uses Procreate to avoid the discomfort of physical media is avoiding learning — not advancing it. But a student using Procreate to do something only digital can do? That's legitimate.
+  </div>
+
+  <h3>Tools by Purpose</h3>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Tool</th><th>What It's Good For</th><th>Watch Out For</th></tr>
+      <tr><td>Procreate / Adobe Fresco</td><td>Digital illustration, concept sketching, undo-friendly experimentation for anxious students</td><td>Undo becomes a crutch; students avoid commitment to a decision</td></tr>
+      <tr><td>Google Arts &amp; Culture</td><td>Virtual museum visits, Street Art project, close-up details of works not otherwise accessible</td><td>Screen-mediated looking is not the same as standing in front of a painting — name that difference explicitly</td></tr>
+      <tr><td>Canva / Adobe Express</td><td>Typography, poster design, layout — graphic design units</td><td>Templates can undercut original design thinking; start without them</td></tr>
+      <tr><td>Stop Motion Studio</td><td>Animation, claymation, sequential storytelling</td><td>Time-intensive; build in buffer for rendering and export</td></tr>
+      <tr><td>Camera / iPhone</td><td>Photography unit, documenting work-in-progress, reference gathering</td><td>Composition before the shutter — teach looking, not just clicking</td></tr>
+      <tr><td>YouTube / Vimeo</td><td>Artist documentaries, technique demos, contemporary studio practice</td><td>Passive watching vs. active looking — structure a task alongside the video</td></tr>
+    </table>
+  </div>
+
+  <h3>AI in the Art Room</h3>
+  <div class="warn">
+    <strong>You will be asked about this.</strong> Have a clear, honest position — not a panic response.
+  </div>
+
+  <details>
+    <summary><strong>What is your stance on AI image generation in student work?</strong></summary>
+    <div class="detail-body">
+      My position: AI-generated images are a legitimate creative tool when used with intent and transparency — but they are not a substitute for developing visual thinking. I approach AI the same way I approach any medium: <strong>what did you decide? What did you observe? What did you revise?</strong> A student who uses AI to generate a base image, then critiques, edits, and responds to it, is still developing an artistic process. A student who generates an image and calls it their work without engagement has learned nothing. I also use AI image tools as a discussion point: who does this empower? Who does it threaten? What does it mean for authorship? These are exactly the kinds of questions I want students asking.
+    </div>
+  </details>
+  <details>
+    <summary><strong>How do you protect traditional skills while embracing new tools?</strong></summary>
+    <div class="detail-body">
+      I sequence them deliberately. Physical, hand-based skills come first — not because digital is lesser, but because understanding material resistance, drying time, pressure, and mistake-permanence builds a tactile intelligence that digital work then builds upon. A student who has painted with real pigment understands digital color differently than one who started with a slider.
+    </div>
+  </details>
+
+  <h3>Digital Citizenship in the Art Context</h3>
+  <ul>
+    <li><strong>Copyright and fair use</strong> — art students need to understand that referencing an image is different from copying it, and reproducing art for sale is different from making it for study</li>
+    <li><strong>Image sourcing</strong> — Creative Commons, Unsplash, Google Arts &amp; Culture as legitimate reference sources; not just "Google Images"</li>
+    <li><strong>Social media and student work</strong> — posting student work requires explicit permission; teach students about consent and their own IP rights</li>
+    <li><strong>Crediting artists</strong> — normalize attribution. If a work influenced you, name it. This is professional practice, not just plagiarism avoidance.</li>
+  </ul>
+</div>
+
+<!-- ════════════════════════════════════════════
+     13. STAR STORIES
+     ════════════════════════════════════════════ -->
+<div class="section-page" id="star">
+  <div class="section-head">
+    <div class="tag">⭐ Stories</div>
+    <h2>STAR Stories</h2>
+    <p>Three ready-to-adapt behavioral stories. Customize with your specifics — the structure is what matters.</p>
+  </div>
+
+  <div class="warn">
+    <strong>Adapt these:</strong> Replace bracketed details with your own. Interviewers recognize generic answers — the specific, messy, real details are what make stories land.
+  </div>
+
+  <h3>Story 1 — The Inspiring Moment</h3>
+  <p style="font-size:12px;color:var(--muted);margin-bottom:12px;">Use for: "Tell me about a rewarding teaching experience" / "What keeps you motivated?"</p>
+  <div class="star-box">
+    <div class="star-row">
+      <div class="star-label s">S</div>
+      <div class="star-content">A student in my [Grade X] class had been disengaged all semester — minimal effort, avoided critiques, called himself "bad at art." He was clearly intelligent, just completely disconnected from the subject.</div>
+    </div>
+    <div class="star-row">
+      <div class="star-label t">T</div>
+      <div class="star-content">I needed to find an entry point that made art feel <strong>personally relevant</strong> — not just another assignment to complete.</div>
+    </div>
+    <div class="star-row">
+      <div class="star-label a">A</div>
+      <div class="star-content">I introduced a street art and graphic design unit with medium choice: traditional or digital. He chose digital and started recreating basketball court scenes he'd photographed himself. I gave him structured challenges — composition, contrast, typography — framed around his own subject matter. I checked in one-on-one during studio time, asking questions rather than giving directions.</div>
+    </div>
+    <div class="star-row">
+      <div class="star-label r">R</div>
+      <div class="star-content">He submitted a <strong>seven-piece digital series</strong> for the semester exhibition and explained his work to visitors for thirty minutes. He enrolled in elective art the following year — his first voluntary choice. That day reminded me: disengagement is almost always a mismatch problem, not a motivation problem.</div>
+    </div>
+  </div>
+
+  <h3>Story 2 — The Classroom Challenge</h3>
+  <p style="font-size:12px;color:var(--muted);margin-bottom:12px;">Use for: "Describe a challenging classroom situation" / "How do you handle diverse skill levels?"</p>
+  <div class="star-box">
+    <div class="star-row">
+      <div class="star-label s">S</div>
+      <div class="star-content">I had a class of 32 students with a wide skill spread — some had private lessons for years, others had never seriously held a paintbrush. Advanced students were visibly bored; beginners felt intimidated. The dynamic was affecting critique culture: eye-rolling, reluctance to share work.</div>
+    </div>
+    <div class="star-row">
+      <div class="star-label t">T</div>
+      <div class="star-content">I needed to redesign mid-semester to serve the full range <strong>without fragmenting the room</strong> or creating visible tracks that reinforced skill hierarchies.</div>
+    </div>
+    <div class="star-row">
+      <div class="star-label a">A</div>
+      <div class="star-content">I restructured projects as open-ended challenges with tiered complexity built in — the same prompt could be executed simply or with high sophistication. I added optional extension challenges (never graded as extra credit) for students who wanted to push further. I restructured critique so advanced students mentored peers — giving them different growth, not just more of the same work. I re-normed the room around <strong>looking and seeing</strong>, where experience level matters less than attention.</div>
+    </div>
+    <div class="star-row">
+      <div class="star-label r">R</div>
+      <div class="star-content">By year-end, advanced students were learning from beginners' fresh observational perspectives, and beginners had gained confidence from structured feedback. End-of-year student reflections cited critique as the most valuable part of the class — across all skill levels.</div>
+    </div>
+  </div>
+
+  <h3>Story 3 — Differentiated Instruction</h3>
+  <p style="font-size:12px;color:var(--muted);margin-bottom:12px;">Use for: "How do you support diverse learners?" / "Tell me about adapting instruction for a specific student need."</p>
+  <div class="star-box">
+    <div class="star-row">
+      <div class="star-label s">S</div>
+      <div class="star-content">I had a student with a fine motor disability in my drawing class. The standard curriculum involved detailed pencil work she physically struggled with. She was masking frustration by rushing through and calling things "done" — disengaging instead of asking for help.</div>
+    </div>
+    <div class="star-row">
+      <div class="star-label t">T</div>
+      <div class="star-content">I needed to preserve full access to the learning objectives — observation, composition, expression — while removing the physical barrier that was blocking her.</div>
+    </div>
+    <div class="star-row">
+      <div class="star-label a">A</div>
+      <div class="star-content">I collaborated with her resource teacher and family to understand her specific needs. I offered collage and mixed media as parallel paths to the same learning outcomes, with rubrics refocused on compositional decision-making. I introduced collage as a whole-class medium for one unit — removing any stigma by making it everyone's tool, not a modification.</div>
+    </div>
+    <div class="star-row">
+      <div class="star-label r">R</div>
+      <div class="star-content">She produced some of the most conceptually sophisticated work in the class. Her participation in critiques increased sharply — she'd been avoiding them because she thought her work wasn't "good enough." The collage unit became a permanent part of my curriculum for all students. Her success changed how I design access for every student I've taught since.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════
+     14. TOUGH SCENARIOS
+     ════════════════════════════════════════════ -->
+<div class="section-page" id="tough">
+  <div class="section-head">
+    <div class="tag">⚡ Stories</div>
+    <h2>Tough Scenarios</h2>
+    <p>The situations that catch unprepared candidates off guard. Have a framework, not a script — these need to feel natural, not rehearsed.</p>
+  </div>
+
+  <div class="scenario">
+    <div class="scenario-q">
+      <span class="sq-icon">⚠</span>
+      A parent complains that their child's artwork was publicly displayed without explicit permission and they're upset about it.
+    </div>
+    <div class="scenario-a">
+      I'd start by listening fully and acknowledging their concern without becoming defensive. Privacy matters, and the parent has a legitimate reason to expect communication. <strong>My first move is always to understand what exactly upset them</strong> — is it the content of the work? The visibility? The lack of prior notice? Then I'd explain my process and where it broke down: I typically send a permission slip before exhibitions, and if that didn't happen clearly, I own that gap. I'd remove the work immediately if they requested it, and follow up with a written apology and a clear explanation of my exhibition policy going forward. Then I'd review my consent process with the whole class — using it as a real-world lesson in artist rights and audience.
+    </div>
+  </div>
+
+  <div class="scenario">
+    <div class="scenario-q">
+      <span class="sq-icon">⚠</span>
+      Admin tells you your art budget has been cut by 60% mid-year. What do you do?
+    </div>
+    <div class="scenario-a">
+      First, I'd ask for the full picture: what's driving the cut, whether it's permanent or temporary, and what flexibility exists. Then I'd audit what I already have and redesign projects around available materials — <strong>constraints are creative fuel, not just obstacles</strong>. I'd pursue alternatives: community donations (local businesses often donate materials), grant writing (many arts councils have small grants for classroom teachers), parent-teacher organization requests, and student-led material drives. I'd also rebalance the curriculum toward drawing and collage, which are low-cost but high in learning value. And I'd document the impact of the cut carefully — not to complain, but to make a data-backed case for restoration when the conversation comes back around.
+    </div>
+  </div>
+
+  <div class="scenario">
+    <div class="scenario-q">
+      <span class="sq-icon">⚠</span>
+      A student makes artwork with content that concerns you — dark imagery, themes of self-harm, or disturbing symbolism.
+    </div>
+    <div class="scenario-a">
+      Art is a legitimate channel for difficult emotions, and I don't want to close that channel — but I do need to understand what I'm seeing. <strong>My first step is a private, calm conversation</strong> with the student: "I was really moved by your work. Can you tell me more about what you were trying to express?" Often the answer reveals a student processing something through art, which is exactly what art is for. But if there's genuine concern — direct references to self-harm, a crisis subtext — I follow the school's safeguarding protocol immediately: I don't evaluate that alone, I bring in the counselor. I document the conversation and the work. I'd rather have a conversation that turned out to be unnecessary than miss something real.
+    </div>
+  </div>
+
+  <div class="scenario">
+    <div class="scenario-q">
+      <span class="sq-icon">⚠</span>
+      A student is publicly cruel about a classmate's work during critique. How do you respond?
+    </div>
+    <div class="scenario-a">
+      I stop the critique immediately — not with anger, but with clarity: <em>"That's not the kind of feedback we give here. Let's pause."</em> I give the affected student an explicit moment of support: "I want to acknowledge that was unkind, and your work deserves better." Then I redirect the class to our critique norms — I notice / I wonder / What if — and continue with a different work. The student who made the cruel comment gets a private conversation afterward, not a public dressing-down. I want to understand what happened (sometimes cruelty is a fear response — "attack before I'm attacked") and make clear that critique culture is not optional. If it's a pattern, it becomes a larger conversation with the student's advisor and possibly parents.
+    </div>
+  </div>
+
+  <div class="scenario">
+    <div class="scenario-q">
+      <span class="sq-icon">⚠</span>
+      Admin asks you to add standardized testing prep into your art class. How do you respond?
+    </div>
+    <div class="scenario-a">
+      I'd take the request seriously and try to understand the pressure they're under first. Then I'd look for legitimate integration: art class can authentically support visual literacy, reading comprehension through image analysis, and vocabulary development — if done with integrity, not as a cover. What I wouldn't do is convert studio time into test prep that erodes the art curriculum itself. I'd come back with a proposal that shows the real connection: how critique protocols build argument structure, how artist statements develop written communication, how art history analysis builds close reading. I'd make the case that art is already doing academic work — just in a different register. And I'd invite admin to observe a critique before the conversation was over.
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════
+     15. TEACHER PORTFOLIO
+     ════════════════════════════════════════════ -->
+<div class="section-page" id="portfolio">
+  <div class="section-head">
+    <div class="tag">📁 Prep</div>
+    <h2>Your Teacher Portfolio</h2>
+    <p>Some schools will ask to see a teaching portfolio. Even when they don't, having one ready is a competitive differentiator. Show who you are as both an educator and an artist.</p>
+  </div>
+
+  <div class="callout">
+    <strong>A teaching portfolio is not the same as an artist portfolio.</strong> An artist portfolio asks "what can I make?" A teaching portfolio asks "what can my students make — and how did you get them there?"
+  </div>
+
+  <h3>What to Include</h3>
+  <div class="card-grid">
+    <div class="card">
+      <div class="card-label">Section 1</div>
+      <h4>Teaching Philosophy</h4>
+      <p>1 page. Your core beliefs about art education, stated plainly and personally. Not a list of buzzwords — a genuine articulation of why you do this work and how.</p>
+    </div>
+    <div class="card">
+      <div class="card-label">Section 2</div>
+      <h4>Sample Units</h4>
+      <p>2–3 complete unit plans: Big Idea, essential questions, learning objectives, pacing, rubric. Show the intellectual architecture of how you design, not just what you've done.</p>
+    </div>
+    <div class="card">
+      <div class="card-label">Section 3</div>
+      <h4>Student Work Samples</h4>
+      <p>Range of student work — different ages, skill levels, mediums. Include before-and-after comparisons where possible. Anonymize unless you have explicit permission to use names.</p>
+    </div>
+    <div class="card">
+      <div class="card-label">Section 4</div>
+      <h4>Your Own Artwork</h4>
+      <p>5–8 pieces that represent your current practice. Don't archive — curate. Show work that connects to what and how you teach, not just your technical range.</p>
+    </div>
+    <div class="card">
+      <div class="card-label">Section 5</div>
+      <h4>Exhibition Documentation</h4>
+      <p>Photos of student exhibitions you've organized. Show: the physical space, students engaging with work, the display quality. This demonstrates investment beyond the classroom.</p>
+    </div>
+    <div class="card">
+      <div class="card-label">Section 6</div>
+      <h4>Reflection &amp; Growth</h4>
+      <p>A brief written reflection on something you've changed in your practice and why. This is the most powerful section — it shows you're not static, you're a learning teacher.</p>
+    </div>
+  </div>
+
+  <h3>Format Options</h3>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Format</th><th>Pros</th><th>Best For</th></tr>
+      <tr><td>Physical binder</td><td>Tactile; easy to present in-room; no tech dependency</td><td>In-person interviews; schools with physical culture</td></tr>
+      <tr><td>PDF</td><td>Easy to email; controlled layout; searchable</td><td>Email submission; initial screening phase</td></tr>
+      <tr><td>Notion / Cargo / Adobe Portfolio</td><td>Visual, scrollable, linkable; shows digital literacy</td><td>Schools with modern tech culture; digital art programs</td></tr>
+      <tr><td>Google Sites</td><td>Free, shareable, easy to update</td><td>Ongoing use; portfolio you maintain over time</td></tr>
+    </table>
+  </div>
+
+  <h3>Portfolio Presentation Tips</h3>
+  <ul>
+    <li>Lead with student work, not your own — it signals that the work is about them, not you</li>
+    <li>For each student work sample, add a brief annotation: what unit, what the student was learning, what surprised you about what they made</li>
+    <li>Curate, don't catalog — 8 strong pieces communicate more than 40 mediocre ones</li>
+    <li>Show range in student work: advanced to developing, and across multiple mediums if possible</li>
+    <li><strong>Be ready to talk about anything in it.</strong> If you include it, you should be able to speak to every choice — why that unit, why that exemplar, why that assessment.</li>
+  </ul>
+</div>
+
+<!-- ════════════════════════════════════════════
+     16. QUESTIONS TO ASK
+     ════════════════════════════════════════════ -->
+<div class="section-page" id="questions">
+  <div class="section-head">
+    <div class="tag">🔍 Prep</div>
+    <h2>Questions to Ask the Interviewer</h2>
+    <p>Asking good questions is half of interviewing well. Curiosity is part of the art teacher brand — show it here too.</p>
+  </div>
+
+  <div class="callout">
+    <strong>Rule:</strong> Ask things you genuinely want to know. Surface questions ("What does a typical day look like?") waste your time. Deep questions — about culture, expectations, history — give you real intelligence and signal that you're a serious candidate.
+  </div>
+
+  <h3>About the Program</h3>
+  <details>
+    <summary><strong>What does the school's relationship with the arts look like beyond the art room?</strong></summary>
+    <div class="detail-body">
+      Signals whether art is integrated or siloed. Great programs have cross-curricular projects, school-wide exhibitions, art in the hallways, and admin who attend openings. Schools where art is treated as enrichment usually show it in the answer.
+    </div>
+  </details>
+  <details>
+    <summary><strong>How has the art program evolved over the last few years — and what's the vision for where it's going?</strong></summary>
+    <div class="detail-body">
+      Tells you about budget trajectory, admin investment, and whether there's genuine growth planned. Also reveals what you'd be inheriting — a thriving program or a rebuilding one. Both can be great; you just need to know which.
+    </div>
+  </details>
+  <details>
+    <summary><strong>What's the balance between curriculum autonomy and prescribed content?</strong></summary>
+    <div class="detail-body">
+      Gets at pedagogical culture without confrontation. Some schools have rigid curriculum maps; others give near-complete autonomy. Neither is inherently wrong — you need to know which you're walking into.
+    </div>
+  </details>
+
+  <h3>About the Students</h3>
+  <details>
+    <summary><strong>What do students say they love most about the art room — and what do they find hardest?</strong></summary>
+    <div class="detail-body">
+      Pulls the interviewer into the student perspective. Interviewers who answer this in detail are paying close attention. It also gives you genuine intelligence about what you're walking into and what students need most.
+    </div>
+  </details>
+  <details>
+    <summary><strong>What are the most common challenges students in this school face outside the art room that show up inside it?</strong></summary>
+    <div class="detail-body">
+      Shows you're thinking holistically. Trauma, instability, learning differences, language challenges — the art room often becomes a refuge. Knowing the community context helps you prepare, not be surprised.
+    </div>
+  </details>
+
+  <h3>About the Team &amp; Culture</h3>
+  <details>
+    <summary><strong>How does the art department collaborate with other departments?</strong></summary>
+    <div class="detail-body">
+      Reveals whether interdisciplinary work is encouraged or protected against. If the history teacher and art teacher have never spoken, that tells you something about the culture. If they co-design units, that's energizing.
+    </div>
+  </details>
+  <details>
+    <summary><strong>What does professional development for arts educators look like here — and is it arts-specific?</strong></summary>
+    <div class="detail-body">
+      PD for art teachers is often underfunded — you get general teacher PD, not art-specific growth. Asking this signals you're serious about continued learning and surfaces whether the school will invest in your development.
+    </div>
+  </details>
+  <details>
+    <summary><strong>What do you wish you'd told the last teacher in this role before they started?</strong></summary>
+    <div class="detail-body">
+      The most revealing question on this list. Good interviewers will give you genuinely useful intelligence: unwritten expectations, cultural norms, challenges of the space. It also signals you're not naive — you know every role has complexity.
+    </div>
+  </details>
+</div>
+
+<!-- ════════════════════════════════════════════
+     17. CHEAT SHEET
+     ════════════════════════════════════════════ -->
+<div class="section-page" id="cheatsheet">
+  <div class="section-head">
+    <div class="tag">⚡ Prep</div>
+    <h2>Quick Cheat Sheet</h2>
+    <p>One-liner anchors for every major question type. Review the night before — not the morning of.</p>
+  </div>
+
+  <h3>Core Messages</h3>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Question</th><th>Core Message</th></tr>
+      <tr><td>Why art teaching?</td><td>Art is where I found myself before I had words for it — and where students find a different version of themselves</td></tr>
+      <tr><td>Teaching philosophy?</td><td>Process over product. Visual thinking. Cultural context. Safe to fail. Always.</td></tr>
+      <tr><td>Assessment in art?</td><td>I assess the learnable, not the tasteable — technique, intent, revision, and growth</td></tr>
+      <tr><td>Disengaged students?</td><td>Mismatch problem, not a motivation problem. Meet them where they are, give choice, make stakes real.</td></tr>
+      <tr><td>Classroom management?</td><td>Routines, volume levels, student ownership of materials. The room runs itself once norms are internalized.</td></tr>
+      <tr><td>Differentiation?</td><td>Same goal, different path. Open-ended prompts, tiered complexity, medium choice.</td></tr>
+      <tr><td>Curriculum planning?</td><td>Big Idea → Skills → Exemplars → Critique. Design backwards from the conversation you want.</td></tr>
+      <tr><td>Your artistic practice?</td><td>I work in [medium], exploring [theme]. It keeps me honest — I can't ask students to be vulnerable if I'm not.</td></tr>
+      <tr><td>Tech in the art room?</td><td>Tech is a medium, not a shortcut. Digital tools expand what's possible; they don't replace what's essential.</td></tr>
+      <tr><td>Your strengths?</td><td>Strong in [X] — actively growing in [Y]. Be specific. Generic strengths are forgettable.</td></tr>
+    </table>
+  </div>
+
+  <h3>Lines to Memorize</h3>
+  <div class="card-grid">
+    <div class="card">
+      <blockquote style="margin:0;font-size:13px;">"Art isn't a break from learning. It is learning — in a different language."</blockquote>
+    </div>
+    <div class="card">
+      <blockquote style="margin:0;font-size:13px;">"I don't grade taste. I grade learning. The two are different."</blockquote>
+    </div>
+    <div class="card">
+      <blockquote style="margin:0;font-size:13px;">"Disengagement is almost always a mismatch problem, not a motivation problem."</blockquote>
+    </div>
+    <div class="card">
+      <blockquote style="margin:0;font-size:13px;">"Drawing is a skill, not a talent. Talent is just practice made invisible."</blockquote>
+    </div>
+    <div class="card">
+      <blockquote style="margin:0;font-size:13px;">"I don't teach art. I teach students — and I use art to do it."</blockquote>
+    </div>
+    <div class="card">
+      <blockquote style="margin:0;font-size:13px;">"The blank page is the real obstacle — not the assignment."</blockquote>
+    </div>
+  </div>
+
+  <h3>Interview Day Checklist</h3>
+  <ul class="checklist">
+    <li><strong>Research one specific thing</strong> about this school's art program before you walk in — mention it by name</li>
+    <li><strong>Bring your portfolio</strong> — even if they didn't ask. Offer it; don't force it.</li>
+    <li><strong>Have 3 STAR stories ready</strong> — inspiring moment, challenge, differentiation</li>
+    <li><strong>Know your 4 philosophy pillars</strong> and one concrete example for each</li>
+    <li><strong>Name-drop 2–3 artists</strong> with a specific pedagogical reason — not just admiration</li>
+    <li><strong>Prepare 3–4 genuine questions</strong> — not logistics questions, but culture questions</li>
+    <li><strong>Review your artist statement</strong> — 3 sentences, what you make / why / what you hope it does</li>
+    <li><strong>Know your assessment approach cold</strong> — interviewers probe here hardest</li>
+    <li><strong>Have a position on AI in art</strong> — you will be asked</li>
+    <li><strong>End every answer in the room</strong> — bring it back to students, not yourself</li>
+  </ul>
+
+  <div class="rule">
+    <strong>Final rule:</strong> The best answers always circle back to the student — what they experienced, what changed, what they made. Keep it about them, not you.
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════
+     GRADE BANDS — K–12
+     ════════════════════════════════════════════ -->
+<div class="section-page" id="gradebands">
+  <div class="section-head">
+    <div class="tag">🎓 Practice</div>
+    <h2>Teaching Across Grade Bands — Elementary to High School</h2>
+    <p>Art education looks fundamentally different at each stage of development. Interviewers will probe this — show you've thought deeply about <em>who</em> you're teaching, not just <em>what</em>.</p>
+  </div>
+
+  <div class="callout">
+    <strong>Key principle:</strong> The elements and principles of art stay the same. The <em>entry points, vocabulary, stakes, and autonomy</em> change dramatically as students grow. Know what's developmentally appropriate — and why.
+  </div>
+
+  <!-- ── ELEMENTARY ── -->
+  <h3>Elementary — Grades K–5 (Ages 5–11)</h3>
+  <div class="pillars">
+    <div class="pillar p1">
+      <div class="num">Developmental Stage</div>
+      <h4>Exploration before craft</h4>
+      <p>Young children learn through <strong>sensory experience and play</strong>. Mess, mud, and movement are not problems to manage — they are the learning. Do not rush technique.</p>
+    </div>
+    <div class="pillar p2">
+      <div class="num">Creative Freedom</div>
+      <h4>Protect the stage of pure invention</h4>
+      <p>Young children draw without self-criticism. A major job of the elementary art teacher is to protect that freedom — not prematurely introduce "right" and "wrong."</p>
+    </div>
+    <div class="pillar p3">
+      <div class="num">Concept Learning</div>
+      <h4>Concrete before abstract</h4>
+      <p>Teach color with actual mixing, not diagrams. Teach texture with real materials. Teach line with giant arm movements before pencils. The body learns first.</p>
+    </div>
+    <div class="pillar p4">
+      <div class="num">Self-Consciousness</div>
+      <h4>Watch for the emerging inner critic</h4>
+      <p>Around Grade 2–3, students begin comparing their work to peers'. This is when "I can't draw" first appears. Catch it early — reframe it before it calcifies.</p>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <tr><th>Area</th><th>What Works</th><th>What to Avoid</th></tr>
+      <tr><td>Lesson length</td><td>Short demos (3–5 min max), then materials in hand immediately</td><td>Long talking phases — attention windows are small</td></tr>
+      <tr><td>Project complexity</td><td>Achievable in 1–2 sessions; visible progress quickly</td><td>Multi-week projects without intermediate checkpoints</td></tr>
+      <tr><td>Critique</td><td>Simple: "What do you see? What do you like about it?" Whole-class sharing is celebratory, not evaluative</td><td>Formal critique protocol — developmentally premature at K–2</td></tr>
+      <tr><td>Artist exemplars</td><td>Bold, colorful, joyful work — Matisse cut-outs, Mondrian, Keith Haring — accessible visually and conceptually</td><td>Dense, subtle, or historically heavy work that needs context they don't have yet</td></tr>
+      <tr><td>Materials</td><td>Chunky tools, large paper, tempera, clay, collage — built for small motor development</td><td>Fine brushes, tiny paper, or media that punishes imprecision</td></tr>
+      <tr><td>Assessment</td><td>Observation-based; verbal conversation; celebrate effort and exploration</td><td>Rubrics that grade "quality" — counterproductive at this stage</td></tr>
+    </table>
+  </div>
+
+  <div class="card-grid">
+    <div class="card">
+      <div class="card-label">Great Entry Projects — Elementary</div>
+      <ul>
+        <li>Warm/cool watercolor wash landscapes</li>
+        <li>Self-portrait in the style of Frida Kahlo or Picasso's cubist portraits</li>
+        <li>Texture rubbings collage</li>
+        <li>Clay pinch pot or coil animal</li>
+        <li>Pattern design inspired by a cultural textile tradition</li>
+        <li>Color-mixing experimentation — "discover the colors between the colors"</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ── MIDDLE SCHOOL ── -->
+  <h3>Middle School — Grades 6–8 (Ages 11–14)</h3>
+  <div class="rule">
+    <strong>The hardest teaching zone — and one of the most important.</strong> Middle schoolers are in full identity formation. They're acutely aware of how they look to peers, which is why the "I can't draw" belief calcifies here. This is where you either lose them to art or keep them for life.
+  </div>
+
+  <div class="pillars">
+    <div class="pillar p1">
+      <div class="num">Core Challenge</div>
+      <h4>Peer judgment is overwhelming</h4>
+      <p>A student who would freely paint in Grade 4 may freeze completely in Grade 7 because a classmate might laugh. Protecting creative risk-taking requires explicit classroom culture-building — it doesn't happen naturally anymore.</p>
+    </div>
+    <div class="pillar p2">
+      <div class="num">Identity Hook</div>
+      <h4>Personal relevance is everything</h4>
+      <p>Middle schoolers want to know: <em>why does this matter to me?</em> Assignments that connect to their identity, their community, and their questions engage them. Generic prompts lose them immediately.</p>
+    </div>
+    <div class="pillar p3">
+      <div class="num">Skill Building</div>
+      <h4>Ready for real technique</h4>
+      <p>This is the window for more rigorous technical instruction: value scales, color theory, perspective, composition rules. They can handle complexity — they just need a reason to care about it.</p>
+    </div>
+    <div class="pillar p4">
+      <div class="num">Social Learning</div>
+      <h4>Peer learning works well here</h4>
+      <p>Peer critique, collaborative projects, and gallery walks work exceptionally well when norms are strong. They want to engage socially — build learning structures that use that energy.</p>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <tr><th>Area</th><th>What Works</th><th>What to Avoid</th></tr>
+      <tr><td>Motivation</td><td>Choice of subject, medium options, connecting to pop culture, music, sports, identity</td><td>Abstract assignments with no personal hook: "draw a still life" with zero student investment</td></tr>
+      <tr><td>Critique</td><td>Structured protocols (I notice / I wonder) — remove the ambiguity of "say something nice"</td><td>Open-ended "what do you think?" — too risky; peer judgment makes students shut down</td></tr>
+      <tr><td>Failure tolerance</td><td>Build in low-stakes experiments: gesture drawing, monoprint, blind contour — where "mistakes" are part of the result</td><td>High-stakes single projects with no iteration phase — one chance = one failure</td></tr>
+      <tr><td>Assessment</td><td>Co-created rubrics; self-assessment; artist statements — they respond to being asked their opinion seriously</td><td>Purely teacher-evaluated work with no student voice in the criteria</td></tr>
+      <tr><td>Artist exemplars</td><td>Contemporary artists they can find on social media — Kehinde Wiley, Banksy, Yayoi Kusama — bridge to their visual world</td><td>Exclusively historical, Euro-centric work disconnected from anything they know</td></tr>
+    </table>
+  </div>
+
+  <div class="card-grid">
+    <div class="card">
+      <div class="card-label">Great Entry Projects — Middle School</div>
+      <ul>
+        <li>Self-portrait as a book cover / album cover / game character</li>
+        <li>Social justice poster in the style of Shepard Fairey</li>
+        <li>Graphic novel / visual narrative page</li>
+        <li>Identity collage — what I am made of</li>
+        <li>Street art / mural design for a real school wall</li>
+        <li>3-value charcoal observational drawing from life</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ── HIGH SCHOOL ── -->
+  <h3>High School — Grades 9–12 (Ages 14–18)</h3>
+  <div class="callout">
+    <strong>High school students can handle genuine complexity</strong> — conceptually, technically, and emotionally. Treat them like emerging artists, not older children. The ones who stay in art by this stage have often made a real commitment. Honor that.
+  </div>
+
+  <div class="pillars">
+    <div class="pillar p1">
+      <div class="num">Artistic Voice</div>
+      <h4>Move from skill to vision</h4>
+      <p>High school is where students develop a point of view — not just technical competence. Ask: <em>what do you want to say?</em> What issues, ideas, or experiences matter enough to make art about?</p>
+    </div>
+    <div class="pillar p2">
+      <div class="num">Portfolio Thinking</div>
+      <h4>Build toward something</h4>
+      <p>AP Art and Design, college portfolios, scholarship applications — many high schoolers are building toward real external stakes. Help them develop a coherent body of work, not a collection of unrelated projects.</p>
+    </div>
+    <div class="pillar p3">
+      <div class="num">Art History</div>
+      <h4>Deep context is now accessible</h4>
+      <p>High school students can engage seriously with art history as argument: who is included, who is erased, what counts as "fine art" and why, how aesthetic movements connected to politics and power.</p>
+    </div>
+    <div class="pillar p4">
+      <div class="num">Critique Culture</div>
+      <h4>Professional-level feedback</h4>
+      <p>High schoolers can learn to give and receive the kind of critique that working artists use: specific, honest, generative. Build this deliberately — it prepares them for studios, design programs, and creative careers.</p>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <tr><th>Area</th><th>What Works</th><th>What to Avoid</th></tr>
+      <tr><td>Autonomy</td><td>Sustained independent projects; student-chosen themes; artist statement as core requirement</td><td>Uniform assignments where everyone makes the same thing — students this age need their own voice</td></tr>
+      <tr><td>Critique</td><td>Fishbowl critique, peer portfolio review, written critique of each other's work — full professional protocol</td><td>Only teacher feedback — they need to learn how to talk about work, not just receive grades on it</td></tr>
+      <tr><td>Art History</td><td>Primary source analysis, debate about what belongs in a museum, research-based artist response projects</td><td>Passive slide shows — they can argue about ideas now; use that</td></tr>
+      <tr><td>Assessment</td><td>Portfolio-based; process documentation weighted heavily; written reflection required</td><td>Project-by-project grading with no through-line — misses the development of artistic identity over time</td></tr>
+      <tr><td>AP &amp; Advanced</td><td>Sustained Investigation: 15+ works around a personal inquiry; Portfolio review: breadth + concentration</td><td>Starting the sustained investigation too late in the year — it needs time and iteration to reach depth</td></tr>
+    </table>
+  </div>
+
+  <div class="card-grid">
+    <div class="card">
+      <div class="card-label">Great Projects — High School</div>
+      <ul>
+        <li>Sustained investigation: 6–8 works on a single personal question</li>
+        <li>Artist response project: make work in direct dialogue with an artist you've researched</li>
+        <li>Community mural or public art installation</li>
+        <li>Documentary photography series with artist statement</li>
+        <li>Art history debate: "Should [specific work] be in a museum?"</li>
+        <li>Portfolio review and written self-assessment — what changed, what I'd do differently</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ── COMPARISON TABLE ── -->
+  <h3>Grade Band at a Glance</h3>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Dimension</th><th>Elementary (K–5)</th><th>Middle School (6–8)</th><th>High School (9–12)</th></tr>
+      <tr><td>Primary goal</td><td>Exploration, joy, sensory learning</td><td>Technique + personal relevance</td><td>Artistic voice + conceptual depth</td></tr>
+      <tr><td>Biggest risk</td><td>Over-correcting and killing joy</td><td>Losing students to peer-judgment paralysis</td><td>Treating them like older middle schoolers instead of emerging artists</td></tr>
+      <tr><td>Critique style</td><td>Celebratory sharing</td><td>Structured protocol with strong norms</td><td>Professional-level peer critique</td></tr>
+      <tr><td>Assessment</td><td>Observation, effort, exploration</td><td>Co-created rubrics, self-assessment</td><td>Portfolio, artist statement, sustained inquiry</td></tr>
+      <tr><td>Artist exemplars</td><td>Bold, joyful, visually immediate</td><td>Contemporary, identity-connected</td><td>Full range — historical context + contemporary practice</td></tr>
+      <tr><td>Your tone</td><td>Enthusiastic, patient, celebratory</td><td>Direct, respectful, genuinely curious about them</td><td>Collegial — they're peers-in-training</td></tr>
+    </table>
+  </div>
+
+  <div class="rule">
+    <strong>Interview answer anchor:</strong> "My approach shifts significantly by grade band — the elements and principles are the same, but what motivates a 7-year-old (pure discovery) is completely different from what motivates a 16-year-old (personal voice and real stakes). I design for where the student actually is, not where it's convenient for me to teach."
+  </div>
+</div>
+
+</main>
+
+<script>
+function show(id) {
+  document.querySelectorAll('.section-page').forEach(function(el) {
+    el.classList.remove('active');
+  });
+  document.querySelectorAll('.nav-item').forEach(function(el) {
+    el.classList.remove('active');
+  });
+  var page = document.getElementById(id);
+  if (page) page.classList.add('active');
+  var navItem = document.querySelector('[data-target="' + id + '"]');
+  if (navItem) navItem.classList.add('active');
+  if (window.innerWidth <= 860) closeSidebar();
+  window.scrollTo(0, 0);
+}
+
+function toggleSidebar() {
+  var sidebar = document.getElementById('sidebar');
+  var overlay = document.getElementById('overlay');
+  sidebar.classList.toggle('open');
+  overlay.classList.toggle('open');
+}
+
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('overlay').classList.remove('open');
+}
+</script>
+</body>
+</html>

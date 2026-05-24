@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WebSockets — Learning Notes</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --border: #30363d;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --accent: #58a6ff;
+    --green: #3fb950;
+    --orange: #d29922;
+    --purple: #bc8cff;
+    --keyword: #ff7b72;
+    --string: #a5d6ff;
+    --type: #ffa657;
+    --comment: #8b949e;
+  }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 15px;
+    line-height: 1.6;
+    padding-bottom: 100px;
+  }
+  nav {
+    position: sticky;
+    top: 0;
+    background: rgba(13,17,23,0.92);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    z-index: 100;
+  }
+  nav a { color: var(--muted); text-decoration: none; font-size: 13px; }
+  nav .sep { color: var(--border); }
+  nav .current { color: var(--green); font-weight: 600; }
+  header {
+    padding: 32px 20px 24px;
+    border-bottom: 1px solid var(--border);
+  }
+  header .tag {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--green);
+    margin-bottom: 8px;
+  }
+  header h1 { font-size: 26px; font-weight: 700; }
+  header p { color: var(--muted); margin-top: 6px; font-size: 14px; }
+  section { padding: 28px 20px 0; }
+  h2 {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--green);
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  h3 { font-size: 15px; font-weight: 600; color: var(--orange); margin: 16px 0 8px; }
+  h4 { font-size: 13px; font-weight: 600; color: var(--text); margin: 12px 0 6px; }
+  p { color: var(--muted); margin-bottom: 12px; line-height: 1.6; }
+  p strong { color: var(--text); }
+  ul { padding-left: 16px; margin-bottom: 12px; }
+  ul li { color: var(--muted); font-size: 14px; margin-bottom: 6px; line-height: 1.5; }
+  ul li strong { color: var(--text); }
+  .callout {
+    background: rgba(88, 166, 255, 0.08);
+    border: 1px solid rgba(88, 166, 255, 0.3);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    font-size: 13px;
+    color: var(--text);
+    line-height: 1.5;
+  }
+  .callout strong { color: var(--accent); }
+  .rule {
+    background: rgba(63, 185, 80, 0.08);
+    border: 1px solid rgba(63, 185, 80, 0.3);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    font-size: 14px;
+    color: var(--text);
+    line-height: 1.5;
+  }
+  .rule strong { color: var(--green); }
+  .warn {
+    background: rgba(210, 153, 34, 0.08);
+    border: 1px solid rgba(210, 153, 34, 0.3);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    font-size: 13px;
+    color: var(--text);
+    line-height: 1.5;
+  }
+  .warn strong { color: var(--orange); }
+  .table-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 16px;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th {
+    background: var(--surface);
+    color: var(--muted);
+    font-weight: 600;
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    color: var(--muted);
+    vertical-align: top;
+    line-height: 1.5;
+  }
+  td:first-child { color: var(--text); font-weight: 500; font-size: 12px; }
+  tr:last-child td { border-bottom: none; }
+  code {
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 5px;
+    color: var(--string);
+  }
+  .code-block {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin-bottom: 16px;
+    overflow-x: auto;
+  }
+  .code-block pre {
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 12px;
+    line-height: 1.7;
+    color: var(--muted);
+    white-space: pre;
+  }
+  .code-block .kw { color: var(--keyword); }
+  .code-block .ty { color: var(--type); }
+  .code-block .str { color: var(--string); }
+  .code-block .cm { color: var(--comment); font-style: italic; }
+  .code-block .fn { color: var(--accent); }
+  .code-block .num { color: var(--purple); }
+  .code-block .label {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+  .transport-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+  .transport-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px;
+  }
+  .transport-card .tc-name {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 4px;
+  }
+  .transport-card .tc-badge {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 2px 7px;
+    border-radius: 20px;
+    margin-bottom: 8px;
+  }
+  .badge-green { background: rgba(63,185,80,0.15); color: var(--green); border: 1px solid rgba(63,185,80,0.3); }
+  .badge-orange { background: rgba(210,153,34,0.15); color: var(--orange); border: 1px solid rgba(210,153,34,0.3); }
+  .badge-red { background: rgba(255,123,114,0.15); color: var(--keyword); border: 1px solid rgba(255,123,114,0.3); }
+  .transport-card p { font-size: 13px; margin-bottom: 0; }
+  .mono-block {
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    color: var(--muted);
+    white-space: pre;
+    line-height: 1.8;
+    margin-bottom: 12px;
+    overflow-x: auto;
+  }
+  .bottom-nav {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: rgba(13,17,23,0.95);
+    backdrop-filter: blur(8px);
+    border-top: 1px solid var(--border);
+    padding: 12px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .bottom-nav a {
+    color: var(--accent);
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 500;
+    flex: 1;
+  }
+  .bottom-nav a.right { text-align: right; }
+  .bottom-nav a.center { text-align: center; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="index.html">Home</a>
+  <span class="sep">›</span>
+  <span class="current">WebSockets</span>
+</nav>
+
+<header>
+  <div class="tag">iOS / System Design / Networking</div>
+  <h1>WebSockets Explained Simply</h1>
+  <p>Real-time communication for mobile — transports compared, WebSocket mechanics, iOS implementation.</p>
+</header>
+
+<!-- TRANSPORT COMPARISON -->
+<section>
+  <h2>Real-Time Transport Options</h2>
+
+  <div class="transport-grid">
+    <div class="transport-card">
+      <div class="tc-name">Push Notifications</div>
+      <span class="tc-badge badge-orange">Unreliable</span>
+      <p>APNs/FCM delivery only. No ordering, no guarantee. Use for app wakeup — never as a primary data stream.</p>
+    </div>
+    <div class="transport-card">
+      <div class="tc-name">HTTP Polling</div>
+      <span class="tc-badge badge-red">Wasteful</span>
+      <p>Client polls on a fixed interval. Most responses are empty. Latency = poll interval. Burns battery and server capacity.</p>
+    </div>
+    <div class="transport-card">
+      <div class="tc-name">Long-Polling</div>
+      <span class="tc-badge badge-orange">Expensive</span>
+      <p>Server holds the request open until data is available. Reduces empty responses, but ties up one server thread per client.</p>
+    </div>
+    <div class="transport-card">
+      <div class="tc-name">Server-Sent Events (SSE)</div>
+      <span class="tc-badge badge-green">Unidirectional</span>
+      <p>Persistent HTTP stream, server → client only. Great for feeds and tickers. Client must use a separate HTTP request to send data.</p>
+    </div>
+    <div class="transport-card">
+      <div class="tc-name">WebSockets</div>
+      <span class="tc-badge badge-green">Recommended</span>
+      <p>Full-duplex, persistent TCP channel. Both sides send frames at any time. Use for chat, games, live trading, collaborative editing.</p>
+    </div>
+  </div>
+</section>
+
+<!-- CORE CONCEPTS -->
+<section>
+  <h2>Core Concepts</h2>
+
+  <h3>WebSockets</h3>
+  <p>Established via an HTTP/1.1 upgrade handshake, then the TCP connection is no longer HTTP — it becomes a raw WebSocket channel. Low per-frame overhead (~2–10 byte header vs. full HTTP headers). Either side can send at any time.</p>
+
+  <h3>WebSocket Frames</h3>
+  <p>The smallest unit of the protocol. Each frame carries an opcode (text, binary, ping, pong, close), a length field, an optional masking key (required client→server), and the payload. A single logical message can span multiple frames, but in practice most messages fit in one. Frames carry either UTF-8 text or raw binary — the receiver interprets bytes according to the opcode.</p>
+</section>
+
+<!-- HOW IT WORKS -->
+<section>
+  <h2>How It Works</h2>
+
+  <h3>Handshake — HTTP → WS Upgrade</h3>
+  <div class="mono-block">Client → Server:  GET /chat HTTP/1.1
+                  Upgrade: websocket
+                  Connection: Upgrade
+                  Sec-WebSocket-Key: &lt;base64-random&gt;
+
+Server → Client:  HTTP/1.1 101 Switching Protocols
+                  Upgrade: websocket
+                  Connection: Upgrade
+                  Sec-WebSocket-Accept: &lt;derived-key&gt;</div>
+  <p>After the <code>101</code>, the TCP connection is a raw WebSocket channel. Both peers send frames independently.</p>
+
+  <h3>Frame Lifecycle</h3>
+  <ol style="padding-left:18px; margin-bottom:14px;">
+    <li style="color:var(--muted); font-size:14px; margin-bottom:6px;">Caller invokes <code>send(data)</code>.</li>
+    <li style="color:var(--muted); font-size:14px; margin-bottom:6px;">Data is wrapped in a WebSocket frame (opcode + length + mask + payload).</li>
+    <li style="color:var(--muted); font-size:14px; margin-bottom:6px;">Receiver strips framing, delivers payload to the application.</li>
+    <li style="color:var(--muted); font-size:14px; margin-bottom:6px;">Either side sends a <code>CLOSE</code> frame for clean shutdown.</li>
+  </ol>
+
+  <h3>Connection Lifecycle on Mobile</h3>
+  <div class="mono-block">App foreground  →  connect()  →  handshake  →  open
+       ↓
+send / receive frames
+       ↓
+App backgrounds  →  close()  (explicit teardown)
+       ↓
+App foregrounds  →  reconnect()  →  handshake  →  open</div>
+</section>
+
+<!-- KEY PATTERNS -->
+<section>
+  <h2>Key Patterns</h2>
+
+  <h3>Typed JSON Message Envelope</h3>
+  <p>Wrap every message so the receiver can route it without inspecting raw bytes.</p>
+  <div class="code-block">
+    <div class="label">JSON</div>
+    <pre>{
+  <span class="str">"type"</span>: <span class="str">"chat.message"</span>,
+  <span class="str">"payload"</span>: {
+    <span class="str">"roomId"</span>: <span class="str">"abc123"</span>,
+    <span class="str">"text"</span>: <span class="str">"hello"</span>
+  }
+}</pre>
+  </div>
+  <div class="rule"><strong>Why:</strong> Decouples routing from content. New event type = new <code>type</code> string + new handler. No protocol change.</div>
+
+  <h3>Message Acknowledgement + Sequence Numbers</h3>
+  <p>Assign a monotonically increasing sequence number to each sent message. Receiver sends back an <code>ack</code>. Sender buffers unacked messages and retransmits on timeout.</p>
+  <div class="code-block">
+    <div class="label">JSON</div>
+    <pre>{ <span class="str">"type"</span>: <span class="str">"ack"</span>, <span class="str">"payload"</span>: { <span class="str">"seq"</span>: <span class="num">42</span> } }</pre>
+  </div>
+  <div class="rule"><strong>Why:</strong> TCP guarantees delivery within a session — not across reconnects. App-level acks enable at-least-once delivery after a drop.</div>
+
+  <h3>Heartbeat (Ping / Pong)</h3>
+  <p>Client sends a WebSocket <code>ping</code> frame every 30 seconds. Server replies with <code>pong</code>. No pong within timeout → treat as dead → reconnect.</p>
+  <div class="rule"><strong>Why:</strong> NAT gateways and proxies silently kill idle TCP connections (typically 60–300s). Pings keep the path alive and surface dead sockets before you try to use them.</div>
+
+  <h3>Reconnect with Exponential Backoff</h3>
+  <p>On disconnect: <code>min(base × 2^attempt, maxDelay)</code> + jitter (<code>delay × random(0.5, 1.0)</code>).</p>
+  <div class="rule"><strong>Why:</strong> Jitter prevents a thundering herd when a server restarts and thousands of clients reconnect simultaneously.</div>
+</section>
+
+<!-- TRADE-OFFS -->
+<section>
+  <h2>Trade-offs &amp; Design Decisions</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Decision</th>
+          <th>Why This Approach</th>
+          <th>What You Give Up</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>WebSockets over SSE</td>
+          <td>Need client→server messages (chat input, game actions)</td>
+          <td>SSE is simpler; HTTP/2 multiplexes it natively</td>
+        </tr>
+        <tr>
+          <td>WSS (TLS) always</td>
+          <td>Prevents MITM; required by many app store policies</td>
+          <td>Slight handshake overhead</td>
+        </tr>
+        <tr>
+          <td>Close on background</td>
+          <td>Conserves battery; avoids unpredictable OS teardown</td>
+          <td>Re-establish on foreground adds latency</td>
+        </tr>
+        <tr>
+          <td>App-level acks over TCP-only</td>
+          <td>Survives connection drops; enables at-least-once delivery</td>
+          <td>More code; requires message buffer + retry logic</td>
+        </tr>
+        <tr>
+          <td>Typed envelope JSON</td>
+          <td>Human-readable, easy to evolve</td>
+          <td>More bytes than binary (Protobuf, MessagePack)</td>
+        </tr>
+        <tr>
+          <td>URLSessionWebSocketTask</td>
+          <td>No third-party dependency; full control over reconnect logic</td>
+          <td>Must implement reconnect, queuing, background handling yourself</td>
+        </tr>
+        <tr>
+          <td>Starscream</td>
+          <td>Auto-reconnect, message queuing, background logic included</td>
+          <td>External dependency; less control over internals</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- CODE EXAMPLES -->
+<section>
+  <h2>Code Examples</h2>
+
+  <h3>iOS — URLSessionWebSocketTask</h3>
+  <div class="code-block">
+    <div class="label">Swift</div>
+    <pre><span class="cm">// Establish a WSS connection using URLSession</span>
+<span class="kw">let</span> url = <span class="ty">URL</span>(string: <span class="str">"wss://api.example.com/chat"</span>)!
+<span class="kw">let</span> task = <span class="ty">URLSession</span>.shared.<span class="fn">webSocketTask</span>(with: url)
+task.<span class="fn">resume</span>()
+
+<span class="cm">// Send a message</span>
+<span class="kw">let</span> message = <span class="ty">URLSessionWebSocketTask</span>.<span class="ty">Message</span>.string(<span class="str">#"{"type":"ping","payload":{}}"#</span>)
+task.<span class="fn">send</span>(message) { error <span class="kw">in</span>
+    <span class="kw">if let</span> error { <span class="fn">print</span>(<span class="str">"Send error: \(error)"</span>) }
+}
+
+<span class="cm">// Receive — must be re-armed after every frame</span>
+<span class="kw">func</span> <span class="fn">receiveNext</span>() {
+    task.<span class="fn">receive</span> { [<span class="kw">weak self</span>] result <span class="kw">in</span>
+        <span class="kw">switch</span> result {
+        <span class="kw">case</span> .success(<span class="kw">let</span> message):
+            <span class="kw">switch</span> message {
+            <span class="kw">case</span> .string(<span class="kw">let</span> text): <span class="kw">self</span>?.<span class="fn">handle</span>(text)
+            <span class="kw">case</span> .data(<span class="kw">let</span> data):   <span class="kw">self</span>?.<span class="fn">handle</span>(data)
+            <span class="kw">@unknown default</span>: <span class="kw">break</span>
+            }
+            <span class="kw">self</span>?.<span class="fn">receiveNext</span>() <span class="cm">// re-arm</span>
+        <span class="kw">case</span> .failure(<span class="kw">let</span> error):
+            <span class="fn">print</span>(<span class="str">"Receive error: \(error)"</span>)
+            <span class="cm">// trigger reconnect logic here</span>
+        }
+    }
+}</pre>
+  </div>
+
+  <h3>iOS — Heartbeat Loop</h3>
+  <div class="code-block">
+    <div class="label">Swift</div>
+    <pre><span class="cm">// Ping every 30s; reconnect if pong doesn't arrive</span>
+<span class="kw">func</span> <span class="fn">startHeartbeat</span>() {
+    <span class="ty">Timer</span>.<span class="fn">scheduledTimer</span>(withTimeInterval: <span class="num">30</span>, repeats: <span class="kw">true</span>) { [<span class="kw">weak self</span>] _ <span class="kw">in</span>
+        <span class="kw">self</span>?.task.<span class="fn">sendPing</span> { error <span class="kw">in</span>
+            <span class="kw">if let</span> error {
+                <span class="fn">print</span>(<span class="str">"Heartbeat failed: \(error) — reconnecting"</span>)
+                <span class="kw">self</span>?.<span class="fn">reconnect</span>()
+            }
+        }
+    }
+}</pre>
+  </div>
+</section>
+
+<!-- PITFALLS -->
+<section>
+  <h2>Common Pitfalls / Gotchas</h2>
+
+  <div class="warn"><strong>Forgetting to re-arm receive()</strong> — <code>URLSessionWebSocketTask.receive</code> reads exactly one frame. Call it again inside the completion handler or you miss everything after the first message.</div>
+  <div class="warn"><strong>No auto-reconnect in URLSessionWebSocketTask</strong> — Unlike Starscream, the native API drops and stays disconnected. Detect failure in the <code>receive</code> completion and call <code>reconnect()</code> manually.</div>
+  <div class="warn"><strong>Not closing on background</strong> — iOS may silently kill a suspended socket. Close explicitly so the server gets the teardown handshake; otherwise it won't know you're gone until heartbeat timeout.</div>
+  <div class="warn"><strong>Network interruptions &amp; proxy closure</strong> — Most disconnects are Wi-Fi loss. Intermediate proxies also silently drop idle connections. Heartbeats handle the proxy case; reconnect logic handles network loss.</div>
+  <div class="warn"><strong>Reconnecting without backoff</strong> — A tight retry loop hammers a recovering server. Always use exponential backoff + jitter.</div>
+  <div class="warn"><strong>Assuming TCP delivery = app delivery</strong> — TCP guarantees delivery within a session, not across reconnects. In-flight frames on a dropped connection are lost. App-level acks are required for cross-session reliability.</div>
+  <div class="warn"><strong>WSS cert issues on real devices</strong> — URLSession rejects self-signed certs. Test with a valid certificate on device early.</div>
+  <div class="warn"><strong>Mixing binary and text frames</strong> — Agree upfront on frame type. Unexpected switches cause silent decode failures.</div>
+</section>
+
+<!-- INTERVIEW TALKING POINTS -->
+<section>
+  <h2>Interview Talking Points</h2>
+  <ul>
+    <li><strong>Handshake:</strong> WebSockets start with HTTP/1.1 <code>101 Switching Protocols</code>, then become a raw TCP channel — this is why they work on ports 80 and 443.</li>
+    <li><strong>Full-duplex:</strong> Both sides send frames at any time without waiting — unlike HTTP request/response.</li>
+    <li><strong>Mobile lifecycle:</strong> Close on background, reopen on foreground. The OS can silently kill idle sockets.</li>
+    <li><strong>Heartbeats:</strong> Ping/pong every ~30s keeps NAT paths alive and surfaces dead connections before you try to use them.</li>
+    <li><strong>Reliability:</strong> TCP alone doesn't cover cross-session delivery. App-level acks + sequence numbers are needed for at-least-once guarantees.</li>
+    <li><strong>WSS always:</strong> Plaintext WS is blocked by many networks and rejected in app review.</li>
+    <li><strong>iOS choice:</strong> <code>URLSessionWebSocketTask</code> = full control, no dependency, but you build reconnect + queuing. Starscream = those batteries included, at the cost of a dependency.</li>
+    <li><strong>Protocol design:</strong> JSON envelope with a <code>type</code> field multiplexes multiple event types over one connection without a protocol change.</li>
+  </ul>
+</section>
+
+<!-- KEY TAKEAWAYS -->
+<section>
+  <h2>Key Takeaways</h2>
+  <div class="callout">
+    WebSockets are the right tool when you need bidirectional, low-latency communication — they start as HTTP, upgrade to a persistent TCP channel, and let both sides send frames at any time. On mobile, the core discipline is lifecycle management: close on background, reconnect on foreground with exponential backoff, and use heartbeats to catch connections that went silent without a clean teardown. For reliability across drops, TCP alone isn't enough — you need application-level acks and sequence numbers. When choosing between <code>URLSessionWebSocketTask</code> and Starscream, the trade-off is control vs. built-in infrastructure: native gives you less dependency overhead, Starscream gives you auto-reconnect and message queuing out of the box.
+  </div>
+</section>
+
+<!-- OPEN QUESTIONS -->
+<section>
+  <h2>Open Questions</h2>
+  <ul>
+    <li><strong>iOS threading:</strong> Which queue does <code>URLSessionWebSocketTask.receive</code> call back on? How to safely bridge to main thread for UI updates?</li>
+    <li><strong>Reconnect state recovery:</strong> After reconnect — re-subscribe to rooms, resend unacked messages, reconcile sequence numbers with server.</li>
+    <li><strong>Load balancing + sticky sessions:</strong> Why persistent connections break round-robin LB and when session affinity is required.</li>
+    <li><strong>Half-open connections:</strong> The TCP failure mode that heartbeats solve — what "half-open" means and how ping/pong detects it.</li>
+    <li><strong>HTTP/2 vs. WebSockets:</strong> When to choose WebSockets over HTTP/2 server push / multiplexed streams.</li>
+    <li><strong>Server-side scaling:</strong> Thread/process model for 100k+ concurrent connections; horizontal scaling strategies.</li>
+  </ul>
+</section>
+
+<div style="height:20px;"></div>
+
+<div class="bottom-nav">
+  <a href="index.html">← Home</a>
+  <a href="interview-prep.html" class="right">Interview Prep →</a>
+</div>
+
+</body>
+</html>
