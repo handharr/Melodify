@@ -38,7 +38,7 @@
 | Third-party SDK facade | `ThirdPartyDataSource` pattern documented in generic (wraps SDK as `RemoteDataSource`) | `PaymentService` wraps Stripe SDK — rest of app never calls SDK directly |
 | Autocomplete strategy | Not in generic | Local prefetch on launch + debounced HTTP GET fallback — WebSockets explicitly rejected |
 | Amenity library | Not in generic | Batch-fetched on launch via `FetchAmenitiesUseCase`; `amenity_id` matched locally — no per-hotel icon network calls |
-| UI framework split | Hybrid UIKit/SwiftUI documented in generic; UIKit for scroll lifecycle, SwiftUI for state-driven screens | UIKit `UITableView` for Hotel List (scroll + pagination lifecycle control); SwiftUI for Search, Detail, Reservation, Payment |
+| UI framework split | SwiftUI default for new apps; UIKit when scroll lifecycle, AVPlayer, or custom transitions needed; hybrid valid screen-by-screen | UIKit `UITableView` for Hotel List (scroll + pagination lifecycle control); SwiftUI for Search, Detail, Reservation, Payment |
 | DI framework | Manual init injection | Swinject — manages graph complexity; singleton vs transient scoping enforced per service |
 | Conflict handling | 409 ≠ 5xx must never share a code path (see generic doc) | HTTP 409 Conflict → distinct "room no longer available" UX + redirect to Hotel Detail (separate path from 5xx/timeout retry UI) |
 

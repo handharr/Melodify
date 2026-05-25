@@ -319,6 +319,7 @@
       <tr><td>Streaming</td><td>Not in generic</td><td>HLS via <code>AVPlayer</code> — adaptive bitrate, chunk-based, short-lived signed URLs</td></tr>
       <tr><td>Pagination</td><td>Not in generic</td><td>Cursor-based (not offset) — library syncs live across devices</td></tr>
       <tr><td>Playback asset resolution</td><td>Not in generic</td><td><code>PlaybackAssetResolver</code>: offline file → HLS manifest → <code>AVPlayer</code></td></tr>
+      <tr><td>UI framework</td><td>SwiftUI default for new apps; UIKit when scroll lifecycle, AVPlayer, or custom transitions needed; hybrid valid screen-by-screen</td><td>UIKit throughout — <code>AVPlayer</code> integration, scroll lifecycle for library list, custom transitions for playback screen</td></tr>
     </table>
   </div>
 

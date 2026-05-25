@@ -310,7 +310,7 @@
       <tr><td>Third-party SDK facade</td><td><code>ThirdPartyDataSource</code> pattern documented in generic (wraps SDK as <code>RemoteDataSource</code>)</td><td><code>PaymentService</code> wraps Stripe SDK — rest of app never calls SDK directly</td></tr>
       <tr><td>Autocomplete strategy</td><td>Not in generic</td><td>Local prefetch on launch + debounced HTTP GET fallback — WebSockets explicitly rejected</td></tr>
       <tr><td>Amenity library</td><td>Not in generic</td><td>Batch-fetched on launch; <code>amenity_id</code> matched locally — no per-hotel icon network calls</td></tr>
-      <tr><td>UI framework split</td><td>Hybrid UIKit/SwiftUI documented in generic; UIKit for scroll lifecycle, SwiftUI for state-driven screens</td><td>UIKit <code>UITableView</code> for Hotel List; SwiftUI for Search, Detail, Reservation, Payment</td></tr>
+      <tr><td>UI framework split</td><td>SwiftUI default for new apps; UIKit when scroll lifecycle, AVPlayer, or custom transitions needed; hybrid valid screen-by-screen</td><td>UIKit <code>UITableView</code> for Hotel List; SwiftUI for Search, Detail, Reservation, Payment</td></tr>
       <tr><td>DI framework</td><td>Manual init injection</td><td>Swinject — singleton vs transient scoping enforced per service</td></tr>
       <tr><td>Conflict handling</td><td>409 ≠ 5xx must never share a code path (see generic doc)</td><td>HTTP 409 Conflict → distinct "room no longer available" UX + redirect to Hotel Detail (separate path from 5xx/timeout retry UI)</td></tr>
     </table>

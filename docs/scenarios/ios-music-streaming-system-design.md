@@ -35,6 +35,7 @@
 | Streaming | Not in generic | HLS via `AVPlayer` — adaptive bitrate, chunk-based, short-lived signed URLs |
 | Pagination | Not in generic | Cursor-based (not offset) — library syncs live across devices |
 | Playback asset resolution | Not in generic | `PlaybackAssetResolver`: offline file → HLS manifest → AVPlayer |
+| UI framework | SwiftUI default for new apps; UIKit when scroll lifecycle, AVPlayer, or custom transitions needed; hybrid valid screen-by-screen | UIKit throughout — AVPlayer integration, scroll lifecycle for library list, custom transitions for playback screen |
 
 ### Key decisions unique to this scenario
 - **`PlayerService` must be app-scoped** — if owned by a ViewController it deallocates when the screen pops and music stops

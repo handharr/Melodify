@@ -33,10 +33,19 @@ In MVP the Presenter holds a reference back to the View via protocol — two-way
 ### MVVM over VIPER
 VIPER splits a screen into 5 objects. The overhead is justified for very large teams where each layer is owned by a different person. For a small team, MVVM + UseCase gives the same testability with half the files.
 
-### UIKit over SwiftUI
-UIKit gives fine-grained control over scroll performance, custom transitions, and `AVPlayerViewController` integration. SwiftUI is the right choice for new simple screens; UIKit is still preferred when you need full control over performance and native framework integration.
+### UIKit vs SwiftUI — Which to Default To
 
-**Hybrid UIKit/SwiftUI within a single app** is a valid pattern when different screens have different needs. Use UIKit for screens that require granular scroll lifecycle hooks (e.g. a paginated list at scale where you need `willDisplay cell` to trigger next-page fetches) and SwiftUI for state-driven screens with simpler layouts. The split is screen-by-screen — Coordinator wires them together, each `ViewController` hosts its SwiftUI content via `UIHostingController` when needed. Rule of thumb: if a screen needs `UITableView` or `UICollectionView` lifecycle control, use UIKit. If it's primarily reactive state → UI, use SwiftUI.
+**New app → SwiftUI.** SwiftUI is the current default for greenfield iOS development. State-driven rendering, declarative layout, and native support for `async`/`await` fit cleanly with the MVVM layer. The ViewModel exposes `@Published` state; the SwiftUI View subscribes with no Combine boilerplate needed.
+
+**Legacy app → stay on UIKit.** Migrating an existing UIKit codebase is high risk for low gain. Hybrid apps add `UIHostingController` overhead and coordination complexity. Unless the team has a specific mandate to migrate, new screens in a UIKit app should remain UIKit.
+
+**Where UIKit is still the right call even in a new app:**
+- Screens that need granular scroll lifecycle (`willDisplay cell` for paginated fetches, sticky headers with custom offsets)
+- Complex custom transitions and interruptible animations
+- Direct `AVPlayerViewController` or `AVPlayerLayer` integration requiring lifecycle control
+- Anything where SwiftUI's layout system cannot match the required pixel-level fidelity
+
+**Hybrid UIKit/SwiftUI** is valid screen-by-screen. Coordinator wires them together. UIKit screens host SwiftUI content via `UIHostingController`; SwiftUI screens embed UIKit views via `UIViewRepresentable`. Rule of thumb: if a screen needs `UITableView`/`UICollectionView` lifecycle control, use UIKit. If it's primarily reactive state → UI, use SwiftUI.
 
 ---
 
