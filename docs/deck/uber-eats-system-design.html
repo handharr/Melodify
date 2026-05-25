@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Uber Eats System Design — iOS</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --border: #30363d;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --accent: #58a6ff;
+    --green: #3fb950;
+    --orange: #d29922;
+    --purple: #bc8cff;
+    --red: #f85149;
+    --keyword: #ff7b72;
+    --string: #a5d6ff;
+    --type: #ffa657;
+    --comment: #8b949e;
+  }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 15px;
+    line-height: 1.6;
+    padding-bottom: 100px;
+  }
+  nav {
+    position: sticky;
+    top: 0;
+    background: rgba(13,17,23,0.92);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    z-index: 100;
+  }
+  nav a { color: var(--muted); text-decoration: none; font-size: 13px; }
+  nav a:hover { color: var(--text); }
+  nav .sep { color: var(--border); }
+  nav .current { color: var(--accent); font-weight: 600; }
+  header {
+    padding: 32px 20px 24px;
+    border-bottom: 1px solid var(--border);
+  }
+  header .tag {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 8px;
+  }
+  header h1 { font-size: 26px; font-weight: 700; }
+  header p { color: var(--muted); font-size: 14px; margin-top: 6px; }
+
+  .toc {
+    margin: 20px 20px 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+  }
+  .toc-title {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 10px;
+  }
+  .toc a {
+    display: block;
+    color: var(--accent);
+    text-decoration: none;
+    font-size: 13px;
+    padding: 3px 0;
+  }
+  .toc a:hover { color: var(--text); }
+  .toc .toc-sub { padding-left: 14px; color: var(--muted); font-size: 12px; }
+  .toc .toc-sub:hover { color: var(--text); }
+
+  section { padding: 28px 20px 0; }
+  h2 {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  h3 {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--orange);
+    margin: 24px 0 10px;
+  }
+  h3:first-child { margin-top: 0; }
+  h4 {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    margin: 16px 0 8px;
+  }
+  p { color: var(--muted); margin-bottom: 12px; line-height: 1.6; }
+  p strong { color: var(--text); }
+  ul, ol { color: var(--muted); padding-left: 20px; margin-bottom: 12px; }
+  li { margin-bottom: 4px; line-height: 1.5; }
+  li strong { color: var(--text); }
+
+  .stack {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 16px;
+  }
+  .stack-row {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .stack-row:last-child { border-bottom: none; }
+  .arrow { color: var(--border); font-size: 16px; margin-top: 1px; flex-shrink: 0; }
+  .stack-name { font-weight: 600; font-size: 14px; color: var(--text); min-width: 180px; flex-shrink: 0; }
+  .stack-desc { font-size: 13px; color: var(--muted); line-height: 1.4; }
+
+  code {
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 5px;
+    color: var(--string);
+  }
+  pre {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    overflow-x: auto;
+    margin-bottom: 16px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 12px;
+    line-height: 1.7;
+    color: var(--text);
+  }
+  .kw { color: var(--keyword); }
+  .ty { color: var(--type); }
+  .st { color: var(--string); }
+  .cm { color: var(--comment); font-style: italic; }
+  .nm { color: var(--accent); }
+  .gr { color: var(--green); }
+
+  table { width: 100%; border-collapse: collapse; margin-bottom: 16px; font-size: 13px; }
+  th {
+    background: var(--surface);
+    color: var(--muted);
+    font-weight: 600;
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    color: var(--muted);
+    vertical-align: top;
+  }
+  td:first-child { color: var(--text); font-weight: 500; }
+  tr:last-child td { border-bottom: none; }
+  .table-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 16px;
+  }
+  .callout {
+    background: rgba(88,166,255,0.08);
+    border: 1px solid rgba(88,166,255,0.3);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    font-size: 13px;
+    color: var(--text);
+    line-height: 1.5;
+  }
+  .callout strong { color: var(--accent); }
+  .rule {
+    background: rgba(63,185,80,0.08);
+    border: 1px solid rgba(63,185,80,0.3);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    font-size: 13px;
+    color: var(--text);
+    line-height: 1.5;
+  }
+  .rule strong { color: var(--green); }
+  .warn {
+    background: rgba(210,153,34,0.08);
+    border: 1px solid rgba(210,153,34,0.3);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    font-size: 13px;
+    color: var(--text);
+    line-height: 1.5;
+  }
+  .warn strong { color: var(--orange); }
+  .divider { border: none; border-top: 1px solid var(--border); margin: 28px 0 0; }
+  .bottom-nav {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: rgba(13,17,23,0.95);
+    backdrop-filter: blur(8px);
+    border-top: 1px solid var(--border);
+    padding: 12px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .bottom-nav a { color: var(--accent); text-decoration: none; font-size: 14px; font-weight: 500; }
+  .bottom-nav a.right { text-align: right; }
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="index.html">Home</a>
+  <span class="sep">›</span>
+  <span class="current">Uber Eats System Design</span>
+</nav>
+
+<header>
+  <div class="tag">System Design</div>
+  <h1>iOS Uber Eats App</h1>
+  <p>REST API · SSE real-time tracking · server-hosted basket · MVVM + Clean Architecture · Coordinator navigation</p>
+</header>
+
+<!-- TOC -->
+<div class="toc">
+  <div class="toc-title">Contents</div>
+  <a href="#delta">Delta — What This Scenario Adds</a>
+  <a href="#screens">Screens in Scope</a>
+  <a href="#requirements">Requirements</a>
+  <a href="#model">Data Model</a>
+  <a href="#api">API Design</a>
+  <a href="#architecture">Architecture</a>
+  <a class="toc-sub" href="#layer-breakdown">Layer Breakdown</a>
+  <a class="toc-sub" href="#vocab">Vocabulary Mapping</a>
+  <a href="#dataflow">Data Flow</a>
+  <a class="toc-sub" href="#flow-restaurant">Restaurant List</a>
+  <a class="toc-sub" href="#flow-order">Place Order</a>
+  <a class="toc-sub" href="#flow-sse">Order Status — SSE</a>
+  <a href="#deepdive">Deep Dives</a>
+  <a class="toc-sub" href="#sse-vs-polling">1. SSE vs Polling vs WebSockets</a>
+  <a class="toc-sub" href="#order-service-scope">2. OrderDomainService Scoping</a>
+  <a class="toc-sub" href="#basket-cache">3. Basket Cache Strategy</a>
+  <a href="#pitfalls">Common Pitfalls</a>
+  <a href="#feedback">Key Takeaways</a>
+</div>
+
+<!-- DELTA -->
+<section id="delta">
+  <h2>Delta — What This Scenario Adds</h2>
+  <p>Scenario extension of the generic iOS architecture. Read this first — it describes what is the same and what this problem adds on top.</p>
+
+  <h3>Same as generic architecture</h3>
+  <ul>
+    <li>Clean Architecture + MVVM + UIKit</li>
+    <li>DTO → Mapper → Domain Model</li>
+    <li><code>FetchPolicy</code> (.fresh / .cached / .strict) on all Repository reads</li>
+    <li>Typed <code>Param</code> structs on every UseCase</li>
+    <li><code>@MainActor</code> on ViewModel — all state mutations on main thread</li>
+    <li><code>defer { isLoading = false }</code> — guaranteed cleanup on success and failure</li>
+    <li><code>[weak self]</code> in all closures to avoid retain cycles</li>
+    <li>Coordinator-based navigation, manual init injection (no DI framework)</li>
+    <li>Mock-the-layer-below testing strategy</li>
+    <li><code>ThirdPartyDataSource</code> facade — app calls protocol, never SDK directly</li>
+    <li>Idempotency keys on mutations — UUID generated at <code>Param</code> call site</li>
+  </ul>
+
+  <h3>What this scenario adds</h3>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Concept</th><th>Generic</th><th>Uber Eats</th></tr>
+      <tr><td>Real-time updates</td><td>Not in generic</td><td><code>OrderDomainService</code> opens a persistent SSE connection; publishes <code>AnyPublisher&lt;Order, AppError&gt;</code></td></tr>
+      <tr><td>SSE stream pattern</td><td>Not in generic</td><td>Multi-fire publisher vs single-value UseCase; screen lifecycle scopes the connection</td></tr>
+      <tr><td>Server-hosted basket</td><td>Not in generic</td><td>Basket lives on backend for cross-device continuity; <code>BasketRepository</code> always writes remote on mutation</td></tr>
+      <tr><td>Image loading</td><td>Not in generic</td><td><code>UIImageView</code> extension wrapping SDWebImage/Kingfisher — same facade pattern as <code>ThirdPartyDataSource</code></td></tr>
+      <tr><td>Cross-device session state</td><td>Not in generic</td><td><code>lastUsedAddress</code> on <code>User</code> drives restaurant list on launch without an extra fetch</td></tr>
+    </table>
+  </div>
+
+  <h3>Key decisions unique to this scenario</h3>
+  <div class="rule"><strong>SSE over polling.</strong> A 1-second poll for 10 minutes = 600 HTTP requests per order. SSE replaces all of that with one persistent connection. Polling is simpler but wastes battery and overloads the backend.</div>
+  <div class="rule"><strong>SSE over WebSockets.</strong> Courier tracking is unidirectional (server → client only). WebSockets add bidirectional complexity this scenario doesn't need.</div>
+  <div class="rule"><strong>Server-hosted basket.</strong> Cross-device continuity — start on iPhone, finish on web. Trade-off: every mutation requires a network round-trip.</div>
+  <div class="callout"><strong><code>OrderDomainService</code> must close SSE on screen exit.</strong> If the stream stays open after the Order Status screen is dismissed, it drains battery and holds a server connection. Close in <code>viewDidDisappear</code> equivalent.</div>
+  <div class="callout"><strong><code>UIImageView</code> extension isolates the image library.</strong> Same principle as <code>ThirdPartyDataSource</code> — call sites call <code>imageView.setImage(url:)</code>, never SDWebImage directly. Swapping libraries touches one file.</div>
+</section>
+
+<!-- SCREENS -->
+<section id="screens">
+  <h2>Screens in Scope</h2>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Screen</th><th>Description</th></tr>
+      <tr><td>Restaurant List</td><td>Address selector + list of nearby restaurants (name, image, rating)</td></tr>
+      <tr><td>Menu</td><td>Dish list for a selected restaurant (name, price, image); add to basket</td></tr>
+      <tr><td>Basket</td><td>View and edit selected dishes; place order (payment excluded)</td></tr>
+      <tr><td>Order Status</td><td>Current order status + courier real-time position on a map via SSE</td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- REQUIREMENTS -->
+<section id="requirements">
+  <h2>Requirements</h2>
+  <h3>Functional</h3>
+  <div class="stack">
+    <div class="stack-row"><div class="stack-name">Restaurant List</div><div class="stack-desc">Choose a delivery address from saved addresses; view nearby restaurants filtered by address</div></div>
+    <div class="stack-row"><div class="stack-name">Menu Screen</div><div class="stack-desc">Browse restaurant menus; add dishes to a basket</div></div>
+    <div class="stack-row"><div class="stack-name">Basket Screen</div><div class="stack-desc">Edit basket (quantities, removals); place order — payment is out of scope</div></div>
+    <div class="stack-row"><div class="stack-name">Order Status Screen</div><div class="stack-desc">Track order status and courier real-time position on a map</div></div>
+  </div>
+
+  <h3>Non-Functional</h3>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Requirement</th><th>Detail</th></tr>
+      <tr><td>Slow network support</td><td>Cached restaurant and dish data for instant display; retry UI on errors</td></tr>
+      <tr><td>Limited on-device storage</td><td>Cache only what is needed; no background pre-fetch of unused data</td></tr>
+      <tr><td>Backend efficiency</td><td>SSE for real-time tracking; no polling; idempotent order creation</td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- DATA MODEL -->
+<section id="model">
+  <h2>Data Model</h2>
+<pre><code><span class="cm">// Domain models — pure Swift structs, no UIKit or Foundation networking types</span>
+
+<span class="kw">struct</span> <span class="ty">User</span> {
+    <span class="nm">userID</span>: <span class="ty">Int</span>
+    <span class="nm">name</span>: <span class="ty">String</span>
+    <span class="nm">email</span>: <span class="ty">String</span>
+    <span class="nm">addresses</span>: [<span class="ty">Address</span>]
+    <span class="nm">lastUsedAddress</span>: <span class="ty">Address</span>   <span class="cm">// drives initial restaurant list without extra fetch</span>
+}
+
+<span class="kw">struct</span> <span class="ty">Address</span> {
+    <span class="nm">addressID</span>: <span class="ty">Int</span>
+    <span class="nm">label</span>: <span class="ty">String</span>
+    <span class="nm">latitude</span>: <span class="ty">Double</span>
+    <span class="nm">longitude</span>: <span class="ty">Double</span>
+    <span class="cm">// + city, street, flat, postcode</span>
+}
+
+<span class="kw">struct</span> <span class="ty">Restaurant</span> {
+    <span class="nm">restaurantID</span>: <span class="ty">Int</span>
+    <span class="nm">name</span>: <span class="ty">String</span>
+    <span class="nm">rating</span>: <span class="ty">Int</span>
+    <span class="nm">address</span>: <span class="ty">Address</span>
+    <span class="nm">imageURL</span>: <span class="ty">URL</span>
+}
+
+<span class="kw">struct</span> <span class="ty">Dish</span> {
+    <span class="nm">dishID</span>: <span class="ty">Int</span>
+    <span class="nm">restaurantID</span>: <span class="ty">Int</span>    <span class="cm">// FK: one-to-many with Restaurant</span>
+    <span class="nm">name</span>: <span class="ty">String</span>
+    <span class="nm">price</span>: <span class="ty">Double</span>
+    <span class="nm">imageURL</span>: <span class="ty">URL</span>
+}
+
+<span class="kw">struct</span> <span class="ty">Basket</span> {
+    <span class="nm">basketID</span>: <span class="ty">Int</span>
+    <span class="nm">userID</span>: <span class="ty">Int</span>
+    <span class="nm">restaurantID</span>: <span class="ty">Int</span>
+    <span class="nm">selectedDishes</span>: [(<span class="nm">dishID</span>: <span class="ty">Int</span>, <span class="nm">count</span>: <span class="ty">Int</span>)]
+}
+
+<span class="kw">struct</span> <span class="ty">Order</span> {
+    <span class="nm">orderID</span>: <span class="ty">Int</span>
+    <span class="nm">status</span>: <span class="ty">OrderStatus</span>
+    <span class="nm">basket</span>: <span class="ty">Basket</span>
+    <span class="nm">courierLatitude</span>: <span class="ty">Double</span>    <span class="cm">// updated via SSE events</span>
+    <span class="nm">courierLongitude</span>: <span class="ty">Double</span>
+}
+
+<span class="kw">enum</span> <span class="ty">OrderStatus</span> {
+    <span class="kw">case</span> <span class="nm">placed</span>, <span class="nm">preparing</span>, <span class="nm">pickedUp</span>, <span class="nm">inTransit</span>, <span class="nm">delivered</span>, <span class="nm">cancelled</span>
+}</code></pre>
+
+  <div class="callout"><strong>Why <code>OrderStatus</code> enum over String?</strong> The video uses <code>status: String</code>. An enum makes status transitions exhaustive at compile time — adding a new state is a compile error everywhere it's handled. Strings let invalid states slip through silently.</div>
+  <div class="callout"><strong>Why <code>lastUsedAddress</code> on User?</strong> The Restaurant List screen needs an address to filter restaurants. Storing the last-used address on the User model means the initial restaurant list can load immediately on app launch without an extra address-selection step. It's a UX shortcut that avoids an extra screen on the happy path.</div>
+</section>
+
+<!-- API DESIGN -->
+<section id="api">
+  <h2>API Design</h2>
+
+  <h3>REST Endpoints</h3>
+<pre><code><span class="cm">// Restaurants &amp; Dishes</span>
+<span class="gr">GET</span>   /users/&lt;userID&gt;               → <span class="ty">UserDTO</span>
+<span class="gr">GET</span>   /restaurants/&lt;addressID&gt;      → [<span class="ty">RestaurantDTO</span>]
+<span class="gr">GET</span>   /dishes/&lt;restaurantID&gt;        → [<span class="ty">DishDTO</span>]
+
+<span class="cm">// Basket</span>
+<span class="gr">POST</span>  /basket  {userID, restaurantID, dishID, count}  → <span class="ty">BasketDTO</span>
+<span class="gr">PATCH</span> /basket  {basketID, dishID, count}              → <span class="ty">BasketDTO</span>
+<span class="gr">GET</span>   /basket/&lt;basketID&gt;            → <span class="ty">BasketDTO</span>
+
+<span class="cm">// Orders</span>
+<span class="gr">POST</span>  /orders  {userID, basketID, idempotencyKey: UUID}  → <span class="ty">OrderDTO</span>
+<span class="gr">GET</span>   /orders/&lt;orderID&gt;             → <span class="ty">OrderDTO</span>
+
+<span class="cm">// SSE — real-time courier tracking</span>
+<span class="gr">GET</span>   /live-order-status/&lt;orderID&gt;  → text/event-stream</code></pre>
+
+  <div class="rule"><strong>Idempotency on POST /orders.</strong> A network timeout after the server succeeds causes the client to retry, creating a duplicate order. Include a client-generated UUID (<code>idempotencyKey</code>) — the server returns the existing record on duplicate submission. Generate the key at the <code>CreateOrderParam</code> call site, not inside the Repository.</div>
+  <div class="callout"><strong>Why SSE over polling for <code>/live-order-status</code>?</strong> Polling at 1-second intervals over a 10-minute order = 600 HTTP requests, most returning no new data. SSE is one persistent connection — the server writes only when state changes. Battery-efficient and backend-friendly.</div>
+</section>
+
+<!-- ARCHITECTURE -->
+<section id="architecture">
+  <h2>Architecture</h2>
+  <p>Pattern: <strong>MVVM + Clean Architecture + UIKit</strong> — Presentation → Domain ← Data.</p>
+
+  <div class="callout"><strong>Why MVVM over MVP (the video's choice)?</strong> MVP's Presenter holds a <code>weak var view: ViewProtocol?</code> back-reference — two-way coupling. MVVM eliminates it: ViewModel exposes <code>@Published</code> state and has no reference to the View. ViewModels are easier to test (no mock View needed) and bind naturally with Combine. The video's Presenter pattern works, but MVVM is the cleaner choice for a new iOS codebase.</div>
+  <div class="callout"><strong>Why manual DI over Swinject (the video's choice)?</strong> Swinject adds a framework dependency and can crash at runtime if a registration is missing — the failure surfaces only at first use, not at boot. Manual init injection via Coordinator exposes all dependencies at compile time. The Coordinator is the composition root; it's also the DI container — no extra framework needed.</div>
+
+  <h3 id="layer-breakdown">Layer Breakdown</h3>
+  <div class="stack">
+    <div class="stack-row">
+      <div class="stack-name">Presentation</div>
+      <div class="stack-desc"><code>ViewController</code> (UIKit) owns <code>ViewModel</code> · binds <code>@Published</code> state via Combine · calls Coordinator for navigation · manages SSE subscription lifecycle</div>
+    </div>
+    <div class="stack-row">
+      <div class="arrow">↓</div>
+      <div class="stack-name">ViewModel</div>
+      <div class="stack-desc"><code>@MainActor @Published</code> · calls UseCases for one-shot actions · subscribes to <code>OrderDomainService.orderUpdates</code> for live tracking · maps Domain → UIModel</div>
+    </div>
+    <div class="stack-row">
+      <div class="arrow">↓</div>
+      <div class="stack-name">UseCases</div>
+      <div class="stack-desc">Stateless, one per user action: <code>FetchRestaurantsUseCase</code>, <code>CreateBasketUseCase</code>, <code>UpdateBasketUseCase</code>, <code>FetchBasketUseCase</code>, <code>CreateOrderUseCase</code></div>
+    </div>
+    <div class="stack-row">
+      <div class="arrow">↓</div>
+      <div class="stack-name">OrderDomainService</div>
+      <div class="stack-desc">Domain Service (stateful) · opens/closes SSE connection · publishes <code>AnyPublisher&lt;Order, AppError&gt;</code> · scoped to <code>OrderCoordinator</code>, not app-level</div>
+    </div>
+    <div class="stack-row">
+      <div class="arrow">↓</div>
+      <div class="stack-name">Repositories</div>
+      <div class="stack-desc"><code>RestaurantRepository</code>, <code>DishRepository</code>, <code>BasketRepository</code>, <code>OrderRepository</code> · each coordinates <code>RemoteDataSource</code> + <code>LocalDataSource</code> · applies <code>FetchPolicy</code> · converts DTO → Domain via Mapper</div>
+    </div>
+    <div class="stack-row">
+      <div class="arrow">↓</div>
+      <div class="stack-name">DataSources</div>
+      <div class="stack-desc">Remote: <code>APIClient</code> (URLSession or Alamofire) · Local: <code>LocalDataSource</code> wrapping Core Data · <code>OrderSSEDataSource</code> (<code>ThirdPartyDataSource</code> facade for SSE client)</div>
+    </div>
+    <div class="stack-row">
+      <div class="arrow">↓</div>
+      <div class="stack-name">Application</div>
+      <div class="stack-desc"><code>AppCoordinator</code> · <code>RestaurantCoordinator</code> · <code>BasketCoordinator</code> · <code>OrderCoordinator</code> · manual init injection — no DI framework</div>
+    </div>
+  </div>
+
+  <h3 id="vocab">Vocabulary Mapping</h3>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Video term</th><th>User's Clean Architecture equivalent</th><th>Notes</th></tr>
+      <tr><td><code>Presenter</code></td><td><code>ViewModel</code></td><td>MVVM eliminates the back-reference — ViewModel has no reference to the View. ViewController subscribes to <code>@Published</code> state via Combine sink.</td></tr>
+      <tr><td><code>Router</code></td><td><code>Coordinator</code></td><td>Direct equivalent — one per flow.</td></tr>
+      <tr><td><code>RestaurantService</code></td><td><code>FetchRestaurantsUseCase</code> + <code>RestaurantRepository</code></td><td>Stateless per-action → UseCase. Data access → Repository.</td></tr>
+      <tr><td><code>BasketService</code></td><td><code>CreateBasketUseCase</code> / <code>UpdateBasketUseCase</code> + <code>BasketRepository</code></td><td>Same split.</td></tr>
+      <tr><td><code>OrderService</code> (stateful SSE)</td><td><code>OrderDomainService</code> + <code>OrderSSEDataSource</code></td><td>Stateful/long-lived → Domain Service. SSE client → ThirdPartyDataSource facade.</td></tr>
+      <tr><td><code>AuthService</code></td><td><code>SessionDomainService</code></td><td>Stateful session — app-scoped Domain Service.</td></tr>
+      <tr><td>Network Client (Alamofire)</td><td><code>APIClient</code> (URLSession-based)</td><td>Alamofire is a valid implementation detail inside <code>RemoteDataSource</code>.</td></tr>
+      <tr><td><code>Storage Facade</code></td><td><code>LocalDataSource</code> protocol</td><td>Same concept — the protocol is the facade. Swapping Core Data for GRDB touches one file.</td></tr>
+      <tr><td>SSE Client</td><td><code>OrderSSEDataSource</code></td><td>ThirdPartyDataSource facade. Returns <code>AsyncStream&lt;OrderSSEEventDTO&gt;</code>.</td></tr>
+      <tr><td>UIImageView Extension</td><td>ThirdPartyDataSource facade pattern</td><td>Same isolation principle. <code>imageView.setImage(url:)</code> — never SDWebImage directly.</td></tr>
+      <tr><td>Swinject DI</td><td>Manual init injection via Coordinator</td><td>User's arch avoids DI frameworks. Coordinator IS the composition root.</td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- DATA FLOW -->
+<section id="dataflow">
+  <h2>Data Flow</h2>
+
+  <h3 id="flow-restaurant">Restaurant List Screen</h3>
+<pre><code>AppCoordinator reads <span class="ty">User.lastUsedAddress</span> from <span class="nm">UserRepository</span> (policy: .cached)
+
+<span class="nm">RestaurantListViewModel</span>.load(policy: .cached)
+  → <span class="nm">FetchRestaurantsUseCase</span>.execute(param: <span class="ty">FetchRestaurantsParam</span>(addressID:))
+      → <span class="nm">RestaurantRepository</span>
+          1. <span class="nm">LocalDataSource</span>.fetch()     <span class="cm">// cached DTOs → Mapper → [Restaurant] → UI renders instantly</span>
+          2. <span class="nm">RemoteDataSource</span>.fetch()    <span class="cm">// GET /restaurants/&lt;addressID&gt; → DTO → Mapper → [Restaurant]</span>
+          3. <span class="nm">LocalDataSource</span>.save(dtos)  <span class="cm">// Core Data updated</span>
+      → ViewModel maps [<span class="ty">Restaurant</span>] → [<span class="ty">RestaurantUIModel</span>]
+      → <span class="nm">@Published</span> restaurantList updated → ViewController re-renders
+      → <span class="kw">defer</span>: isLoading = <span class="kw">false</span></code></pre>
+
+  <h3 id="flow-order">Place Order</h3>
+<pre><code><span class="nm">BasketViewModel</span>.placeOrder()
+  → <span class="nm">CreateOrderUseCase</span>.execute(
+        param: <span class="ty">CreateOrderParam</span>(
+            userID: ...,
+            basketID: ...,
+            idempotencyKey: <span class="ty">UUID</span>()    <span class="cm">// generated here — not inside Repository</span>
+        )
+    )
+      → <span class="nm">OrderRepository</span>.create(param:)
+          → <span class="nm">OrderRemoteDataSource</span>.post(<span class="st">/orders</span>) → <span class="ty">OrderDTO</span> → <span class="ty">OrderMapper</span> → <span class="ty">Order</span>
+      → ViewModel calls Coordinator → pushes Order Status screen</code></pre>
+
+  <h3 id="flow-sse">Order Status Screen — SSE Flow</h3>
+<pre><code><span class="cm">// Screen appears</span>
+<span class="nm">OrderStatusViewController</span>.viewDidAppear()
+  → <span class="nm">OrderStatusViewModel</span>.startTracking(orderID:)
+      → <span class="nm">OrderDomainService</span>.startTracking(orderID:)
+          → <span class="nm">OrderSSEDataSource</span>.stream(orderID:)     <span class="cm">// AsyncStream&lt;OrderSSEEventDTO&gt;</span>
+          → <span class="kw">for await</span> event <span class="kw">in</span> stream
+              → <span class="nm">OrderMapper</span>.toDomain(event) → <span class="ty">Order</span>
+              → publishes via <span class="ty">AnyPublisher</span>&lt;<span class="ty">Order</span>, <span class="ty">AppError</span>&gt;
+      → ViewModel.orderUpdates sink → maps <span class="ty">Order</span> → <span class="ty">OrderUIModel</span>
+      → <span class="nm">@Published</span> courierLocation + orderStatus → map pin moves, label updates
+
+<span class="cm">// Screen exits</span>
+<span class="nm">OrderStatusViewController</span>.viewDidDisappear()
+  → <span class="nm">OrderStatusViewModel</span>.stopTracking()
+      → <span class="nm">OrderDomainService</span>.stopTracking()    <span class="cm">// SSE connection closed immediately</span></code></pre>
+
+  <div class="warn"><strong>Always close SSE on screen exit.</strong> A stream left open after navigation drains battery and holds a server connection with no consumer. <code>stopTracking()</code> must be called in every exit path — pop, dismiss, and app background.</div>
+</section>
+
+<!-- DEEP DIVES -->
+<section id="deepdive">
+  <h2>Deep Dives</h2>
+
+  <!-- 1. SSE -->
+  <h3 id="sse-vs-polling">1. SSE vs Polling vs WebSockets</h3>
+
+  <h4>Why polling is wrong here</h4>
+<pre><code><span class="cm">// 1-second polling over a 10-minute order</span>
+t=0s    <span class="gr">GET</span> /orders/{id} → <span class="st">"preparing"</span>   <span class="cm">← wasted request</span>
+t=1s    <span class="gr">GET</span> /orders/{id} → <span class="st">"preparing"</span>   <span class="cm">← wasted request</span>
+...
+t=47s   <span class="gr">GET</span> /orders/{id} → <span class="st">"picked_up"</span>   <span class="cm">← finally useful</span>
+<span class="cm">// 600 requests total, 599 returned unchanged data</span>
+
+<span class="cm">// SSE — one connection</span>
+t=0s    <span class="gr">GET</span> /live-order-status/{id}         <span class="cm">← persistent connection opened</span>
+t=47s   ← server: {status: "picked_up",  lat: 1.30, lng: 103.8}
+t=89s   ← server: {status: "in_transit", lat: 1.31, lng: 103.81}</code></pre>
+
+  <div class="table-wrap">
+    <table>
+      <tr><th></th><th>SSE</th><th>Polling</th><th>WebSocket</th></tr>
+      <tr><td>Direction</td><td>Server → client only</td><td>Client pulls</td><td>Bidirectional</td></tr>
+      <tr><td>Protocol</td><td>HTTP/1.1 or HTTP/2</td><td>HTTP/1.1</td><td>ws://</td></tr>
+      <tr><td>Battery cost</td><td>Low</td><td>High</td><td>Low</td></tr>
+      <tr><td>Complexity</td><td>Simple</td><td>Simplest</td><td>Higher</td></tr>
+      <tr><td>Right for courier tracking?</td><td>✅</td><td>❌</td><td>Overkill</td></tr>
+    </table>
+  </div>
+  <div class="rule"><strong>Rule:</strong> Use SSE when data flows server → client only and you want push without bidirectional complexity. Use WebSocket when the client also needs to push — e.g. chat, collaborative editing.</div>
+
+  <hr class="divider">
+
+  <!-- 2. OrderDomainService Scoping -->
+  <h3 id="order-service-scope">2. OrderDomainService — Scoping</h3>
+  <p>Unlike <code>PlayerService</code> in a music app (app-scoped to keep audio alive across all screens), <code>OrderDomainService</code> should be scoped to <code>OrderCoordinator</code> — created when the order flow starts, destroyed when the coordinator deallocates.</p>
+
+  <div class="table-wrap">
+    <table>
+      <tr><th>Scope</th><th>Result</th></tr>
+      <tr><td>App-scoped (too broad)</td><td>SSE connection stays open between orders; wastes battery and server resources when not on Order Status screen</td></tr>
+      <tr><td>ViewController-scoped (too narrow)</td><td>Service destroyed if VC is re-created; stream drops mid-tracking</td></tr>
+      <tr><td>Coordinator-scoped ✅</td><td>Lives exactly as long as the order flow; created by OrderCoordinator, destroyed when coordinator pops</td></tr>
+    </table>
+  </div>
+  <div class="callout"><strong>Compare to <code>PlayerService</code>.</strong> Music playback must continue when the user navigates away from the player screen — app-scoped is required. Courier tracking has no reason to continue once the Order Status screen is dismissed — coordinator-scoped is correct.</div>
+
+  <hr class="divider">
+
+  <!-- 3. Basket Cache -->
+  <h3 id="basket-cache">3. Basket Cache Strategy</h3>
+  <p>The basket lives on the backend (primary source of truth) but is mirrored in <code>BasketLocalDataSource</code> (Core Data). This serves two purposes:</p>
+
+  <div class="stack">
+    <div class="stack-row">
+      <div class="stack-name">Instant restore</div>
+      <div class="stack-desc">If the app is killed and relaunched mid-basket, the local cache shows the last known state immediately while a <code>GET /basket</code> fetch runs in the background.</div>
+    </div>
+    <div class="stack-row">
+      <div class="stack-name">Offline display</div>
+      <div class="stack-desc"><code>FetchPolicy.cached</code> on <code>FetchBasketUseCase</code> returns the local cache first. The Repository writes network responses back to the cache when they arrive.</div>
+    </div>
+  </div>
+
+<pre><code><span class="cm">// BasketRepository — applies FetchPolicy</span>
+<span class="kw">func</span> <span class="nm">fetchBasket</span>(policy: <span class="ty">FetchPolicy</span>) <span class="kw">async throws</span> → <span class="ty">Basket</span> {
+    <span class="kw">switch</span> policy {
+    <span class="kw">case</span> .cached:
+        <span class="kw">if let</span> cached = <span class="kw">try</span> localDataSource.fetch() {
+            <span class="kw">return</span> <span class="ty">BasketMapper</span>.toDomain(cached)!
+        }
+        <span class="kw">fallthrough</span>
+    <span class="kw">case</span> .fresh:
+        <span class="kw">let</span> dto = <span class="kw">try await</span> remoteDataSource.fetch()
+        <span class="kw">try</span> localDataSource.save(dto)
+        <span class="kw">return</span> <span class="ty">BasketMapper</span>.toDomain(dto)!
+    <span class="kw">case</span> .strict:
+        <span class="kw">guard let</span> cached = <span class="kw">try</span> localDataSource.fetch() <span class="kw">else</span> { <span class="kw">throw</span> <span class="ty">AppError</span>.cacheMiss }
+        <span class="kw">return</span> <span class="ty">BasketMapper</span>.toDomain(cached)!
+    }
+}</code></pre>
+</section>
+
+<!-- PITFALLS -->
+<section id="pitfalls">
+  <h2>Common Pitfalls</h2>
+  <div class="warn"><strong>Not closing SSE on screen exit.</strong> Stream stays open, drains battery, holds a server connection with no consumer. Always call <code>stopTracking()</code> in <code>viewDidDisappear</code> — not just on explicit back-tap.</div>
+  <div class="warn"><strong>ViewModel must not hold a reference to its View.</strong> This is the core MVVM contract — ViewController subscribes to <code>@Published</code> state via Combine, ViewModel has no back-reference. The MVP pattern (<code>weak var view: ViewProtocol?</code>) creates two-way coupling that makes the ViewModel untestable without a mock View.</div>
+  <div class="warn"><strong>UseCases and Domain Services must not call networking directly.</strong> Networking belongs in <code>RemoteDataSource</code>. The correct chain is <code>UseCase → Repository → RemoteDataSource → APIClient</code>. A service that calls a network client directly bypasses the Repository abstraction and couples the Domain layer to Data.</div>
+  <div class="warn"><strong>No idempotency key on order creation.</strong> A network timeout after the server succeeds causes a duplicate order on retry. Generate a <code>UUID</code> at the <code>CreateOrderParam</code> call site and include it in the POST body.</div>
+  <div class="warn"><strong>Swinject missing registration crash.</strong> Registrations missing at startup crash at first use — hard to catch in tests. Manual init injection via Coordinator exposes all missing dependencies at compile time.</div>
+  <div class="warn"><strong><code>[weak self]</code> missing in Combine sink.</strong> <code>OrderStatusViewModel</code> subscribes to <code>OrderDomainService.orderUpdates</code>. Capturing <code>self</code> strongly creates a retain cycle. Store the <code>AnyCancellable</code> in a <code>Set&lt;AnyCancellable&gt;</code> and always capture <code>[weak self]</code>.</div>
+</section>
+
+<!-- KEY TAKEAWAYS -->
+<section id="feedback">
+  <h2>Key Takeaways</h2>
+  <div class="rule"><strong>The core data flow.</strong> Address → restaurant list → menu → basket (server-hosted, locally cached) → order (idempotency key) → SSE stream for live tracking. Say this end-to-end before drawing anything.</div>
+  <div class="rule"><strong>SSE is the headline technical decision.</strong> Justify it against polling (600 wasted requests) and WebSockets (unidirectional is sufficient). The lifecycle rule: open on screen appear, close on screen disappear.</div>
+  <div class="rule"><strong>MVVM eliminates the MVP back-reference.</strong> ViewModel has no reference to View. ViewController subscribes to <code>@Published</code> state. Easier to test — no mock View needed.</div>
+  <div class="rule"><strong>Coordinator is the DI composition root.</strong> No framework needed. Dependencies are composed via manual init at the Coordinator level — missing dependencies are compile errors, not runtime crashes.</div>
+  <div class="callout"><strong>Two things to nail in the interview:</strong> (1) Justify SSE over polling with numbers — one persistent connection vs 600 requests per order. (2) State architecture rationale before drawing the diagram, then walk the data flow top-to-bottom immediately after.</div>
+</section>
+
+<div class="bottom-nav">
+  <a href="index.html">← Home</a>
+</div>
+
+</body>
+</html>
