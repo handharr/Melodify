@@ -1,0 +1,369 @@
+# iOS Messenger App — System Design
+
+**Source:** Mock Mobile System Design Interview — Andrey Tech (ex-Meta)
+
+> Scenario extension of [`docs/ios-app-system-design.md`](../ios-app-system-design.md).
+> Read the delta below first.
+
+---
+
+## Delta — What This Scenario Adds
+
+### Same as generic architecture
+- Clean Architecture + MVVM + UIKit
+- DTO → Mapper → Domain Model (Mapper is the only type that knows both)
+- `FetchPolicy` (.fresh / .cached / .strict) on all Repository reads
+- Typed `Param` structs on every UseCase
+- `@MainActor` on ViewModel — all state mutations on main thread
+- `defer { isLoading = false }` — guaranteed cleanup on success and failure
+- `[weak self]` in all closures to avoid retain cycles
+- Coordinator-based navigation, DI via manual init injection
+- Mock-the-layer-below testing strategy
+- `async/await` for I/O; Combine for reactive binding to `@Published` state
+
+### What this scenario adds
+
+| Concept | Generic | This Scenario |
+|---|---|---|
+| Real-time data | Not covered | `MessageStreamService` Domain Service — wraps WebSocket, exposes `AnyPublisher<Message, Never>` per chat |
+| Offline write queue | Not covered | `MessageSyncService` Domain Service — queues `isSent = false` messages, flushes on app foreground |
+| Three-tier API strategy | `FetchPolicy` covers read intent | Initial load / cursor pagination / delta sync by `sequenceId` — three distinct endpoints per list screen |
+| Local DB as SSOT | `LocalDataSource` for cache | Realm via `LocalDataSource` — renders immediately from cache, syncs in background; WebSocket frames upsert into same store |
+| File/attachment storage | Not in generic | `LocalFileDataSource` — stores media binaries; only URL stored in `MessageLocalDataSource` |
+| Message status lifecycle | Not covered | `sentTime` / `receivedTime` / `readTime` + `isSent: Bool` for local delivery tracking |
+
+### Key decisions unique to this scenario
+
+- **`MessageStreamService` must be app-scoped.** If owned by `ChatThreadViewModel`, the WebSocket closes when the screen pops — incoming messages are silently missed.
+- **`MessageSyncService` triggers on app lifecycle, not a timer.** Fires on `sceneDidBecomeActive` / `applicationDidBecomeActive`, not on a polling interval.
+- **Local DB is the single source of truth.** ViewModels never read from the network. Network writes flow into `MessageLocalDataSource` (upsert by `id`); the LocalDataSource stream drives the ViewModel.
+- **Three-tier REST is required alongside FetchPolicy.** FetchPolicy (`.fresh` / `.cached`) covers read intent but doesn't model delta sync — fetching only records changed since a known `sequenceId` is a separate concern.
+- **Upsert by `message.id`, never append.** A message can arrive via both WebSocket and a delta REST sync. Appending would duplicate it; upserting by `id` is idempotent.
+
+---
+
+## Requirements
+
+### Functional
+- 1-to-1 chat messaging (no group chats for MVP)
+- Chat List screen: avatar, name, message preview, timestamp — sorted by most recent activity
+- Chat Thread screen: scrollable message history, send/receive messages
+- Media sharing: image and file attachments with thumbnail and full-resolution variants
+- Offline mode: view cached chat history; queue and deliver pending sends on reconnect
+
+### Non-Functional
+- **Offline-first:** render from local cache immediately on every screen open
+- **Battery / bandwidth optimized:** delta sync (not full refresh), no polling
+- **Real-time:** WebSocket after initial REST sync
+- MVP excludes: push notifications, typing indicators
+
+---
+
+## API Design
+
+### REST — Three-Tier Strategy
+
+Every list screen has three endpoint tiers, each with a distinct job:
+
+```
+Chat List
+  GET  /chat/all                              → 15 most recent chats (initial load)
+  GET  /chat/all/after?timestamp=<ts>         → next 15 chats (scroll pagination)
+  GET  /chat/all/delta/after?sequenceId=<id>  → only chats changed since sequenceId (background sync)
+
+Chat Thread
+  GET  /chat/{chat_id}/all                    → 50 most recent messages (initial load)
+  GET  /chat/{chat_id}/all/before?timestamp=  → next 50 older messages (scroll up)
+  GET  /chat/{chat_id}/all/after?timestamp=   → messages since timestamp (foreground sync)
+
+Send (REST fallback — prefer WebSocket when socket is live)
+  POST /chat/{chat_id}/message                → send a Message object
+
+Real-time
+  WS   /chat/{chat_id}                        → event stream after REST sync
+```
+
+**Why three tiers?** Each tier has a distinct job:
+- Initial load: snappiness — populate the screen immediately
+- Pagination: avoid large payloads — load older records only on demand
+- Delta sync: battery efficiency — payload size proportional to change, not list size
+
+### WebSocket Event Model
+
+```swift
+struct WSEvent<T: Decodable> {
+    let type: WSEventType
+    let payload: T
+}
+
+enum WSEventType {
+    case messageSent
+    case messageReceived
+    // case typingIndicator  // future — additive, no breaking change
+}
+```
+
+A strongly-typed envelope makes new event types additive. No stringly-typed `if eventType == "message_sent"` scattered across the codebase.
+
+---
+
+## Data Model
+
+### Domain Models
+
+```swift
+struct Chat {
+    let chatId: String
+    let users: [User]           // array enables future group chat
+    let status: ChatStatus      // .read | .unread
+    let preview: String         // last message snippet for chat list
+    let lastActivity: Date      // drives sort order — optimistically updated on send
+}
+
+enum ChatStatus { case read, unread }
+
+struct User {
+    let userId: String
+    let imageThumbnail: URL     // low-res, used in chat list
+    let imageFullRes: URL       // high-res, used in profile view
+    let firstName: String
+    let lastName: String
+    let isActive: Bool          // online indicator
+}
+
+struct Message {
+    let id: String              // dedup key — upsert, never append
+    let text: String
+    let attachments: [Attachment]
+    let sentTime: Date
+    let receivedTime: Date?
+    let readTime: Date?
+    let isSent: Bool            // local flag: has this been delivered to server?
+    let isRead: Bool
+}
+
+struct Attachment {
+    let type: AttachmentType    // .image | .video | .pdf
+    let url: URL                // URL only — binary stored in LocalFileDataSource
+}
+
+enum AttachmentType { case image, video, pdf }
+```
+
+### DTOs (mirror API shape, Codable)
+
+```swift
+struct ChatDTO: Codable       { chat_id, users, status, preview, last_activity }
+struct UserDTO: Codable       { user_id, image_thumbnail, image_fullres, first_name, last_name, is_active }
+struct MessageDTO: Codable    { id, text, attachments, sent_time, received_time, read_time, is_sent, is_read }
+struct AttachmentDTO: Codable { type, url }
+```
+
+Mappers (`ChatMapper`, `MessageMapper`) are the only types that know both DTO and Domain model.
+
+---
+
+## Architecture
+
+### Layer Breakdown
+
+```
+Presentation   ViewController + ViewModel (@MainActor, @Published)
+Domain         UseCase + Domain Service + Model + Param + FetchPolicy
+Data           Repository + RemoteDataSource + LocalDataSource + DTO + Mapper + APIClient
+Application    AppCoordinator + ChatCoordinator (navigation only) + DI
+```
+
+### Vocabulary Translation
+
+| Interview term | Generic arch equivalent | Layer |
+|---|---|---|
+| `ChatThreadCoordinator` (data orchestrator) | `FetchMessagesUseCase` + `MessageStreamService` | Domain |
+| `ChatListCoordinator` (data orchestrator) | `FetchChatsUseCase` + `MessageStreamService` | Domain |
+| `ChatThreadRepo` | `MessageRepository: MessageRepositoryProtocol` | Data |
+| `ChatListRepo` | `ChatRepository: ChatRepositoryProtocol` | Data |
+| `APIClient` (held by Coordinator) | `MessageRemoteDataSource` wrapping `APIClient` | Data |
+| `WebSocket` (held by Coordinator) | `MessageStreamService` Domain Service | Domain |
+| `StateManager` | `ViewState<T>` enum + `@Published var state` on ViewModel | Presentation |
+| `OfflineSyncManager` | `MessageSyncService` Domain Service | Domain |
+| `Local DB (Realm)` | `MessageLocalDataSource` (Realm as backend) | Data |
+| `File Storage` | `LocalFileDataSource` | Data |
+
+The interview used "Coordinator" for both navigation and data orchestration. In this architecture those are two separate concerns: `ChatCoordinator` handles navigation (Application layer); `FetchMessagesUseCase` handles data access (Domain); `MessageStreamService` owns the WebSocket (Domain Service, app-scoped).
+
+### Component Graph
+
+```
+AppCoordinator
+  └── ChatCoordinator (navigation only)
+         ├── ChatListViewController + ChatListViewModel
+         │       FetchChatsUseCase → ChatRepository → ChatRemoteDataSource (APIClient)
+         │                                          → ChatLocalDataSource (Realm)
+         │       MessageStreamService.subscribe(chatId:) → AnyPublisher<Message, Never>
+         │
+         └── ChatThreadViewController + ChatThreadViewModel
+                 FetchMessagesUseCase → MessageRepository → MessageRemoteDataSource (APIClient)
+                                                          → MessageLocalDataSource (Realm)
+                 MessageStreamService (same app-scoped instance)
+                 MessageSyncService (app-scoped — flushes isSent=false on foreground)
+
+LocalFileDataSource — stores attachment binaries, referenced by URL in Message model
+```
+
+---
+
+## Data Flow
+
+### Load Chat Thread (offline-first)
+
+```
+ChatThreadViewController.viewDidLoad()
+  → ChatThreadViewModel.load()
+      state = .loading
+      → FetchMessagesUseCase.execute(policy: .cached, param: ChatParam(chatId:))
+          → MessageRepository
+              1. MessageLocalDataSource.fetch(chatId:)
+                 → [MessageDTO] → MessageMapper.toDomain() → [Message]
+                 → state = .success(messages)            // renders immediately from cache
+              2. MessageRemoteDataSource.fetch(after: lastSequenceId)
+                 → [MessageDTO] → MessageMapper.toDomain() → [Message]
+                 → MessageLocalDataSource.upsert(dtos)   // upsert by message.id
+                 → state updated with merged messages
+      defer: isLoading = false
+      → MessageStreamService.subscribe(chatId: chatId) → AnyPublisher<Message, Never>
+          → each incoming Message: MessageLocalDataSource.upsert(dto)
+          → state appended / merged
+```
+
+### Send Message (with offline queue)
+
+```
+User taps send
+  → ChatThreadViewModel.send(text:)
+      → MessageLocalDataSource.upsert(MessageDTO(id: UUID(), text: text, isSent: false))
+      → state updated optimistically (message appears as "pending")
+      → SendMessageUseCase.execute(param: SendMessageParam(chatId:, message:))
+          → MessageRepository.send()
+              → MessageRemoteDataSource.post(/chat/{chat_id}/message)
+              → on success: MessageLocalDataSource.update(id:, isSent: true)
+              → on failure: isSent remains false → MessageSyncService will retry
+```
+
+### Background Sync (MessageSyncService)
+
+```
+sceneDidBecomeActive / applicationDidBecomeActive
+  → MessageSyncService.syncPending()
+      → MessageLocalDataSource.fetch(where: isSent == false) → [MessageDTO]
+      → for each: SendMessageUseCase.execute(param:)
+          → on success: MessageLocalDataSource.update(id:, isSent: true)
+          → on failure: leave for next foreground event
+```
+
+---
+
+## Deep Dives
+
+### WebSocket Lifecycle
+
+`MessageStreamService` is a Domain Service (app-scoped singleton):
+
+```swift
+class MessageStreamService {
+    private var socket: WebSocketConnection
+
+    func connect()
+    func subscribe(to chatId: String) -> AnyPublisher<Message, Never>
+    func disconnect()
+}
+```
+
+Lifecycle:
+1. App foreground → `AppCoordinator` calls `messageStreamService.connect()`
+2. View appears → ViewModel calls `messageStreamService.subscribe(to: chatId)`, cancels on `viewWillDisappear`
+3. App backgrounds → `messageStreamService.disconnect()` (socket closed to save battery)
+4. App foregrounds → `connect()`, then `FetchMessagesUseCase` with delta endpoint to catch messages missed during the background gap
+
+The ViewModel subscribes to both `FetchMessagesUseCase` and `MessageStreamService` — both feed the same `@Published var state: ViewState<[Message]>`.
+
+### Three-Tier REST vs FetchPolicy
+
+`FetchPolicy` covers read intent (.fresh / .cached / .strict) but doesn't model delta sync. Three-tier maps onto FetchPolicy as:
+
+| Tier | Endpoint | FetchPolicy analog |
+|---|---|---|
+| Initial load | `GET /chat/{id}/all` | `.cached` → show local, then `.fresh` in background |
+| Cursor pagination | `GET .../before?timestamp=` | `.fresh` — always hits network for older pages |
+| Delta sync | `GET .../delta/after?sequenceId=` | No analog — payload is change-proportional, not list-proportional |
+
+Delta sync is the battery-efficiency win: instead of re-fetching 50 messages, fetch only the 3 that arrived while the app was in the background.
+
+### Pagination Inconsistency (Interviewer-Flagged Weakness)
+
+Timestamp-based pagination is fragile when new messages arrive mid-scroll:
+
+```
+Chat list, Page 1: [Chat_A (t=100), Chat_B (t=90), Chat_C (t=80)]
+                             ↑
+              New message arrives in Chat_D → Chat_D.last_activity = t=95
+
+Page 2 request: after?timestamp=80
+Server returns:  [Chat_E (t=70), ...]  ← Chat_D (t=95) was missed
+```
+
+Fix: server-issued opaque cursor (sequenceId) instead of client-supplied timestamp. The server anchors the page to a stable position regardless of inserts. The client treats the cursor as opaque — never parses it, just echoes it back.
+
+### ViewState Machine
+
+Not a separate component — embedded in ViewModel:
+
+```swift
+enum ViewState<T> {
+    case loading
+    case success(T)
+    case error(Error)
+}
+
+// ViewModel
+@MainActor
+class ChatThreadViewModel: ObservableObject {
+    @Published var state: ViewState<[Message]> = .loading
+
+    func load() {
+        state = .loading                           // before UseCase call
+        // ... UseCase call ...
+        state = .success(messages)                 // on data received
+        // on error:
+        state = .error(error)
+    }
+}
+```
+
+The transition sequence: set `.loading` before calling UseCase → set `.success(data)` or `.error` after. All views in the app enforce this same lifecycle — no ad-hoc `isLoading: Bool` scattered per-screen.
+
+---
+
+## Interviewer Feedback
+
+### Rating Pillars (4/5 across all)
+
+**Problem Breakdown (4/5):** Strong requirements gathering. Defined scope clearly (1-to-1, offline-first, no push for MVP). Systematic plan of attack before drawing.
+
+**System Architecture (4/5):**
+- ✅ Layered approach (Presentation / Domain / Data)
+- ✅ Repository pattern with local DB as SSOT
+- ✅ Offline-first with `isSent` flag and background sync
+- ❌ Did not address pagination inconsistency when new messages arrive during scroll
+- ❌ Suggested POST for sends alongside WebSocket — redundant; prefer WebSocket-first
+
+**Technical Proficiency (4/5):** Strong SwiftUI + Combine command. Clean `AnyPublisher` boundary between data layer and ViewModel. StateManager pattern is sound.
+
+**Communication (4/5):** Discussed trade-offs clearly. Offered multiple options with pros/cons when challenged.
+
+### Key Takeaways
+
+- "Data orchestrator Coordinator" is an anti-pattern — Coordinator = navigation only. Split data orchestration into UseCase + Domain Service.
+- The three-tier API strategy (initial / pagination / delta) is the right answer for any offline-first + real-time app.
+- Route message sends through WebSocket-first; fall back to POST only when the socket is unavailable.
+- Timestamp cursors are fragile for live data — default to server-issued opaque cursors.
+- `MessageStreamService` and `MessageSyncService` must be app-scoped Domain Services, not ViewModel-owned components.
