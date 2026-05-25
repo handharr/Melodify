@@ -214,6 +214,39 @@ FeedViewModel (@MainActor)
 Cells ──► ImageSDKDataSource (SDWebImage) ──► S3 URLs (photoURLs from PostDTO)
 ```
 
+### Dependency Injection (Composition Root)
+
+No DI framework. Dependencies flow inward via init. `AppCoordinator` owns the composition root — it builds the full graph and holds app-scoped objects as strong properties.
+
+```swift
+// AppCoordinator — composition root
+let client = APIClient()
+
+// Data layer
+let feedRemoteDS = FeedRemoteDataSource(client: client)
+let likeRemoteDS = LikeRemoteDataSource(client: client)
+let feedLocalDS  = FeedLocalDataSource()              // wraps Core Data
+
+// Repositories
+let newsFeedRepo = NewsFeedRepository(remote: feedRemoteDS, local: feedLocalDS)
+let likeRepo     = LikeRepository(remote: likeRemoteDS, local: feedLocalDS)
+
+// Domain Services — strong property on AppCoordinator; survives screen transitions
+let likeService  = LikeDomainService(repository: likeRepo)
+likeService.resumePendingRetries()                    // re-queue successfullySent=false on launch
+
+// UseCases — stateless; created per-navigation
+let fetchFeedUseCase = FetchFeedUseCase(repository: newsFeedRepo)
+
+// Presentation — created by Coordinator when pushing feed screen
+let viewModel = FeedViewModel(
+    fetchFeed: fetchFeedUseCase,
+    likeService: likeService
+)
+```
+
+`LikeDomainService` is a stored property on `AppCoordinator`, not created inside `FeedViewController`. This is what keeps it alive across screen transitions and app lifecycle events. If it were owned by the ViewController, it would deallocate on pop and lose the retry queue.
+
 ---
 
 ## Data Flow
@@ -343,7 +376,7 @@ Open question: retry policy (exponential back-off vs fixed interval, retry cap) 
 - **Offset pagination on a live feed.** Insertions at the top shift offsets — duplicates appear. Use cursor-based pagination.
 - **Not implementing `cancelPrefetchingForItemsAt`.** Stale requests pile up and starve visible cells. Always pair `prefetchItemsAt` with its cancel counterpart.
 - **Forgetting `sd_cancelCurrentImageLoad()` in `prepareForReuse`.** Fast scrollers see wrong images briefly — the recycled cell shows the previous request's result.
-- **Swinject singleton vs transient confusion.** ⚠️ The video uses Swinject; the generic arch uses manual init injection. If Swinject is used, stateful services (`LikeDomainService`) must be `.singleton`; stateless mappers `.transient`. Registering a stateful service as `.transient` creates a new instance per resolution — the like queue disappears.
+- **Creating `LikeDomainService` inside a ViewController instead of the composition root.** If `FeedViewController` owns it, the service deallocates on pop — the retry queue is lost. It must be a stored property on `AppCoordinator`, passed down via init injection.
 - **`successfullySent` records never cleaned up.** The retry loop must set `successfullySent = true` and eventually delete the record on success, or the Core Data queue grows unbounded.
 - **`LikeDomainService` owned by a ViewController.** If scoped to a screen, it deallocates when the user navigates away — the retry queue disappears. Register at AppCoordinator level, same as `PlayerService` in the music streaming scenario.
 
