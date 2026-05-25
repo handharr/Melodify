@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Story Viewer System Design — iOS</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --border: #30363d;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --accent: #58a6ff;
+    --green: #3fb950;
+    --orange: #d29922;
+    --purple: #bc8cff;
+    --red: #f85149;
+    --keyword: #ff7b72;
+    --string: #a5d6ff;
+    --type: #ffa657;
+    --comment: #8b949e;
+  }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 15px;
+    line-height: 1.6;
+    padding-bottom: 100px;
+  }
+  nav {
+    position: sticky;
+    top: 0;
+    background: rgba(13,17,23,0.92);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    z-index: 100;
+  }
+  nav a { color: var(--muted); text-decoration: none; font-size: 13px; }
+  nav a:hover { color: var(--text); }
+  nav .sep { color: var(--border); }
+  nav .current { color: var(--accent); font-weight: 600; }
+  header {
+    padding: 32px 20px 24px;
+    border-bottom: 1px solid var(--border);
+  }
+  header .tag {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 8px;
+  }
+  header h1 { font-size: 26px; font-weight: 700; }
+  header p { color: var(--muted); font-size: 14px; margin-top: 6px; }
+
+  /* TOC */
+  .toc {
+    margin: 20px 20px 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+  }
+  .toc-title {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 10px;
+  }
+  .toc a {
+    display: block;
+    color: var(--accent);
+    text-decoration: none;
+    font-size: 13px;
+    padding: 3px 0;
+  }
+  .toc a:hover { color: var(--text); }
+  .toc .toc-sub { padding-left: 14px; color: var(--muted); font-size: 12px; }
+  .toc .toc-sub:hover { color: var(--text); }
+
+  section { padding: 28px 20px 0; }
+  h2 {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  h3 {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--orange);
+    margin: 24px 0 10px;
+  }
+  h3:first-child { margin-top: 0; }
+  h4 {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    margin: 16px 0 8px;
+  }
+  p { color: var(--muted); margin-bottom: 12px; line-height: 1.6; }
+  p strong { color: var(--text); }
+  ul, ol { color: var(--muted); padding-left: 20px; margin-bottom: 12px; }
+  li { margin-bottom: 4px; line-height: 1.5; }
+  li strong { color: var(--text); }
+
+  .stack {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 16px;
+  }
+  .stack-row {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .stack-row:last-child { border-bottom: none; }
+  .arrow { color: var(--border); font-size: 16px; margin-top: 1px; flex-shrink: 0; }
+  .stack-name { font-weight: 600; font-size: 14px; color: var(--text); min-width: 140px; flex-shrink: 0; }
+  .stack-desc { font-size: 13px; color: var(--muted); line-height: 1.4; }
+
+  code {
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 5px;
+    color: var(--string);
+  }
+  pre {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    overflow-x: auto;
+    margin-bottom: 16px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 12px;
+    line-height: 1.7;
+    color: var(--text);
+  }
+  .kw { color: var(--keyword); }
+  .ty { color: var(--type); }
+  .st { color: var(--string); }
+  .cm { color: var(--comment); font-style: italic; }
+  .nm { color: var(--accent); }
+  .gr { color: var(--green); }
+
+  table { width: 100%; border-collapse: collapse; margin-bottom: 16px; font-size: 13px; }
+  th {
+    background: var(--surface);
+    color: var(--muted);
+    font-weight: 600;
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    color: var(--muted);
+    vertical-align: top;
+  }
+  td:first-child { color: var(--text); font-weight: 500; }
+  tr:last-child td { border-bottom: none; }
+  .table-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 16px;
+  }
+  .callout {
+    background: rgba(88,166,255,0.08);
+    border: 1px solid rgba(88,166,255,0.3);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    font-size: 13px;
+    color: var(--text);
+    line-height: 1.5;
+  }
+  .callout strong { color: var(--accent); }
+  .rule {
+    background: rgba(63,185,80,0.08);
+    border: 1px solid rgba(63,185,80,0.3);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    font-size: 13px;
+    color: var(--text);
+    line-height: 1.5;
+  }
+  .rule strong { color: var(--green); }
+  .warn {
+    background: rgba(210,153,34,0.08);
+    border: 1px solid rgba(210,153,34,0.3);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    font-size: 13px;
+    color: var(--text);
+    line-height: 1.5;
+  }
+  .warn strong { color: var(--orange); }
+  .divider { border: none; border-top: 1px solid var(--border); margin: 28px 0 0; }
+  .bottom-nav {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: rgba(13,17,23,0.95);
+    backdrop-filter: blur(8px);
+    border-top: 1px solid var(--border);
+    padding: 12px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .bottom-nav a { color: var(--accent); text-decoration: none; font-size: 14px; font-weight: 500; }
+  .bottom-nav a.right { text-align: right; }
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="index.html">Home</a>
+  <span class="sep">›</span>
+  <span class="current">Story Viewer System Design</span>
+</nav>
+
+<header>
+  <div class="tag">System Design</div>
+  <h1>iOS Story Viewer</h1>
+  <p>delta API · delta polling · three-view carousel · StoryOrderService · SDWebImage · offline cache</p>
+</header>
+
+<!-- TOC -->
+<div class="toc">
+  <div class="toc-title">Contents</div>
+  <a href="#delta">Delta — What This Scenario Adds</a>
+  <a href="#requirements">Requirements</a>
+  <a href="#api">API Design</a>
+  <a href="#model">Data Model</a>
+  <a href="#architecture">Architecture</a>
+  <a href="#dataflow">Data Flow</a>
+  <a href="#deepdive">Technical Deep Dives</a>
+  <a class="toc-sub" href="#carousel">1. Three-UIImageView Carousel</a>
+  <a class="toc-sub" href="#sdwebimage">2. SDWebImage as ThirdPartyDataSource</a>
+  <a class="toc-sub" href="#timer">3. Auto-Advance Timer</a>
+  <a class="toc-sub" href="#expiry">4. Story Expiry Enforcement</a>
+  <a class="toc-sub" href="#throttle">5. 10-Minute Throttle Guard</a>
+  <a class="toc-sub" href="#prefetch">6. Pre-fetching</a>
+  <a class="toc-sub" href="#viewedstate">7. Viewed State &amp; Delta Merge</a>
+  <a href="#pitfalls">Common Pitfalls</a>
+  <a href="#feedback">Key Takeaways</a>
+</div>
+
+<!-- DELTA -->
+<section id="delta">
+  <h2>Delta — What This Scenario Adds</h2>
+  <p>Scenario extension of the generic iOS architecture. Read this first — it describes what's the same and what this problem adds on top.</p>
+
+  <h3>Same as generic architecture</h3>
+  <ul>
+    <li>Clean Architecture + MVVM + UIKit</li>
+    <li>DTO → Mapper → Domain Model</li>
+    <li><code>FetchPolicy</code> (.fresh / .cached / .strict) on all Repository reads</li>
+    <li>Typed <code>Param</code> structs on every UseCase</li>
+    <li><code>@MainActor</code> on ViewModel — all state mutations on main thread</li>
+    <li><code>defer { isLoading = false }</code> — guaranteed cleanup on success and failure</li>
+    <li><code>[weak self]</code> in all closures</li>
+    <li>Coordinator-based navigation, manual init injection (no DI framework)</li>
+    <li>Mock-the-layer-below testing strategy</li>
+    <li><code>ThirdPartyDataSource</code> pattern — wraps third-party SDKs; app never calls SDK directly</li>
+  </ul>
+
+  <h3>What this scenario adds</h3>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Concept</th><th>Generic</th><th>Story Viewer</th></tr>
+      <tr><td>API strategy</td><td>Cursor or offset pagination</td><td>Single endpoint <code>getStoriesAfter(cursor:)</code> — full load + delta in one call</td></tr>
+      <tr><td>Domain Service</td><td>SessionService / PlayerService examples</td><td><code>StoryOrderService</code> — stateful ranking (unseen-first) + <code>markAsSeen</code> tracking</td></tr>
+      <tr><td>Image loading</td><td>Not covered</td><td><code>ImageSDKDataSource</code> (ThirdPartyDataSource wrapping SDWebImage) — caches decoded <code>UIImage</code>, background download</td></tr>
+      <tr><td>Image pre-fetching</td><td>Not covered</td><td>ViewModel triggers prefetch for <code>nextStory</code> on every display cycle</td></tr>
+      <tr><td>UI carousel pattern</td><td>Not covered</td><td>Three recycled <code>UIImageView</code> instances with swipe gesture — seamless infinite loop</td></tr>
+      <tr><td>Auto-advance</td><td>Not covered</td><td>10-second timer in ViewController, started after image download completes (not on transition)</td></tr>
+      <tr><td>Story expiry</td><td>Not covered</td><td>Repository filters <code>expireAt &lt; now</code> before returning Domain models</td></tr>
+      <tr><td>Throttle guard</td><td>FetchPolicy handles cache/network split</td><td><code>FetchPolicy.cached</code> at Repository — skips network if local data is &lt; 10 min old</td></tr>
+    </table>
+  </div>
+
+  <div class="rule">
+    <strong>No pagination.</strong> Stories are 24-hour bounded. The full metadata response is ~50 KB. A single <code>getStoriesAfter(cursor:)</code> endpoint handles both initial load (cursor = nil) and delta updates (cursor = latest known ID). Three pagination endpoints for 50 KB of data adds complexity with no benefit.
+  </div>
+
+  <div class="rule">
+    <strong>StoryOrderService is a Domain Service, not a UseCase.</strong> It is stateful — it holds a <code>Set&lt;Story.ID&gt;</code> of seen IDs that must survive across swipes and foreground re-entries. A stateless UseCase cannot hold that state.
+  </div>
+
+  <div class="callout">
+    <strong>Vocabulary mapping from the video:</strong> "Presenter" → <code>StoryViewModel</code> · "DataSource (cache object)" → ViewModel <code>@Published</code> state + FetchPolicy · "PhotoService" → <code>StoryRepository</code> + DataSources · "PhotoOrderer" → <code>StoryOrderService</code> · "NetworkClient (Alamofire)" → <code>APIClient</code> + <code>StoryRemoteDataSource</code> · "Swinject DI" → manual init injection via <code>StoryCoordinator</code>
+  </div>
+</section>
+
+<!-- REQUIREMENTS -->
+<section id="requirements">
+  <h2>Requirements</h2>
+
+  <h3>Functional</h3>
+  <ul>
+    <li>Full-screen story slideshow: swipe left/right or auto-advance every 10 seconds</li>
+    <li>Stories expire 24 hours after posting — expired stories must not be displayed</li>
+    <li>"Next" story = most recently posted unseen story (unseen-first, recency sort)</li>
+    <li>Once the last story is reached, loop back to the first (infinite scroll)</li>
+    <li>Offline mode: cached stories remain browsable without connectivity</li>
+    <li>Each story shows: photo, author avatar, author name, timestamp</li>
+  </ul>
+
+  <h3>Non-Functional</h3>
+  <ul>
+    <li><strong>UI performance</strong> — no frame drops during swipe; no visible spinners mid-session</li>
+    <li><strong>Network resilience</strong> — graceful degradation on slow or intermittent connections</li>
+    <li><strong>Storage efficiency</strong> — avoid redundant image data; decoded <code>UIImage</code> cache, not raw bytes</li>
+    <li><strong>Backend efficiency</strong> — 10-minute throttle guard; delta-only updates after initial load</li>
+  </ul>
+</section>
+
+<!-- API -->
+<section id="api">
+  <h2>API Design</h2>
+
+  <h3>Endpoint</h3>
+  <pre><code><span class="gr">GET</span> /stories?after={photoID}</code></pre>
+
+  <div class="table-wrap">
+    <table>
+      <tr><th>Parameter</th><th>Type</th><th>Description</th></tr>
+      <tr><td><code>after</code></td><td>Int?</td><td>ID of the most recent locally known story. Omit for initial load.</td></tr>
+    </table>
+  </div>
+
+  <p>Response: array of <code>StoryDTO</code> — newest-first, all unexpired stories posted after the cursor.</p>
+
+  <h3>Two calls, one endpoint</h3>
+  <div class="stack">
+    <div class="stack-row">
+      <div class="stack-name">Initial load</div>
+      <div class="stack-desc"><code>GET /stories</code> (no cursor) — returns all stories from the last 24 hours</div>
+    </div>
+    <div class="stack-row">
+      <div class="stack-name">Delta update</div>
+      <div class="stack-desc"><code>GET /stories?after=3</code> — returns only stories posted after ID 3</div>
+    </div>
+  </div>
+
+  <h3>Capacity estimate</h3>
+  <pre><code>100 bytes/field × 500 stories × ~0.25 compression × 4 string fields
+  ≈ 50,000 bytes ≈ <span class="st">50 KB</span>
+
+<span class="cm">// Images are NOT in this response.</span>
+<span class="cm">// API returns a URL string; binary is fetched lazily from Amazon S3.</span></code></pre>
+
+  <div class="callout">
+    <strong>Why not pagination?</strong> Classic cursor pagination (<code>initialLoad(pageSize)</code>, <code>headLoad</code>, <code>tailLoad</code>) is designed for feeds of arbitrary depth. Stories are time-bounded. 50 KB fits in a single response. Pagination adds 3 endpoints and client-side merging complexity for zero benefit.
+  </div>
+</section>
+
+<!-- DATA MODEL -->
+<section id="model">
+  <h2>Data Model</h2>
+
+  <h3>Domain Model</h3>
+  <pre><code><span class="kw">struct</span> <span class="ty">Story</span> {
+    <span class="kw">let</span> <span class="nm">id</span>: <span class="ty">Int</span>
+    <span class="kw">let</span> <span class="nm">photoURL</span>: <span class="ty">URL</span>
+    <span class="kw">let</span> <span class="nm">profilePicURL</span>: <span class="ty">URL</span>
+    <span class="kw">let</span> <span class="nm">authorName</span>: <span class="ty">String</span>
+    <span class="kw">let</span> <span class="nm">createdAt</span>: <span class="ty">Date</span>
+    <span class="kw">let</span> <span class="nm">expireAt</span>: <span class="ty">Date</span>
+}</code></pre>
+
+  <h3>DTO (mirrors API shape exactly)</h3>
+  <pre><code><span class="kw">struct</span> <span class="ty">StoryDTO</span>: <span class="ty">Codable</span> {
+    <span class="kw">let</span> <span class="nm">photoID</span>: <span class="ty">Int</span>
+    <span class="kw">let</span> <span class="nm">photoURL</span>: <span class="ty">String</span>
+    <span class="kw">let</span> <span class="nm">profilePicURL</span>: <span class="ty">String</span>
+    <span class="kw">let</span> <span class="nm">authorName</span>: <span class="ty">String</span>
+    <span class="kw">let</span> <span class="nm">createdAt</span>: <span class="ty">Int</span>    <span class="cm">// Unix timestamp</span>
+    <span class="kw">let</span> <span class="nm">expireAt</span>: <span class="ty">Int</span>     <span class="cm">// Unix timestamp</span>
+}</code></pre>
+
+  <h3>UIModel (ViewModel → View only)</h3>
+  <pre><code><span class="kw">struct</span> <span class="ty">StoryUIModel</span> {
+    <span class="kw">let</span> <span class="nm">id</span>: <span class="ty">Int</span>
+    <span class="kw">let</span> <span class="nm">photoURL</span>: <span class="ty">URL</span>
+    <span class="kw">let</span> <span class="nm">avatarURL</span>: <span class="ty">URL</span>
+    <span class="kw">let</span> <span class="nm">authorName</span>: <span class="ty">String</span>
+    <span class="kw">let</span> <span class="nm">timeAgo</span>: <span class="ty">String</span>   <span class="cm">// "10 min ago" — formatted by ViewModel</span>
+}</code></pre>
+
+  <h3>Mapper</h3>
+  <pre><code><span class="kw">struct</span> <span class="ty">StoryMapper</span> {
+    <span class="kw">static func</span> <span class="nm">toDomain</span>(<span class="nm">_</span> <span class="nm">dto</span>: <span class="ty">StoryDTO</span>) -> <span class="ty">Story</span>? {
+        <span class="kw">guard</span>
+            <span class="kw">let</span> <span class="nm">photoURL</span> = <span class="ty">URL</span>(string: dto.photoURL),
+            <span class="kw">let</span> <span class="nm">avatarURL</span> = <span class="ty">URL</span>(string: dto.profilePicURL)
+        <span class="kw">else</span> { <span class="kw">return nil</span> }
+        <span class="kw">return</span> <span class="ty">Story</span>(
+            id: dto.photoID,
+            photoURL: photoURL,
+            profilePicURL: avatarURL,
+            authorName: dto.authorName,
+            createdAt: <span class="ty">Date</span>(timeIntervalSince1970: <span class="ty">TimeInterval</span>(dto.createdAt)),
+            expireAt: <span class="ty">Date</span>(timeIntervalSince1970: <span class="ty">TimeInterval</span>(dto.expireAt))
+        )
+    }
+}</code></pre>
+</section>
+
+<!-- ARCHITECTURE -->
+<section id="architecture">
+  <h2>Architecture</h2>
+
+  <h3>Presentation</h3>
+  <div class="stack">
+    <div class="stack-row">
+      <div class="stack-name">StoryViewController</div>
+      <div class="stack-desc">Owns 3 <code>UIImageView</code> instances (recycled on swipe) · <code>UISwipeGestureRecognizer</code> · auto-advance <code>Timer</code> (started post-download) · binds to ViewModel via Combine</div>
+    </div>
+    <div class="stack-row">
+      <div class="stack-name">StoryViewModel</div>
+      <div class="stack-desc"><code>@MainActor</code> · <code>@Published var currentStory: StoryUIModel?</code> · calls <code>FetchStoriesUseCase</code> · calls <code>StoryOrderService.markAsSeen(id:)</code> · triggers <code>ImageSDKDataSource.prefetch</code> for next story</div>
+    </div>
+  </div>
+
+  <h3>Domain</h3>
+  <div class="stack">
+    <div class="stack-row">
+      <div class="stack-name">FetchStoriesUseCase</div>
+      <div class="stack-desc"><code>execute(policy: FetchPolicy, param: FetchStoriesParam) async throws -> [Story]</code> · calls <code>StoryRepositoryProtocol</code></div>
+    </div>
+    <div class="stack-row">
+      <div class="stack-name">StoryOrderService</div>
+      <div class="stack-desc"><strong>Domain Service (stateful)</strong> · holds <code>Set&lt;Story.ID&gt;</code> of seen IDs · <code>ordered(stories:)</code> → unseen-first, recency sort · <code>markAsSeen(id:)</code> · <code>next(in:)</code></div>
+    </div>
+    <div class="stack-row">
+      <div class="stack-name">Story</div>
+      <div class="stack-desc">Domain Model — pure Swift struct, no UIKit, no networking</div>
+    </div>
+    <div class="stack-row">
+      <div class="stack-name">FetchStoriesParam</div>
+      <div class="stack-desc">Typed Param — <code>cursor: Int?</code></div>
+    </div>
+  </div>
+
+  <h3>Data</h3>
+  <div class="stack">
+    <div class="stack-row">
+      <div class="stack-name">StoryRepository</div>
+      <div class="stack-desc">Implements <code>StoryRepositoryProtocol</code> · applies <code>FetchPolicy.cached</code> (skip remote if &lt; 10 min old) · filters <code>expireAt &lt; now</code> · maps <code>StoryDTO → Story</code> via <code>StoryMapper</code></div>
+    </div>
+    <div class="stack-row">
+      <div class="stack-name">StoryRemoteDataSource</div>
+      <div class="stack-desc"><code>GET /stories?after={cursor}</code> → <code>[StoryDTO]</code></div>
+    </div>
+    <div class="stack-row">
+      <div class="stack-name">StoryLocalDataSource</div>
+      <div class="stack-desc">Read/write <code>[StoryDTO]</code> to disk · CoreData or Codable JSON · stores last-fetched timestamp for throttle guard</div>
+    </div>
+    <div class="stack-row">
+      <div class="stack-name">ImageSDKDataSource</div>
+      <div class="stack-desc"><strong>ThirdPartyDataSource</strong> wrapping SDWebImage · <code>load(url:into:completion:)</code> → delivers decoded <code>UIImage</code> on main thread · <code>prefetch(url:)</code> · rest of app calls <code>ImageDataSourceProtocol</code>, never SDWebImage directly</div>
+    </div>
+  </div>
+
+  <h3>Application</h3>
+  <div class="stack">
+    <div class="stack-row">
+      <div class="stack-name">StoryCoordinator</div>
+      <div class="stack-desc">Composition root — builds full dependency graph via manual init injection · creates <code>StoryOrderService</code> as app-scoped instance</div>
+    </div>
+  </div>
+
+  <div class="rule">
+    <strong>Dependency rule:</strong> <code>StoryViewController</code> → <code>StoryViewModel</code> → <code>FetchStoriesUseCase</code> → <code>StoryRepositoryProtocol</code> ← <code>StoryRepository</code> → DataSources. Domain depends on nothing.
+  </div>
+</section>
+
+<!-- DATA FLOW -->
+<section id="dataflow">
+  <h2>Data Flow</h2>
+
+  <h3>Initial load</h3>
+  <pre><code>StoryViewController.<span class="nm">viewDidLoad</span>()
+  → StoryViewModel.<span class="nm">load</span>()
+      → isLoading = <span class="kw">true</span>
+      → FetchStoriesUseCase.<span class="nm">execute</span>(policy: .cached, param: <span class="ty">FetchStoriesParam</span>(cursor: <span class="kw">nil</span>))
+          → StoryRepository.<span class="nm">fetch</span>(policy: .cached, param:)
+              → StoryLocalDataSource.<span class="nm">read</span>() → [<span class="ty">StoryDTO</span>]? → <span class="ty">StoryMapper</span> → [<span class="ty">Story</span>]  <span class="cm">// fast return if fresh</span>
+              → <span class="cm">// if stale:</span>
+              → StoryRemoteDataSource.<span class="nm">getStoriesAfter</span>(cursor: <span class="kw">nil</span>) → [<span class="ty">StoryDTO</span>]
+              → filter expireAt &lt; now
+              → <span class="ty">StoryMapper</span>.<span class="nm">toDomain</span>() → [<span class="ty">Story</span>]
+              → StoryLocalDataSource.<span class="nm">write</span>([<span class="ty">StoryDTO</span>])
+          → returns [<span class="ty">Story</span>]
+      → StoryOrderService.<span class="nm">ordered</span>(stories:) → sorted [<span class="ty">Story</span>] (unseen-first)
+      → ViewModel maps <span class="ty">Story</span> → <span class="ty">StoryUIModel</span>
+      → @Published currentStory updated → ViewController renders
+      → ImageSDKDataSource.<span class="nm">prefetch</span>(url: nextStory.photoURL)
+      → <span class="kw">defer</span>: isLoading = <span class="kw">false</span></code></pre>
+
+  <h3>Delta update (foreground re-entry)</h3>
+  <pre><code>applicationDidBecomeActive
+  → StoryViewModel.<span class="nm">refresh</span>()
+      → FetchStoriesUseCase.<span class="nm">execute</span>(policy: .cached, param: <span class="ty">FetchStoriesParam</span>(cursor: latestKnownID))
+          → StoryRepository checks local timestamp
+              → &lt; 10 min old: return cached [<span class="ty">Story</span>]   <span class="cm">// throttle guard</span>
+              → ≥ 10 min old: remote <span class="nm">getStoriesAfter</span>(cursor: latestKnownID) → deltas only
+                              → merge with local store → StoryLocalDataSource.<span class="nm">write</span>(merged)
+          → returns merged [<span class="ty">Story</span>]
+      → StoryOrderService.<span class="nm">ordered</span>(stories:) → new unseen stories bubble to front
+      → @Published currentStory updated</code></pre>
+
+  <h4>Timeline example</h4>
+  <pre><code><span class="cm">// First session (8:00–9:00) — cursor = nil</span>
+server returns: 0, 1, 2, 3  →  latestKnownID = 3
+
+<span class="cm">// Foreground re-entry (12:00) — cache is stale (≥ 10 min)</span>
+cursor = 3  →  server returns: 4, 5, 6, 7, 8, 9  (deltas only)
+StoryOrderService places 7, 8, 9 at front (newest unseen first)</code></pre>
+
+  <h3>Swipe → display</h3>
+  <pre><code>user swipes →
+  → ViewController rearranges UIImageViews (<span class="cm">// 3 → pos 2, 1 → pos 3</span>)
+  → StoryViewModel.<span class="nm">advanceToNext</span>()
+      → StoryOrderService.<span class="nm">markAsSeen</span>(id: currentStory.id)
+      → currentStory = StoryOrderService.<span class="nm">next</span>(in: stories)
+      → @Published update → ViewController loads image into visible UIImageView
+  → ImageSDKDataSource.<span class="nm">load</span>(url:, into: centreView) { [<span class="kw">weak self</span>] <span class="kw">in</span>
+        self?.<span class="nm">startAutoAdvanceTimer</span>()   <span class="cm">// timer starts AFTER download completes</span>
+    }
+  → ImageSDKDataSource.<span class="nm">prefetch</span>(url: nextStory.photoURL)</code></pre>
+</section>
+
+<!-- DEEP DIVES -->
+<section id="deepdive">
+  <h2>Technical Deep Dives</h2>
+
+  <h3 id="carousel">1. Three-UIImageView Carousel (View Recycling)</h3>
+  <p>Three <code>UIImageView</code> instances are laid out side by side. On each swipe, <strong>no new views are allocated</strong> — existing views are repositioned and their images swapped at rest:</p>
+  <pre><code><span class="cm">// Before swipe →:  [ story N-1 | story N  | story N+1 ]  (N on screen)</span>
+<span class="cm">// After  swipe →:  [ story N   | story N+1| story N+2 ]  (N+1 on screen)</span>
+<span class="cm">//</span>
+<span class="cm">// Leftmost view moved to rightmost position.</span>
+<span class="cm">// Image swapped at rest. O(1) layout work per swipe.</span></code></pre>
+
+  <div class="callout">
+    <strong>Why not UICollectionView?</strong> <code>UICollectionViewFlowLayout</code> snap-scrolling makes seamless wrap-around (last → first story) awkward — you'd need to insert fake items or hack the content offset. Manual recycling handles the loop trivially.
+  </div>
+  <div class="callout">
+    <strong>Why not UIPageViewController?</strong> Same wrap-around problem, plus it instantiates new child view controllers per page — higher memory overhead for an infinite loop.
+  </div>
+  <p>Gesture: <code>UISwipeGestureRecognizer</code> completes the transition automatically if &gt;50% of screen width is covered. Short fast swipes (velocity-based) also trigger the flip.</p>
+
+  <h3 id="sdwebimage">2. SDWebImage as <code>ImageSDKDataSource</code></h3>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Library</th><th>What it caches</th><th>Cost per display</th></tr>
+      <tr><td>NSURLCache</td><td>Raw HTTP response bytes</td><td>bytes → Data → UIImage decode (CPU, potentially on main thread)</td></tr>
+      <tr><td>SDWebImage</td><td>Decoded <code>UIImage</code> object</td><td>Cache hit returns UIImage immediately — zero decode overhead</td></tr>
+    </table>
+  </div>
+  <div class="rule">
+    <strong>ThirdPartyDataSource pattern:</strong> <code>ImageSDKDataSource</code> implements <code>ImageDataSourceProtocol</code>. ViewController and ViewModel never import SDWebImage. Swapping the library = one file change.
+  </div>
+
+  <h3 id="timer">3. Auto-Advance Timer</h3>
+  <pre><code><span class="cm">// ❌ Wrong — timer starts on transition; user sees spinner during their window</span>
+<span class="kw">func</span> <span class="nm">showNext</span>() {
+    <span class="nm">startAutoAdvanceTimer</span>()
+    imageView.<span class="nm">sd_setImage</span>(with: url)
+}
+
+<span class="cm">// ✓ Correct — timer starts only after image is ready</span>
+<span class="kw">func</span> <span class="nm">showNext</span>() {
+    imageSDKDataSource.<span class="nm">load</span>(url: url, into: imageView) { [<span class="kw">weak self</span>] <span class="kw">in</span>
+        self?.<span class="nm">startAutoAdvanceTimer</span>()
+    }
+}</code></pre>
+
+  <h3 id="expiry">4. Story Expiry Enforcement</h3>
+  <p><code>StoryRepository</code> filters <code>expireAt &lt; Date()</code> before returning Domain models on every cache read. A story cached 23 hours ago is not displayed if it has since expired. No separate background timer needed — the check runs on every read path.</p>
+
+  <h3 id="throttle">5. 10-Minute Throttle Guard</h3>
+  <p><code>StoryLocalDataSource</code> records the timestamp of the last successful fetch. <code>StoryRepository</code> checks it when applying <code>FetchPolicy.cached</code>:</p>
+  <pre><code><span class="cm">// In StoryRepository.fetch(policy: .cached, param:)</span>
+<span class="kw">let</span> <span class="nm">age</span> = <span class="ty">Date</span>().<span class="nm">timeIntervalSince</span>(localDataSource.lastFetchedAt)
+<span class="kw">if</span> age &lt; 600 {
+    <span class="kw">return</span> localDataSource.<span class="nm">read</span>()   <span class="cm">// skip network</span>
+}
+<span class="kw">let</span> <span class="nm">dtos</span> = <span class="kw">try await</span> remoteDataSource.<span class="nm">getStoriesAfter</span>(cursor: param.cursor)
+<span class="cm">// ... save + return</span></code></pre>
+  <div class="rule">
+    <strong>The ViewModel never makes the time decision.</strong> It always uses <code>FetchPolicy.cached</code>. The throttle logic lives entirely in the Repository — one place to change it.
+  </div>
+
+  <h3 id="prefetch">6. Pre-fetching</h3>
+  <p><code>StoryViewModel</code> calls <code>ImageSDKDataSource.prefetch(url: nextStory.photoURL)</code> immediately after rendering the current story. By the time the user swipes, the next image is already decoded in SDWebImage's memory cache — zero visible latency, no spinner.</p>
+
+  <div class="warn">
+    <strong>Cancel prefetch on backward swipe.</strong> If the user swipes back to story N-1, the in-flight prefetch for story N+1 should be cancelled. Stale prefetch requests waste bandwidth and pollute the cache.
+  </div>
+
+  <h3 id="viewedstate">7. Viewed State &amp; Delta Merge</h3>
+  <p><code>StoryOrderService</code> holds a <code>Set&lt;Story.ID&gt;</code> in memory. On delta merge:</p>
+  <ol>
+    <li>New stories are added to the pool</li>
+    <li><code>ordered(stories:)</code> runs on the full merged pool</li>
+    <li>Stories with IDs in the seen set are sorted to the back</li>
+    <li><code>next(in:)</code> returns the first unseen story</li>
+  </ol>
+  <div class="callout">
+    <strong>Open question:</strong> Whether the seen-set is persisted to disk (CoreData/JSON) alongside story metadata or is memory-only. If memory-only, the user re-sees all stories on next app launch — intentional for stories (Instagram does this) but worth raising in an interview.
+  </div>
+</section>
+
+<!-- PITFALLS -->
+<section id="pitfalls">
+  <h2>Common Pitfalls</h2>
+
+  <div class="warn">
+    <strong>Starting the auto-advance timer on transition.</strong> Burns the user's 10-second window on a loading spinner. Timer must start only after <code>ImageSDKDataSource</code> signals download completion.
+  </div>
+  <div class="warn">
+    <strong>Using NSURLCache for images.</strong> Re-decodes bytes → UIImage on every cache hit. Under fast swiping this causes visible frame drops. Use SDWebImage (decoded UIImage cache).
+  </div>
+  <div class="warn">
+    <strong>Polling on every viewWillAppear.</strong> Without the 10-minute throttle guard in the Repository, every tab switch hits the backend. Always apply <code>FetchPolicy.cached</code> on foreground re-entry.
+  </div>
+  <div class="warn">
+    <strong>Allocating new UIImageViews per swipe.</strong> Triggers layout passes on every navigation. Always reuse the three existing views — move and swap, never allocate.
+  </div>
+  <div class="warn">
+    <strong>Not filtering expireAt on cache read.</strong> A story cached hours ago may have expired before display. Filter at the Repository level on every read, not just on fetch.
+  </div>
+  <div class="warn">
+    <strong>Not carrying viewed-state through delta merge.</strong> If <code>StoryOrderService</code> drops the seen set on rebuild, previously-viewed stories reappear at the front after a refresh.
+  </div>
+</section>
+
+<!-- FEEDBACK -->
+<section id="feedback">
+  <h2>Key Takeaways</h2>
+
+  <div class="rule">
+    <strong>Single delta endpoint, not pagination.</strong> Stories are 24-hour bounded — the full metadata response is ~50 KB. <code>getStoriesAfter(cursor:)</code> handles both initial load and delta updates. Pagination adds 3 endpoints and merging complexity for zero benefit.
+  </div>
+  <div class="rule">
+    <strong>StoryOrderService is a Domain Service, not a UseCase.</strong> It holds stateful viewed-state across swipes and foreground re-entries. A UseCase executes once and returns; a Domain Service persists.
+  </div>
+  <div class="rule">
+    <strong>10-minute throttle guard lives entirely in StoryRepository.</strong> The ViewModel always passes <code>FetchPolicy.cached</code>. The time-based decision is the Repository's concern — never the ViewModel's.
+  </div>
+  <div class="rule">
+    <strong>Three recycled UIImageViews for seamless infinite loop.</strong> UICollectionView and UIPageViewController both struggle with wrap-around. Manual recycling is O(1) layout work per swipe.
+  </div>
+  <div class="rule">
+    <strong>SDWebImage as a ThirdPartyDataSource.</strong> Caches decoded UIImage — zero CPU decode overhead on swipe. App calls ImageDataSourceProtocol; SDK never leaks out of the DataSource layer.
+  </div>
+  <div class="rule">
+    <strong>Auto-advance timer starts after download, not transition.</strong> Guarantees a full 10 seconds of visible content. SDWebImage completion callback → start timer.
+  </div>
+</section>
+
+<div class="bottom-nav">
+  <a href="index.html">← Home</a>
+  <span></span>
+</div>
+
+</body>
+</html>
