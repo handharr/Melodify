@@ -254,7 +254,7 @@ DI: Coordinator composes all dependencies via manual init injection (no framewor
 | `AuthService` | `Domain Service: SessionService` | Stateful session — app-scoped Domain Service. |
 | `Network Client (Alamofire)` | `APIClient` (URLSession-based) | Generic HTTP client. Alamofire is a valid implementation detail inside `RemoteDataSource`. |
 | `Mapper` | `Mapper` | Same name, same role. `static func toDomain(_ dto: DTO) -> Model?` |
-| `Storage Facade / Core Data` | `LocalDataSource` wrapping Core Data | Protocol facade is already the `LocalDataSource` abstraction. |
+| `Storage Facade / Core Data` | `RestaurantLocalDataSource`, `DishLocalDataSource`, `BasketLocalDataSource` wrapping Core Data | Each domain entity gets its own named `LocalDataSource`. Swapping Core Data for GRDB touches those files only. |
 | `SSE Client` | `OrderSSEDataSource` (`ThirdPartyDataSource` facade) | Wraps SSE library; returns `AsyncStream<DTO>`; rest of app never sees the library. |
 | `UIImageView Extension` | `ThirdPartyDataSource` facade pattern | Same isolation principle — call site calls `imageView.setImage(url:)`, never the library directly. |
 | `Swinject DI container` | Manual init injection via `Coordinator` | User's arch avoids framework DI. Swinject adds a dependency and potential init-time crashes. |
@@ -270,9 +270,9 @@ DI: Coordinator composes all dependencies via manual init injection (no framewor
 2. RestaurantListViewModel.load(policy: .cached)
      → FetchRestaurantsUseCase.execute(param: FetchRestaurantsParam(addressID:))
          → RestaurantRepository
-             1. LocalDataSource.fetch() → cached DTOs → Mapper → [Restaurant] → UI renders instantly
-             2. RemoteDataSource.fetch() → GET /restaurants/<addressID> → DTO → Mapper → [Restaurant]
-             3. LocalDataSource.save(dtos) → Core Data updated
+             1. RestaurantLocalDataSource.fetch() → cached DTOs → Mapper → [Restaurant] → UI renders instantly
+             2. RestaurantRemoteDataSource.fetch() → GET /restaurants/<addressID> → DTO → Mapper → [Restaurant]
+             3. RestaurantLocalDataSource.save(dtos) → Core Data updated
          → ViewModel maps [Restaurant] → [RestaurantUIModel]
          → @Published restaurantList updated → ViewController re-renders
          → defer: isLoading = false

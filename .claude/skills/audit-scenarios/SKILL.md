@@ -26,14 +26,30 @@ For each scenario doc, check all of the following:
 
 ### 2b. Naming convention alignment
 Check every component name against the generic architecture doc's conventions:
-- Remote access layer named `*RemoteDataSource` (not `APIClient`, `Service`, `Manager`, `Store`)
-- Local access layer named `*LocalDataSource` (not `Store`, `Cache`, `DB`)
+- Remote access layer named `*RemoteDataSource` (not `APIClient`, `Service`, `Manager`, `Store`) — and always domain-prefixed (e.g. `RestaurantRemoteDataSource`, not bare `RemoteDataSource` as a class name)
+- Local access layer named `*LocalDataSource` (not `Store`, `Cache`, `DB`) — always domain-prefixed (e.g. `MessageLocalDataSource`, not bare `LocalDataSource` as a class name in layer breakdowns, data flows, or code examples)
 - Business logic named `*UseCase` (stateless) or `*Service` (stateful Domain Service)
 - Data transfer objects named `*DTO`
 - Conversion types named `*Mapper`
 - Navigation named `*Coordinator`
 
 Flag any deviation with the correct term.
+
+**Exception:** bare `LocalDataSource` / `RemoteDataSource` is acceptable in: the delta table's "Generic" column (describing what the base arch provides), pattern-level warning callouts, and type-annotation diagrams showing which layer uses which access style. It is NOT acceptable as a class name in layer breakdowns, data flow pseudocode, or vocabulary mapping tables.
+
+### 2e. Redundant generic content
+Check both the `.md` and its HTML for explanations that belong only in `ios-app-system-design.md`, not in a scenario deck:
+
+**Flag as ❌ Redundant** if the scenario contains any of the following generic-only sections:
+- "Why MVVM over MVP?" explanation
+- "Why MVVM over VIPER?" explanation
+- "Why Clean Architecture over MVC?" explanation
+- "Why FetchPolicy over hardcoding network/cache logic per ViewModel?" explanation
+- "UseCase vs Domain Service" comparison table (with columns: Triggered by / State / Has I/O? / Lifetime)
+
+**Scenario-specific reasoning is fine** — e.g. "Why UIKit over SwiftUI for THIS scenario" (AVPlayerViewController, scroll lifecycle), "Why GRDB for this app", "Why SSE over polling for this use case", "Why manual DI over Swinject (what the reference video uses)".
+
+The test: would this exact explanation appear unchanged in every other scenario? If yes, it's generic and must be removed from the scenario deck.
 
 ### 2c. Layer dependency rule
 Check that the dependency rule holds: **Presentation → Domain ← Data. Domain depends on nothing.**
@@ -44,7 +60,7 @@ Flag:
 - Repositories returning DTOs beyond their own layer (should map first)
 - Domain models mentioning UIKit or networking types
 
-### 2d. HTML sync drift
+### 2d. HTML sync drift (both .md and .html)
 Compare the scenario `.md` section structure against its HTML:
 - Does the HTML have all sections present in the `.md`?
 - Does the HTML delta table match the `.md` delta table?
@@ -91,10 +107,10 @@ Output a structured report. Format:
 
 End the report with a summary table:
 
-| Scenario | Delta | Naming | Layers | HTML Sync | Actions |
-|---|---|---|---|---|---|
-| music-streaming | ✅ | ✅ | ✅ | ✅ | None |
-| (next scenario) | ... | ... | ... | ... | ... |
+| Scenario | Delta | Naming | Layers | HTML Sync | Redundant Content | Actions |
+|---|---|---|---|---|---|---|
+| music-streaming | ✅ | ✅ | ✅ | ✅ | ✅ | None |
+| (next scenario) | ... | ... | ... | ... | ... | ... |
 
 ## Step 4 — Recommend next steps
 

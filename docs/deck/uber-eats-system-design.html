@@ -444,7 +444,6 @@
   <h2>Architecture</h2>
   <p>Pattern: <strong>MVVM + Clean Architecture + UIKit</strong> — Presentation → Domain ← Data.</p>
 
-  <div class="callout"><strong>Why MVVM over MVP (the video's choice)?</strong> MVP's Presenter holds a <code>weak var view: ViewProtocol?</code> back-reference — two-way coupling. MVVM eliminates it: ViewModel exposes <code>@Published</code> state and has no reference to the View. ViewModels are easier to test (no mock View needed) and bind naturally with Combine. The video's Presenter pattern works, but MVVM is the cleaner choice for a new iOS codebase.</div>
   <div class="callout"><strong>Why manual DI over Swinject (the video's choice)?</strong> Swinject adds a framework dependency and can crash at runtime if a registration is missing — the failure surfaces only at first use, not at boot. Manual init injection via Coordinator exposes all dependencies at compile time. The Coordinator is the composition root; it's also the DI container — no extra framework needed.</div>
 
   <h3 id="layer-breakdown">Layer Breakdown</h3>
@@ -471,12 +470,12 @@
     <div class="stack-row">
       <div class="arrow">↓</div>
       <div class="stack-name">Repositories</div>
-      <div class="stack-desc"><code>RestaurantRepository</code>, <code>DishRepository</code>, <code>BasketRepository</code>, <code>OrderRepository</code> · each coordinates <code>RemoteDataSource</code> + <code>LocalDataSource</code> · applies <code>FetchPolicy</code> · converts DTO → Domain via Mapper</div>
+      <div class="stack-desc"><code>RestaurantRepository</code>: <code>RestaurantRemoteDataSource</code> + <code>RestaurantLocalDataSource</code> · <code>DishRepository</code>: <code>DishRemoteDataSource</code> + <code>DishLocalDataSource</code> · <code>BasketRepository</code>: <code>BasketRemoteDataSource</code> + <code>BasketLocalDataSource</code> · <code>OrderRepository</code>: <code>OrderRemoteDataSource</code> · all apply <code>FetchPolicy</code>, convert DTO → Domain via Mapper</div>
     </div>
     <div class="stack-row">
       <div class="arrow">↓</div>
       <div class="stack-name">DataSources</div>
-      <div class="stack-desc">Remote: <code>APIClient</code> (URLSession or Alamofire) · Local: <code>LocalDataSource</code> wrapping Core Data · <code>OrderSSEDataSource</code> (<code>ThirdPartyDataSource</code> facade for SSE client)</div>
+      <div class="stack-desc">Remote: <code>RestaurantRemoteDataSource</code>, <code>DishRemoteDataSource</code>, <code>BasketRemoteDataSource</code>, <code>OrderRemoteDataSource</code> (all wrap <code>APIClient</code>) · Local: <code>RestaurantLocalDataSource</code>, <code>DishLocalDataSource</code>, <code>BasketLocalDataSource</code> (Core Data) · <code>OrderSSEDataSource</code> (<code>ThirdPartyDataSource</code> facade)</div>
     </div>
     <div class="stack-row">
       <div class="arrow">↓</div>
@@ -496,7 +495,7 @@
       <tr><td><code>OrderService</code> (stateful SSE)</td><td><code>OrderDomainService</code> + <code>OrderSSEDataSource</code></td><td>Stateful/long-lived → Domain Service. SSE client → ThirdPartyDataSource facade.</td></tr>
       <tr><td><code>AuthService</code></td><td><code>SessionDomainService</code></td><td>Stateful session — app-scoped Domain Service.</td></tr>
       <tr><td>Network Client (Alamofire)</td><td><code>APIClient</code> (URLSession-based)</td><td>Alamofire is a valid implementation detail inside <code>RemoteDataSource</code>.</td></tr>
-      <tr><td><code>Storage Facade</code></td><td><code>LocalDataSource</code> protocol</td><td>Same concept — the protocol is the facade. Swapping Core Data for GRDB touches one file.</td></tr>
+      <tr><td><code>Storage Facade</code></td><td><code>RestaurantLocalDataSource</code>, <code>DishLocalDataSource</code>, <code>BasketLocalDataSource</code></td><td>Each domain entity gets its own named <code>LocalDataSource</code>. Swapping Core Data for GRDB touches those files only.</td></tr>
       <tr><td>SSE Client</td><td><code>OrderSSEDataSource</code></td><td>ThirdPartyDataSource facade. Returns <code>AsyncStream&lt;OrderSSEEventDTO&gt;</code>.</td></tr>
       <tr><td>UIImageView Extension</td><td>ThirdPartyDataSource facade pattern</td><td>Same isolation principle. <code>imageView.setImage(url:)</code> — never SDWebImage directly.</td></tr>
       <tr><td>Swinject DI</td><td>Manual init injection via Coordinator</td><td>User's arch avoids DI frameworks. Coordinator IS the composition root.</td></tr>
@@ -514,9 +513,9 @@
 <span class="nm">RestaurantListViewModel</span>.load(policy: .cached)
   → <span class="nm">FetchRestaurantsUseCase</span>.execute(param: <span class="ty">FetchRestaurantsParam</span>(addressID:))
       → <span class="nm">RestaurantRepository</span>
-          1. <span class="nm">LocalDataSource</span>.fetch()     <span class="cm">// cached DTOs → Mapper → [Restaurant] → UI renders instantly</span>
-          2. <span class="nm">RemoteDataSource</span>.fetch()    <span class="cm">// GET /restaurants/&lt;addressID&gt; → DTO → Mapper → [Restaurant]</span>
-          3. <span class="nm">LocalDataSource</span>.save(dtos)  <span class="cm">// Core Data updated</span>
+          1. <span class="nm">RestaurantLocalDataSource</span>.fetch()     <span class="cm">// cached DTOs → Mapper → [Restaurant] → UI renders instantly</span>
+          2. <span class="nm">RestaurantRemoteDataSource</span>.fetch()    <span class="cm">// GET /restaurants/&lt;addressID&gt; → DTO → Mapper → [Restaurant]</span>
+          3. <span class="nm">RestaurantLocalDataSource</span>.save(dtos)  <span class="cm">// Core Data updated</span>
       → ViewModel maps [<span class="ty">Restaurant</span>] → [<span class="ty">RestaurantUIModel</span>]
       → <span class="nm">@Published</span> restaurantList updated → ViewController re-renders
       → <span class="kw">defer</span>: isLoading = <span class="kw">false</span></code></pre>

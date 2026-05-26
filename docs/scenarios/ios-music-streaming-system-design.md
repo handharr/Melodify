@@ -221,15 +221,6 @@ Player monitors bandwidth and switches quality levels mid-stream by requesting c
 
 Pattern: **MVVM + Clean Architecture** — Presentation → Domain ← Data. Same rule as Melodify.
 
-> **Why MVVM over MVP?**
-> In MVP the Presenter holds a reference back to the View (via protocol), creating a two-way coupling. MVVM breaks that — ViewModel exposes `@Published` state and doesn't know the View exists. This makes ViewModels easier to test (no mock View needed) and works naturally with Combine/SwiftUI binding. MVP made sense before reactive frameworks; MVVM is the current iOS standard.
-
-> **Why MVVM over VIPER?**
-> VIPER splits a screen into 5 objects (View, Interactor, Presenter, Entity, Router). The overhead is justified for very large teams where each layer is owned by a different person. For a solo/small team project the boilerplate slows you down with no real benefit. MVVM + UseCase gives the same testability with half the files.
-
-> **Why Clean Architecture over MVC?**
-> MVC in iOS degrades to Massive ViewController — business logic, networking, and layout all end up in the ViewController. Clean Architecture enforces a dependency rule (Presentation → Domain ← Data) that makes each layer independently testable and replaceable. The cost is more files; the benefit is every layer can be tested without the others.
-
 > **Why UIKit over SwiftUI?**
 > UIKit gives fine-grained control over scroll performance, custom transitions, and `AVPlayerViewController` integration — all critical for a music app. SwiftUI's `List` and animation model can't yet match UIKit for complex interactive layouts. SwiftUI is the right choice for new simple screens; UIKit is still preferred when you need full control over performance and native media playback.
 
@@ -243,9 +234,9 @@ Pattern: **MVVM + Clean Architecture** — Presentation → Domain ← Data. Sam
 | `LibraryRepo` | `LibraryRepository: LibraryRepositoryProtocol` |
 | `CollectionRepo` | `CollectionRepository: CollectionRepositoryProtocol` |
 | `PlayableItemRepo` | `PlayableItemRepository: PlayableItemRepositoryProtocol` |
-| `APIClient` | `RemoteDataSource` (one per domain) |
-| `LocalDB / GRDB` | `LocalDataSource` (one per domain) |
-| `LibraryStore` / `CollectionStore` / `PlayableItemStore` | **gone** — this is just what `LocalDataSource` returns |
+| `APIClient` | `LibraryRemoteDataSource`, `CollectionRemoteDataSource`, `PlayableItemRemoteDataSource`, `MediaRemoteDataSource` |
+| `LocalDB / GRDB` | `LibraryLocalDataSource`, `CollectionLocalDataSource`, `PlayableItemLocalDataSource`, `DownloadLocalDataSource` |
+| `LibraryStore` / `CollectionStore` / `PlayableItemStore` | **gone** — this is just what `LibraryLocalDataSource`, `CollectionLocalDataSource`, etc. return |
 | `PlaybackAssetResolver` | logic inside `PlayerService` (Domain Service) |
 | `PlayerService` | `PlayerService` — Domain Service, app-scoped |
 | *(not in video)* | `StreamRefreshService` — Domain Service, expiry check logic |
@@ -313,17 +304,14 @@ Data
 ### FetchPolicy applies here too
 Same `.fresh / .cached / .strict` you use in Melodify — `LibraryRepository` checks policy before deciding to hit remote or return from local. No new concept needed.
 
-> **Why FetchPolicy over hardcoding network/cache logic in each ViewModel?**
-> Without a policy, every ViewModel decides independently whether to hit the network. This leads to inconsistent behaviour and duplicate cache logic. FetchPolicy centralises the decision into a typed value that travels from ViewModel → UseCase → Repository. The caller declares intent (I want fresh data / I'm OK with stale / cache only), the Repository enforces it. Easy to test, easy to change globally.
-
 ### Data Flow — Library Screen
 ```
 LibraryViewModel.load(policy: .cached)
   → FetchLibraryUseCase.execute(policy: .cached, param:)
     → LibraryRepository
-        1. localDataSource.fetch() → return cached rows immediately (UI renders)
-        2. remoteDataSource.fetch() → write DTOs to localDataSource via LibraryItemMapper
-        3. localDataSource emits updated stream → ViewModel updates UI
+        1. LibraryLocalDataSource.fetch() → return cached rows immediately (UI renders)
+        2. LibraryRemoteDataSource.fetch() → write DTOs to LibraryLocalDataSource via LibraryItemMapper
+        3. LibraryLocalDataSource emits updated stream → ViewModel updates UI
 ```
 
 ### Data Flow — Playback

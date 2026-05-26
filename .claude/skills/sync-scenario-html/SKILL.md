@@ -56,11 +56,20 @@ Copy the `<style>` block verbatim from the style reference. Never modify or abbr
 ### Section mapping (.md → HTML)
 Every `##` heading in the `.md` becomes a `<section id="...">` with an `<h2>` and a matching entry in `.toc`.
 Every `###` heading becomes an `<h3>`.
-Blockquotes (`>`) become `.callout` divs.
-Bold decision rationale (`**Why X over Y?**`) becomes `.callout` divs.
+Blockquotes (`>`) become `.callout` divs — **only if the reasoning is scenario-specific** (see below).
+Bold decision rationale (`**Why X over Y?**`) becomes `.callout` divs — **only if unique to this scenario**.
 Rules and principles become `.rule` divs.
 Warnings and gotchas become `.warn` divs.
 The delta "Key decisions unique to this scenario" bullets become `.rule` or `.callout` divs depending on tone.
+
+**Do NOT render the following as callouts** — these are generic architecture rationale that belong only in `ios-app-system-design.html`, not in scenario decks:
+- "Why MVVM over MVP?"
+- "Why MVVM over VIPER?"
+- "Why Clean Architecture over MVC?"
+- "Why FetchPolicy over hardcoding network/cache logic per ViewModel?"
+- "UseCase vs Domain Service" comparison table
+
+If these appear in the source `.md`, skip them during HTML generation and flag them in your step 2 diff report as content to remove from the `.md`.
 
 ### File path
 Save the HTML at `docs/deck/<scenario-name>.html`.

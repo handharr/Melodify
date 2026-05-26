@@ -41,8 +41,8 @@ Scan the raw notes for every architectural component, layer, or pattern named. B
 | (fill in) | (fill in) | (fill in) |
 
 Use the generic architecture doc as the source of truth for the user's naming conventions:
-- Remote access layer → `RemoteDataSource`
-- Local/cache layer → `LocalDataSource`
+- Remote access layer → `<Domain>RemoteDataSource` (e.g. `RestaurantRemoteDataSource`) — always domain-prefixed, never bare `RemoteDataSource`
+- Local/cache layer → `<Domain>LocalDataSource` (e.g. `MessageLocalDataSource`) — always domain-prefixed, never bare `LocalDataSource`
 - Business logic objects → `UseCase` (stateless) or `Domain Service` (stateful)
 - Data objects that mirror API shape → `DTO`
 - Conversion between DTO and Domain → `Mapper`
@@ -135,9 +135,14 @@ Structure:
 
 Before writing any file, verify:
 - No scenario component violates the dependency rule (or is annotated if it does)
-- All naming follows the generic architecture conventions
+- All naming follows the generic architecture conventions; all DataSources are domain-prefixed
 - The delta table is complete — nothing scenario-specific leaked into "same as generic"
 - The generic architecture doc does not need updating (if the scenario revealed a gap in the generic doc, call it out explicitly to the user)
+- **No generic "Why" explanations are in the scenario output.** The following belong only in `ios-app-system-design.md` / `ios-app-system-design.html` and must NOT appear in a scenario doc:
+  - "Why MVVM over MVP?" / "Why MVVM over VIPER?" / "Why Clean Architecture over MVC?"
+  - "Why FetchPolicy over hardcoding network/cache logic per ViewModel?"
+  - "UseCase vs Domain Service" comparison table
+  - Keep only reasoning that is unique to this specific scenario — e.g. why UIKit vs SwiftUI for this screen type, why a specific storage backend, why SSE vs polling for this use case.
 
 ## Step 7 — Produce the HTML deck
 
