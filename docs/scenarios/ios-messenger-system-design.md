@@ -188,7 +188,7 @@ Domain
                                calls SendMessageUseCase for retries
 
   Models:   Chat, Message, User, Attachment, ChatStatus, AttachmentType
-  Params:   ChatListParam(), ChatParam(chatId:), SendMessageParam(chatId:, message:),
+  Params:   ChatListParam(), ChatParam(chatId:), SendMessageParam(chatId:, text:, localId:),
             MarkReadParam(chatId:, messageIds:)
 
 Data
@@ -303,15 +303,18 @@ ChatThreadViewController.viewDidLoad()
 ```
 User taps send
   → ChatThreadViewModel.send(text:)
-      → MessageRepository.stageOptimistic(message: Message(id: UUID(), text: text, isSent: false))
-          → MessageLocalDataSource.upsert(...)            // ViewModel calls Repository (via protocol), not DataSource directly
-      → state updated optimistically (message appears as "pending")
-      → SendMessageUseCase.execute(param: SendMessageParam(chatId:, message:))
-          → MessageRepository.send()
-              → MessageRemoteDataSource.post(/chat/{chat_id}/message)
-              → on success: MessageLocalDataSource.update(id:, isSent: true)
-              → on failure: isSent remains false → MessageSyncService will retry
+      → SendMessageUseCase.execute(param: SendMessageParam(chatId:, text:, localId: UUID()))
+          Phase 1 (optimistic):
+              → MessageRepository.stageOptimistic(message: Message(id: localId, text: text, isSent: false))
+                  → MessageLocalDataSource.upsert(...)    // DB write → Realm live query → ViewModel state updates
+          Phase 2 (network):
+              → MessageRepository.send(chatId:, message:)
+                  → MessageRemoteDataSource.post(/chat/{chat_id}/message)
+                  → on success: MessageLocalDataSource.update(id: localId, isSent: true)
+                  → on failure: isSent remains false → MessageSyncService will retry
 ```
+
+The ViewModel calls one UseCase. The UseCase owns both the optimistic write and the network call — ViewModel never touches Repository or DataSource directly.
 
 ### Background Sync (MessageSyncService)
 
