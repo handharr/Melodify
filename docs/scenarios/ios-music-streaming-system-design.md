@@ -24,7 +24,8 @@
 - `ThirdPartyDataSource` (SDK facade) — wraps third-party SDKs as a `RemoteDataSource`; app calls protocol, never SDK directly
 - Idempotency keys on mutations — client-generated UUID at `Param` call site for any retryable mutation
 - HTTP `409 ≠ 5xx` — concurrency conflicts and transient server errors must never share a code path
-- Infrastructure layer (`Gateway` suffix) — Domain defines protocol; concrete in Infrastructure; nothing depends on Gateway except DI wiring in Application
+- Infrastructure layer (`Gateway` suffix) — Gateway trigger is cross-layer span, not SDK imports; single-layer SDKs wrap in their natural layer (DataSource or Service); Domain defines protocol; concrete in Infrastructure; nothing depends on Gateway except DI wiring in Application
+- External layer (outermost ring) — actual SDKs and OS frameworks; UIKit / SwiftUI / Combine need no wrapper (reactive/UI primitives used directly); all other SDKs always wrapped; wrapper placement scope-based: single-layer SDK → DataSource or Service, cross-layer SDK → Gateway in Infrastructure
 
 ### What this scenario adds
 | Concept | Generic | Music Streaming |
@@ -270,7 +271,7 @@ Domain
   DomainServices:
               PlayerService               owns PlaybackState, queue, shuffle/repeat logic
                                           app-scoped singleton — survives screen transitions
-                                          calls AVPlayerGatewayProtocol for actual audio playback
+                                          calls AudioPlayerProtocol for actual audio playback
               StreamRefreshService        pure logic — given StreamInfo.expiresAt,
                                           decides when to trigger FetchStreamInfoUseCase
 
@@ -302,13 +303,25 @@ Data
     PlayableItemMapper.toDomain(_:)    ← handles Track vs Episode polymorphism
     StreamInfoMapper.toDomain(_:)
 
-Infrastructure
-  AVPlayerGateway: AVPlayerGatewayProtocol
+  AVPlayerAdapter: AudioPlayerProtocol
     └─ wraps AVPlayer + AVAudioSession (AVFoundation)
     └─ exposes play(url:), pause(), stop(), seek(to:), configure(audioSessionCategory:)
-    └─ the only class in the playback path that imports AVFoundation
-    └─ Domain defines the protocol; only Application wires the concrete
-    └─ PlayerService calls via AVPlayerGatewayProtocol — Domain never imports AVFoundation
+    └─ AVFoundation is single-layer (Domain concern) → wraps in Data, not Infrastructure
+    └─ Domain defines AudioPlayerProtocol; Application wires AVPlayerAdapter at startup
+
+Infrastructure
+  None — AVFoundation is single-layer (no Presentation footprint); wraps as AVPlayerAdapter in
+  Data. PlayerService calls AudioPlayerProtocol (Domain protocol), never AVFoundation directly.
+
+External
+  AVFoundation    →  AVPlayerAdapter (Data) — AVPlayer + AVAudioSession
+  GRDB            →  LibraryLocalDataSource · CollectionLocalDataSource · PlayableItemLocalDataSource · DownloadLocalDataSource (Data)
+  URLSession      →  APIClient (Data)
+
+Application
+  AppCoordinator (composition root — builds full dependency graph, registers app-scoped services)
+  AppDelegate (entry point — wires window, registers PlayerService at app scope)
+  Manual init injection — no DI framework; Coordinators compose all dependencies via init
 ```
 
 ### FetchPolicy applies here too
@@ -345,7 +358,7 @@ PlayerViewModel.play(item, at: index)
       1. builds queue via PlayableItemRepository (PlayableItemRepositoryProtocol, policy: .strict)
       2. resolves asset:
            DownloadRepository (DownloadRepositoryProtocol): downloaded?
-             ├─ yes → file:// URL → AVPlayerGateway → AVPlayer
+             ├─ yes → file:// URL → AVPlayerAdapter (AudioPlayerProtocol)
              └─ no  → FetchStreamInfoUseCase → DownloadRepository (DownloadRepositoryProtocol) → MediaRemoteDataSource → HLS CDN
                        → manifest → chunks → AVPlayer streams adaptively
       3. delegates expiry check to StreamRefreshService [Domain Service]
@@ -390,7 +403,7 @@ Two separate `MediaFileDataSource` instances — offline saves can never be evic
 ```
 PlayerService triggers playback
   → PlaybackAssetResolver checks DownloadRepository (DownloadRepositoryProtocol)
-      ├─ downloaded? → file:// URL → AVPlayerGateway → AVPlayer
+      ├─ downloaded? → file:// URL → AVPlayerAdapter (AudioPlayerProtocol)
       └─ not downloaded? → FetchStreamInfoUseCase → DownloadRepository (DownloadRepositoryProtocol) → MediaRemoteDataSource → HLS CDN
                              → manifest (.m3u8)
                              → quality buckets → chunks (2–10s each)
@@ -398,10 +411,10 @@ PlayerService triggers playback
 ```
 
 ### manifest `expiresAt` — Refresh During Playback
-- `AVPlayerGateway` detects chunk-boundary approach; `StreamRefreshService` checks `expiresAt` before the next chunk request
+- `PlayerService` (via `AudioPlayerProtocol` → `AVPlayerAdapter`) monitors chunk-boundary; `StreamRefreshService` checks `expiresAt` before the next chunk request
 - If near expiry → background task fetches a fresh `stream-info` via `FetchStreamInfoUseCase` → `MediaRemoteDataSource`
 - Refresh happens **without interrupting the active audio buffer** — chunks already buffered keep playing while the new manifest loads
-- Owner: `PlayerService` (via `AVPlayerGatewayProtocol` + `StreamRefreshService`), not the ViewModel
+- Owner: `PlayerService` (via `AudioPlayerProtocol` + `StreamRefreshService`), not the ViewModel
 
 ### Offline Playback — Two Paths
 
@@ -666,7 +679,7 @@ Before fetching each new chunk:
   StreamRefreshService.needsRefresh(for: streamInfo)
     → checks: Date() > streamInfo.expiresAt - refreshThreshold (e.g. 60s)
     → if yes → background fetch new stream-info from API
-    → swap manifest URL in AVPlayerGateway
+    → swap manifest URL via AudioPlayerProtocol.updateManifest(_:) (→ AVPlayerAdapter)
     → buffered chunks already playing are unaffected
 ```
 
@@ -918,7 +931,7 @@ func seek(to time: TimeInterval) {
     let wasPlaying = state.status == .playing
     state = state.with(status: .seeking)    // UI shows seeking indicator
 
-    avPlayerGateway.seek(to: time) { [weak self] in
+    audioPlayer.seek(to: time) { [weak self] in   // AudioPlayerProtocol → AVPlayerAdapter
         // completion — restore previous state
         self?.state = self?.state.with(status: wasPlaying ? .playing : .paused)
     }

@@ -23,13 +23,14 @@
 - `ThirdPartyDataSource` facade pattern — wraps third-party SDKs; app calls protocol, never SDK directly
 - Idempotency keys on mutations — client-generated UUID at `Param` call site for any retryable mutation
 - HTTP `409 ≠ 5xx` — concurrency conflicts and transient server errors must never share a code path
-- Infrastructure layer (`Gateway` suffix) — Domain defines protocol; concrete in Infrastructure; nothing depends on Gateway except DI wiring in Application
+- Infrastructure layer (`Gateway` suffix) — Gateway trigger is cross-layer span, not SDK imports; single-layer SDKs wrap in their natural layer (DataSource or Service); **this scenario has no Gateway** — WebSocket is networking-transport only (no Presentation footprint) and wraps as `WebSocketClient` in Data, not as a Gateway
+- External layer (outermost ring) — actual SDKs and OS frameworks; UIKit / SwiftUI / Combine need no wrapper (reactive/UI primitives used directly); all other SDKs always wrapped; wrapper placement scope-based: single-layer SDK → DataSource or Service, cross-layer SDK → Gateway in Infrastructure
 
 ### What this scenario adds
 
 | Concept | Generic | This Scenario |
 |---|---|---|
-| Real-time data | Not covered | `MessageStreamService` Domain Service — wraps WebSocket, exposes `AnyPublisher<Message, Never>` per chat |
+| Real-time data | Not covered | `MessageStreamService` Domain Service — calls `MessageStreamDataSourceProtocol`; `MessageStreamDataSource` wraps `WebSocketClient` in Data, exposes `AnyPublisher<Message, Never>` per chat |
 | Offline write queue | Not covered | `MessageSyncService` Domain Service — queues `isSent = false` messages, flushes on app foreground |
 | Three-tier API strategy | `FetchPolicy` covers read intent | Initial load / cursor pagination / delta sync by `sequenceId` — three distinct endpoints per list screen |
 | Local DB as SSOT | `LocalDataSource` for cache | Realm via `LocalDataSource` — renders immediately from cache, syncs in background; WebSocket frames upsert into same store |
@@ -188,7 +189,7 @@ Domain
 
   Domain Services (stateful / app-scoped):
     MessageStreamService       connect/disconnect · subscribe(chatId:) → AnyPublisher<Message, Never>
-                               calls WebSocketGatewayProtocol — never touches WebSocket library directly
+                               calls MessageStreamDataSourceProtocol — never touches WebSocket library directly
     MessageSyncService         syncPending() on foreground — flushes isSent=false messages
                                calls SendMessageUseCase for retries
 
@@ -207,14 +208,24 @@ Data
     └─ ChatLocalDataSource      → Realm (live query drives ChatListViewModel)
     └─ ChatMapper
 
+  MessageStreamDataSource : MessageStreamDataSourceProtocol
+    └─ WebSocketClient (connect / receive() → AsyncStream<Data> / disconnect)
+    └─ decodes raw frames → MessageDTO; MessageStreamService calls via protocol, never the SDK directly
+
+  WebSocketClient
+    └─ wraps URLSessionWebSocketTask (or Starscream)
+    └─ connect(to:) / send(_:) / receive() → AsyncStream<Data> / disconnect()
+    └─ persistent-connection peer to APIClient — networking transport only, no Presentation footprint
+
   AttachmentFileDataSource — binary files on disk; only URL stored in MessageLocalDataSource
 
 Infrastructure
-  WebSocketGateway: WebSocketGatewayProtocol
-    └─ wraps URLSessionWebSocketTask (or Starscream)
-    └─ exposes connect() / disconnect() / send(_:) / receive() → AnyPublisher<Data, Never>
-    └─ Domain defines the protocol; only Application wires the concrete
-    └─ MessageStreamService calls via WebSocketGatewayProtocol — never imports WebSocket library
+  None — no SDK in this scenario spans multiple layers; WebSocket is Data-only
+
+External
+  URLSessionWebSocketTask / Starscream  →  WebSocketClient (Data)
+  Realm                                 →  MessageLocalDataSource · ChatLocalDataSource (Data)
+  URLSession                            →  APIClient (Data)
 
 Application
   AppCoordinator + ChatCoordinator (navigation only) + DI via manual init injection
@@ -251,6 +262,7 @@ AppCoordinator
                  FetchMessagesUseCase → MessageRepository → MessageRemoteDataSource (APIClient)
                                                           → MessageLocalDataSource (Realm)
                  MessageStreamService (same app-scoped instance)
+                     └── MessageStreamDataSource → WebSocketClient (URLSessionWebSocketTask)
                  MessageSyncService (app-scoped — flushes isSent=false on foreground)
 
 AttachmentFileDataSource — stores attachment binaries, referenced by URL in Message model
@@ -357,23 +369,24 @@ User scrolls to bottom of chat list
 
 ```
 WebSocket receives WSEvent { type: .messageReceived, payload: MessageDTO }
-  → MessageStreamService publishes Message to AnyPublisher<Message, Never>
-  → MessageRepository handles incoming event:
+  → MessageStreamDataSource decodes raw frame → MessageDTO
+  → MessageStreamService receives MessageDTO:
+      1. calls MessageRepository.receiveMessage(dto:)    // upsert into local DB before publishing
+             → MessageLocalDataSource.upsert(dto)        // upsert by message.id
+               → Realm live query fires
+               → ChatThreadViewModel.state updated (if this thread is open)
+             → ChatLocalDataSource.upsert(ChatDTO(
+                   chatId: dto.chatId,
+                   preview: dto.text,
+                   lastActivity: dto.sentTime))
+               → Realm live query fires
+               → ChatListViewModel.state re-sorted (chat bubbles to top, preview updated)
+      2. publishes Message (Domain model) via AnyPublisher<Message, Never>
+         → ViewModel subscribers receive domain model; no second upsert needed
 
-      1. MessageLocalDataSource.upsert(dto)
-         → Realm live query fires
-         → ChatThreadViewModel.state updated          // if this thread is open — new message appears
-
-      2. ChatLocalDataSource.upsert(ChatDTO(
-             chatId: message.chatId,
-             preview: message.text,
-             lastActivity: message.sentTime))
-         → Realm live query fires
-         → ChatListViewModel.state re-sorted          // chat bubbles to top, preview updated
-
-Key: ViewModels are decoupled — neither knows about the other.
-     Both observe their own Realm DataSource. The Repository is responsible
-     for keeping both stores in sync when a message arrives.
+Key: MessageStreamService writes to local DB first (via MessageRepository), then publishes.
+     ViewModels observe their own Realm DataSource and the publisher independently —
+     neither knows about the other.
 ```
 
 ### App Foreground — Gap Recovery
@@ -444,7 +457,7 @@ User opens ChatThread (or scrolls to bottom, viewing latest messages)
 
 ```swift
 class MessageStreamService {
-    private let gateway: WebSocketGatewayProtocol   // Infrastructure — injected via DI
+    private let streamDataSource: MessageStreamDataSourceProtocol   // Data — injected via DI
 
     func connect()
     func subscribe(to chatId: String) -> AnyPublisher<Message, Never>

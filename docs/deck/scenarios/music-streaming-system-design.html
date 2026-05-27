@@ -308,7 +308,8 @@
     <li><code>ThirdPartyDataSource</code> (SDK facade) — wraps third-party SDKs as a <code>RemoteDataSource</code>; app calls protocol, never SDK directly</li>
     <li>Idempotency keys on mutations — client-generated UUID at <code>Param</code> call site for any retryable mutation</li>
     <li>HTTP <code>409 ≠ 5xx</code> — concurrency conflicts and transient server errors must never share a code path</li>
-    <li>Infrastructure layer (<code>Gateway</code> suffix) — Domain defines protocol; concrete in Infrastructure; nothing depends on Gateway except DI wiring in Application</li>
+    <li>Infrastructure layer (<code>Gateway</code> suffix) — Gateway trigger is cross-layer span, not SDK imports; single-layer SDKs wrap in their natural layer (DataSource or Service); Domain defines protocol; concrete in Infrastructure; nothing depends on Gateway except DI wiring in Application</li>
+    <li>External layer (outermost ring) — actual SDKs and OS frameworks; UIKit / SwiftUI / Combine need no wrapper (reactive/UI primitives used directly); all other SDKs always wrapped; wrapper placement scope-based: single-layer SDK → DataSource or Service, cross-layer SDK → Gateway in Infrastructure</li>
   </ul>
 
   <h3>What this scenario adds</h3>
@@ -484,9 +485,11 @@ Each quality bucket → chunks:
   <h3>Layer Breakdown</h3>
   <div class="stack">
     <div class="stack-row"><div class="stack-name">Presentation</div><div class="stack-desc"><code>LibraryViewController</code> → <code>LibraryViewModel</code> → <code>FetchLibraryUseCase</code><br><code>CollectionDetailViewController</code> → <code>CollectionDetailViewModel</code> → <code>FetchCollectionUseCase</code>, <code>FetchPlayableItemsUseCase</code><br><code>PlayerViewController</code> → <code>PlayerViewModel</code> → <code>PlayerService</code> (app-scoped), <code>ResolvePlaybackAssetUseCase</code></div></div>
-    <div class="stack-row"><div class="arrow">↓</div><div class="stack-name">Domain</div><div class="stack-desc">UseCases: <code>FetchLibraryUseCase</code>, <code>FetchCollectionUseCase</code>, <code>FetchPlayableItemsUseCase</code>, <code>FetchStreamInfoUseCase</code>, <code>DownloadTrackUseCase</code><br>Domain Services: <code>PlayerService</code> (stateful, app-scoped — calls <code>AVPlayerGatewayProtocol</code> for actual playback), <code>StreamRefreshService</code> (pure logic, no I/O)</div></div>
-    <div class="stack-row"><div class="arrow">↓</div><div class="stack-name">Data</div><div class="stack-desc"><code>LibraryRepository</code>: <code>LibraryRemoteDataSource</code> + <code>LibraryLocalDataSource</code> (GRDB)<br><code>CollectionRepository</code>: <code>CollectionRemoteDataSource</code> + <code>CollectionLocalDataSource</code> (GRDB)<br><code>PlayableItemRepository</code>: <code>PlayableItemRemoteDataSource</code> + <code>PlayableItemLocalDataSource</code> (GRDB)<br><code>DownloadRepository</code>: <code>MediaRemoteDataSource</code> (HLS CDN) + <code>DownloadLocalDataSource</code> (itemId→path) + <code>MediaFileDataSource</code> (disk, LRU 5 GB)</div></div>
-    <div class="stack-row"><div class="arrow">↓</div><div class="stack-name">Infrastructure</div><div class="stack-desc"><code>AVPlayerGateway: AVPlayerGatewayProtocol</code> — wraps <code>AVPlayer</code> + <code>AVAudioSession</code> (AVFoundation) · exposes play(url:), pause(), stop(), seek(to:), configure(audioSessionCategory:) · the only class in the playback path that imports AVFoundation · Domain defines the protocol; only Application wires the concrete · <code>PlayerService</code> calls via <code>AVPlayerGatewayProtocol</code> — Domain never imports AVFoundation</div></div>
+    <div class="stack-row"><div class="arrow">↓</div><div class="stack-name">Domain</div><div class="stack-desc">UseCases: <code>FetchLibraryUseCase</code>, <code>FetchCollectionUseCase</code>, <code>FetchPlayableItemsUseCase</code>, <code>FetchStreamInfoUseCase</code>, <code>DownloadTrackUseCase</code><br>Domain Services: <code>PlayerService</code> (stateful, app-scoped — calls <code>AudioPlayerProtocol</code> for actual playback), <code>StreamRefreshService</code> (pure logic, no I/O)</div></div>
+    <div class="stack-row"><div class="arrow">↓</div><div class="stack-name">Data</div><div class="stack-desc"><code>LibraryRepository</code>: <code>LibraryRemoteDataSource</code> + <code>LibraryLocalDataSource</code> (GRDB)<br><code>CollectionRepository</code>: <code>CollectionRemoteDataSource</code> + <code>CollectionLocalDataSource</code> (GRDB)<br><code>PlayableItemRepository</code>: <code>PlayableItemRemoteDataSource</code> + <code>PlayableItemLocalDataSource</code> (GRDB)<br><code>DownloadRepository</code>: <code>MediaRemoteDataSource</code> (HLS CDN) + <code>DownloadLocalDataSource</code> (itemId→path) + <code>MediaFileDataSource</code> (disk, LRU 5 GB)<br><code>AVPlayerAdapter: AudioPlayerProtocol</code> — wraps <code>AVPlayer</code> + <code>AVAudioSession</code> (AVFoundation); exposes play(url:), pause(), stop(), seek(to:), configure(audioSessionCategory:); AVFoundation is single-layer (Domain concern) → wraps in Data, not Infrastructure</div></div>
+    <div class="stack-row"><div class="stack-name">Infrastructure</div><div class="stack-desc">None — AVFoundation is single-layer (no Presentation footprint); wraps as <code>AVPlayerAdapter</code> in Data. <code>PlayerService</code> calls <code>AudioPlayerProtocol</code> (Domain protocol), never AVFoundation directly.</div></div>
+    <div class="stack-row"><div class="stack-name">External</div><div class="stack-desc"><code>AVFoundation</code> → <code>AVPlayerAdapter</code> (Data) — AVPlayer + AVAudioSession · <code>GRDB</code> → <code>LibraryLocalDataSource</code> · <code>CollectionLocalDataSource</code> · <code>PlayableItemLocalDataSource</code> · <code>DownloadLocalDataSource</code> (Data) · <code>URLSession</code> → <code>APIClient</code> (Data)</div></div>
+    <div class="stack-row"><div class="stack-name">Application</div><div class="stack-desc"><code>AppCoordinator</code> (composition root — builds full dependency graph, registers app-scoped services) · <code>AppDelegate</code> (entry point — wires window, registers <code>PlayerService</code> at app scope) · Manual init injection — no DI framework; Coordinators compose all dependencies via init</div></div>
   </div>
 
   <h3>Data Flow — Library Screen</h3>
@@ -517,8 +520,8 @@ Each quality bucket → chunks:
       1. build queue via <span class="nm">PlayableItemRepository</span> (<span class="ty">PlayableItemRepositoryProtocol</span>, policy: .strict)
       2. resolve asset:
            <span class="nm">DownloadRepository</span> (<span class="ty">DownloadRepositoryProtocol</span>): downloaded?
-             ├─ yes → <span class="st">file://</span> URL → <span class="nm">AVPlayerGateway</span> → AVPlayer
-             └─ no  → <span class="nm">FetchStreamInfoUseCase</span> → <span class="nm">MediaRemoteDataSource</span> → HLS CDN
+             ├─ yes → <span class="st">file://</span> URL → <span class="nm">AVPlayerAdapter</span> (<span class="ty">AudioPlayerProtocol</span>)
+             └─ no  → <span class="nm">FetchStreamInfoUseCase</span> → <span class="nm">DownloadRepository</span> (<span class="ty">DownloadRepositoryProtocol</span>) → <span class="nm">MediaRemoteDataSource</span> → HLS CDN
       3. delegate expiry to <span class="nm">StreamRefreshService</span>
            near expiry? → <span class="nm">FetchStreamInfoUseCase</span> → <span class="nm">DownloadRepository</span> (<span class="ty">DownloadRepositoryProtocol</span>) → <span class="nm">MediaRemoteDataSource</span>
                           buffered chunks keep playing uninterrupted</code></pre>
@@ -557,7 +560,7 @@ Each quality bucket → chunks:
   <h3>HLS Flow (recap)</h3>
 <pre><code><span class="nm">PlayerService</span> triggers playback
   → <span class="nm">PlaybackAssetResolver</span> checks <span class="nm">DownloadRepository</span> (<span class="ty">DownloadRepositoryProtocol</span>)
-      ├─ downloaded? → <span class="st">file://</span> URL → <span class="nm">AVPlayerGateway</span> → AVPlayer
+      ├─ downloaded? → <span class="st">file://</span> URL → <span class="nm">AVPlayerAdapter</span> (<span class="ty">AudioPlayerProtocol</span>)
       └─ not downloaded? → <span class="nm">FetchStreamInfoUseCase</span> → <span class="nm">DownloadRepository</span> (<span class="ty">DownloadRepositoryProtocol</span>) → <span class="nm">MediaRemoteDataSource</span> → HLS CDN
                              → manifest (.m3u8)
                              → quality buckets → chunks (2–10s each)
@@ -565,10 +568,10 @@ Each quality bucket → chunks:
 
   <h3>manifest <code>expiresAt</code> — Refresh During Playback</h3>
   <ul>
-    <li><code>AVPlayerGateway</code> detects chunk-boundary approach; <code>StreamRefreshService</code> checks <code>expiresAt</code> before the next chunk request</li>
+    <li><code>PlayerService</code> (via <code>AudioPlayerProtocol</code> → <code>AVPlayerAdapter</code>) monitors chunk-boundary; <code>StreamRefreshService</code> checks <code>expiresAt</code> before the next chunk request</li>
     <li>If near expiry → background task fetches a fresh <code>stream-info</code> via <code>FetchStreamInfoUseCase</code> → <code>MediaRemoteDataSource</code></li>
     <li>Refresh happens <strong>without interrupting the active audio buffer</strong> — chunks already buffered keep playing while the new manifest loads</li>
-    <li>Owner: <code>PlayerService</code> (via <code>AVPlayerGatewayProtocol</code> + <code>StreamRefreshService</code>), not the ViewModel</li>
+    <li>Owner: <code>PlayerService</code> (via <code>AudioPlayerProtocol</code> + <code>StreamRefreshService</code>), not the ViewModel</li>
   </ul>
 
   <h3>Offline Playback — Two Paths</h3>
@@ -742,7 +745,7 @@ https://cdn.example.com/track_123.m3u8?token=abc&expires=1716490800
 <pre><code><span class="nm">StreamRefreshService</span>.needsRefresh(for: streamInfo)
   → checks: <span class="ty">Date</span>() > streamInfo.expiresAt - refreshThreshold  <span class="cm">(e.g. 60s)</span>
   → if yes → background fetch new stream-info from API
-             swap manifest URL in AVPlayerGateway
+             swap manifest URL via <span class="nm">AudioPlayerProtocol</span>.updateManifest(_:) (→ <span class="nm">AVPlayerAdapter</span>)
              buffered chunks already playing are unaffected</code></pre>
   <div class="rule"><strong>The refresh is invisible to the user</strong> — chunks already in the buffer play out while the new manifest loads in the background.</div>
 

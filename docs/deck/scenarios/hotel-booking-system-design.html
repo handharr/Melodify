@@ -297,7 +297,8 @@
     <li><code>ThirdPartyDataSource</code> (SDK facade) — wraps third-party SDKs as a <code>RemoteDataSource</code>; app calls protocol, never SDK directly</li>
     <li>Idempotency keys on mutations — client-generated UUID at <code>Param</code> call site for any retryable mutation</li>
     <li>HTTP 409 ≠ 5xx — concurrency conflicts and transient server errors must never share a code path</li>
-    <li>Infrastructure layer (<code>Gateway</code> suffix) — Domain defines protocol; concrete in Infrastructure; nothing depends on Gateway except DI wiring in Application</li>
+    <li>Infrastructure layer (<code>Gateway</code> suffix) — Gateway trigger is cross-layer span, not SDK imports; single-layer SDKs wrap in their natural layer (DataSource or Service); Domain defines protocol; concrete in Infrastructure; nothing depends on Gateway except DI wiring in Application</li>
+    <li>External layer (outermost ring) — actual SDKs and OS frameworks; UIKit / SwiftUI / Combine need no wrapper (reactive/UI primitives used directly); all other SDKs always wrapped; wrapper placement scope-based: single-layer SDK → DataSource or Service, cross-layer SDK → Gateway in Infrastructure</li>
   </ul>
 
   <h3>What this scenario adds</h3>
@@ -306,8 +307,8 @@
       <tr><th>Concept</th><th>Generic</th><th>Hotel Booking</th></tr>
       <tr><td>Image storage</td><td>Not in generic</td><td>Two-tier cache: <code>ImageFileDataSource</code> (disk) + CoreData metadata index (<code>url → filePath + savedAt</code> for TTL)</td></tr>
       <tr><td>Offline storage</td><td>Not in generic</td><td><code>ReservationLocalDataSource</code> (CoreData) — read-only offline reservation history</td></tr>
-      <tr><td>Domain Services</td><td><code>Service</code> suffix — stateful/long-lived, pure Swift, no SDK imports</td><td><code>ReservationService</code> (hold timer + live state) · <code>ImageService</code> (two-tier cache) · <code>PaymentService</code> (orchestrates payment via <code>PaymentGatewayProtocol</code> → <code>ProcessPaymentUseCase</code>)</td></tr>
-      <tr><td>Infrastructure</td><td>Not typically in scope</td><td><code>StripePaymentGateway: PaymentGatewayProtocol</code> — only class that imports Stripe SDK; wired by Application</td></tr>
+      <tr><td>Domain Services</td><td><code>Service</code> suffix — stateful/long-lived, no UIKit/third-party SDK imports; Foundation + stable Apple frameworks via protocol OK</td><td><code>ReservationService</code> (hold timer + live state) · <code>ImageService</code> (two-tier cache) · <code>PaymentService</code> (orchestrates payment via <code>PaymentGatewayProtocol</code> → <code>ProcessPaymentUseCase</code>)</td></tr>
+      <tr><td>Infrastructure</td><td>Cross-layer SDKs → <code>Gateway</code> in Infrastructure; single-layer SDKs wrap in their natural layer (DataSource or Service)</td><td><code>StripePaymentGateway: PaymentGatewayProtocol</code> — only class that imports Stripe SDK; wired by Application</td></tr>
       <tr><td>Hold timer</td><td>Not in generic</td><td>Server-authoritative 15-min lock; client counts down using server's <code>expiration_time</code></td></tr>
       <tr><td>Idempotency key</td><td>Documented in generic — UUID at <code>Param</code> call site for retryable mutations</td><td>Client-generated <code>local_id</code> UUID on every mutation — prevents duplicate reservations/charges on retry</td></tr>
       <tr><td>Pagination</td><td>Not in generic</td><td>Offset-limit — simpler; BE controls sort order; data doesn't move mid-scroll</td></tr>
@@ -494,6 +495,7 @@ limit=&lt;int&gt;          <span class="cm">// 25 per page</span>
     <div class="stack-row"><div class="stack-name">Infrastructure</div><div class="stack-desc">StripePaymentGateway: PaymentGatewayProtocol — only class that imports Stripe SDK; wired by Application</div></div>
     <div class="stack-row"><div class="arrow">↓</div><div class="stack-name">Repository</div><div class="stack-desc">HotelRepository · ReservationRepository · AmenityRepository · ImageRepository · PaymentRepository</div></div>
     <div class="stack-row"><div class="arrow">↓</div><div class="stack-name">DataSource</div><div class="stack-desc">Remote: <code>HotelRemoteDataSource</code> · <code>ReservationRemoteDataSource</code> · <code>MediaRemoteDataSource</code> · <code>PaymentRemoteDataSource</code><br>Local: <code>HotelLocalDataSource</code> · <code>ReservationLocalDataSource</code> · <code>AmenityLocalDataSource</code> · <code>ImageLocalDataSource</code> · <code>ImageFileDataSource</code></div></div>
+    <div class="stack-row"><div class="stack-name">External</div><div class="stack-desc"><code>Stripe</code> → <code>StripePaymentGateway</code> (Infrastructure) · <code>CoreData</code> → <code>ReservationLocalDataSource</code> · <code>ImageLocalDataSource</code> (Data) · <code>URLSession</code> → <code>APIClient</code> (Data)</div></div>
     <div class="stack-row"><div class="stack-name">Application</div><div class="stack-desc">AppDelegate · Coordinator (per flow) · Swinject DI container</div></div>
   </div>
 

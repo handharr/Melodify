@@ -1,10 +1,10 @@
 ---
 name: philosophy-sync-scenarios
-description: Propagates changes from docs/ios-app-system-design-philosophy.md into all docs/scenarios/ files. Proposes updates per scenario before writing, then regenerates HTML for any changed scenario.
+description: Propagates changes from docs/ios-app-system-design-philosophy.md into all docs/scenarios/ files, and fixes any standing naming/layer/content violations found during the same pass. Proposes all changes per scenario before writing, then regenerates HTML for any changed scenario.
 user-invocable: true
 ---
 
-The generic architecture doc (`docs/ios-app-system-design-philosophy.md`) was updated. Your job is to propagate those changes into every scenario doc in `docs/scenarios/`, then regenerate the HTML for any scenario that changed.
+The generic architecture doc (`docs/ios-app-system-design-philosophy.md`) was updated. Your job is to propagate those changes into every scenario doc in `docs/scenarios/`, fix any standing violations found during the same pass, then regenerate the HTML for any scenario that changed.
 
 This skill proposes changes per scenario before writing — it never silently overwrites.
 
@@ -27,48 +27,111 @@ Present this summary to the user before proceeding — it gives context for the 
 
 ## Step 3 — Assess impact per scenario
 
-For each scenario doc, determine which of the generic doc changes are relevant to it.
+For each scenario doc, run two independent passes and merge the findings into a single proposal.
 
-Not all changes affect all scenarios. Use judgment:
+### Pass A — Delta propagation
+
+Determine which generic doc changes (from Step 2) are relevant to this scenario. Not all changes affect all scenarios. Use judgment:
 - A new concurrency pattern in the generic doc probably affects all scenarios
 - A new pagination note only affects scenarios that discuss pagination
 - A renamed component affects any scenario that uses that component name
 
-Also check — independently of what changed in the generic doc — whether each scenario's `## Architecture` section follows the required four-layer structure:
+### Pass B — Standing-rules audit
 
-```
-Presentation / Domain / Data / Infrastructure
-```
+Independently of what changed in the generic doc, check every scenario against these standing rules:
 
-All four layers must always be present. Unused layers are marked `None`. Flag any scenario where:
-- A layer is missing entirely
+**B1. Architecture section — 5-layer completeness**
+The `## Architecture` section must list all five layers in order: Presentation → Domain → Data → Infrastructure → External. Every layer must appear even if unused — unused layers are marked `None`.
+
+Flag if:
+- Any of the five layers is missing entirely
+- A layer is omitted instead of showing `None`
 - The section only contains a general pattern statement with no named components
-- DataSources appear without a domain prefix
 
-For each scenario, produce a proposal:
+**B2. Naming conventions**
+Check every component name against the generic doc's conventions:
+- Remote access: `*RemoteDataSource` — always domain-prefixed (e.g. `RestaurantRemoteDataSource`, not bare `RemoteDataSource` as a class name)
+- Local access: `*LocalDataSource` — always domain-prefixed (e.g. `MessageLocalDataSource`, not bare `LocalDataSource` as a class name in layer breakdowns, data flows, or code examples)
+- Business logic: `*UseCase` (stateless) or `*Service` (stateful Domain Service)
+- DTOs: `*DTO` — Mappers: `*Mapper`
+- Navigation: `*Coordinator`
+- Infrastructure wrappers: `*Gateway` — always vendor-prefixed (e.g. `StripePaymentGateway`, not bare `Gateway`)
+
+**Exception:** bare `LocalDataSource` / `RemoteDataSource` is acceptable in the delta table's "Generic" column, pattern-level warning callouts, and type-annotation diagrams. It is NOT acceptable as a class name in layer breakdowns, data flow pseudocode, or vocabulary tables.
+
+**B3. Redundant generic content**
+Flag as ❌ Redundant if the scenario contains any of these generic-only explanations:
+- "Why MVVM over MVP?" or "Why MVVM over VIPER?"
+- "Why Clean Architecture over MVC?"
+- "Why FetchPolicy over hardcoding network/cache logic per ViewModel?"
+- UseCase vs Domain Service comparison table (columns: Triggered by / State / Has I/O? / Lifetime)
+- Domain Service vs Gateway comparison table
+
+Scenario-specific reasoning is fine (e.g. "Why UIKit over SwiftUI for THIS scenario"). The test: would this exact explanation appear unchanged in every other scenario? If yes, it's generic and must be removed.
+
+**B4. External SDK wrapper compliance**
+For every External SDK listed in the Architecture section:
+- No-wrapper exceptions: UIKit, SwiftUI, Combine only
+- Every other SDK must have a named wrapper
+- Wrapper placement: single-layer SDK → `DataSource`/`APIClient`/`WebSocketClient` (Data) or `Service` (Domain); multi-layer SDK → `*Gateway` in Infrastructure
+
+Flag if a multi-layer SDK is wrapped as a DataSource/Service, or a single-layer SDK is wrapped as a Gateway.
+
+**B5. "Same as generic" accuracy**
+Verify the existing "Same as generic architecture" list is still accurate against the current generic doc. Flag any entry that no longer matches, or any pattern present in the generic doc that is missing from the list.
+
+**B6. Layer dependency rule**
+Flag:
+- ViewModels calling Repositories directly (should go via UseCase)
+- UseCases referencing network types (should use Repository protocol)
+- Repositories returning DTOs beyond their own layer (should map first)
+- Domain models mentioning UIKit or networking types
+
+---
+
+For each scenario, produce a single merged proposal:
 
 ```
 ### Scenario: <name>
 **Impact:** High / Medium / Low / None
 
-Changes needed:
+#### Delta changes (from generic doc update)
 - [ ] Delta "Same as generic" list: add <X> (new pattern in generic doc)
 - [ ] Delta table: update <row> — generic column now says <Y>
 - [ ] Section <Z>: rename <OldTerm> → <NewTerm> throughout
-- [ ] No changes needed
+
+#### Standing violations (pre-existing, independent of this sync)
+- [ ] B1 Architecture: missing Infrastructure layer — add with `None`
+- [ ] B2 Naming: rename `LocalDataSource` → `MessageLocalDataSource` in layer breakdown
+- [ ] B3 Redundant: remove "Why MVVM over MVP?" section
+- [ ] B4 SDK wrapper: AVFoundation is multi-layer — wrap as `AVPlayerGateway` in Infrastructure, not a Service
+- [ ] B5 "Same" list: `FetchPolicy` missing — add it
+- [ ] B6 Layer rule: ViewModel calls Repository directly — route via UseCase
+
+#### No changes needed
+(only if both passes found nothing)
 ```
 
 Show all proposals to the user before writing any file. Ask for confirmation: "Apply all? Or select specific scenarios?"
 
 ## Step 4 — Apply approved changes
 
-For each approved scenario:
+For each approved scenario, apply both delta changes and standing-violation fixes:
 
+**Delta changes:**
 1. Update the "Same as generic architecture" list if new shared patterns were added
 2. Update the delta table rows where the "Generic" column description changed
 3. Rename any component names that were updated in the generic doc
 4. Update rationale text if the "why" for a shared pattern changed
 5. Do NOT remove delta items that are still scenario-specific — only update the generic-side descriptions
+
+**Standing-violation fixes:**
+6. Add any missing Architecture layers (marked `None` if unused)
+7. Rename naming violations to their correct domain-prefixed forms throughout the file
+8. Remove any redundant generic content sections (B3)
+9. Correct SDK wrapper placement if misclassified (B4)
+10. Add missing "same" list entries for patterns now in the generic doc (B5)
+11. Fix layer dependency violations if clearly structural (B6) — if ambiguous, flag for manual review instead of silently rewriting
 
 Write the updated `.md` file.
 
@@ -108,14 +171,17 @@ After all writes are complete:
 <summary from step 2>
 
 ### Scenarios updated
-| Scenario | .md updated | HTML regenerated | Changes |
-|---|---|---|---|
-| music-streaming | ✅ | ✅ | Added FetchPolicy to "same" list; renamed X → Y |
-| (next) | ⏭️ skipped | — | No impact from this change |
+| Scenario | .md updated | HTML regenerated | Delta changes | Standing fixes |
+|---|---|---|---|---|
+| music-streaming | ✅ | ✅ | Added FetchPolicy to "same" list | Renamed LocalDataSource → TrackLocalDataSource |
+| hotel-booking | ✅ | ✅ | None | Removed redundant "Why MVVM over MVP?" section |
+| (next) | ⏭️ skipped | — | No impact | No violations found |
 
 ### Skipped scenarios
 <list any that were skipped and why>
 
-### Recommended follow-up
-- Run /philosophy-audit-scenarios to verify full consistency
+### Remaining manual review items
+<list any B6 layer dependency violations that were flagged but not auto-fixed due to ambiguity>
 ```
+
+If no standing violations were found in any scenario, omit the "Standing fixes" column and the "Remaining manual review items" section.

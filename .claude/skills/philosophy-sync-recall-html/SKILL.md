@@ -48,6 +48,76 @@ Skip reading all other scenario `.md` and deck files entirely.
 
 ---
 
+## Column philosophy — layers only
+
+The table columns represent **Clean Architecture layers** exclusively. Storage and Network are external concerns (they sit outside the app's layered architecture) and are therefore merged into a single **External** column — they do not get individual columns.
+
+| Column | Layer | What it contains |
+|---|---|---|
+| **External** | External | Local store tech + endpoint/transport, both stacked in one cell |
+| **Infrastructure** | Infrastructure | Gateway / SDK wrapper — bridges External to Domain |
+| **Data** | Data | Repository (solid chip) + DataSource (dashed chip) |
+| **Domain** | Domain | Stateless UseCase (solid) or stateful Service (dashed) |
+| **Presentation** | Presentation | ViewModel or ViewController |
+
+**Never add separate Storage or Network columns.** If both apply to a flow, show them stacked in the External cell — storage chip first, then network chip.
+
+### Chip type rules
+
+| Component type | Column | CSS class | Border |
+|---|---|---|---|
+| UseCase, Repository | Data / Domain | `.chip` | solid |
+| Service (Domain), DataSource | Data / Domain | `.chip.svc` / `.chip.ds` | dashed |
+| Infrastructure Gateway / SDK | Infrastructure | `.chip.infra` | solid, purple tint |
+| Network endpoint | External | `.chip.ep` | solid, neutral |
+| Storage / DB | External | `.chip.st` | dashed, neutral |
+| Shared (spans multiple flows) | any | `.chip.shared` | neutral + flow dots |
+
+### Flow color classes
+
+| Class | Color | When to use |
+|---|---|---|
+| `f1` | Blue (accent) | Read / Load — initial page loads, cache reads, library fetches |
+| `f2` | Orange | Write / Mutation — POST, PATCH, user-initiated writes |
+| `f3` | Green | Real-time / Streaming — WebSocket receive, SSE, live updates |
+| `f4` | Red | Offline / Background — sync queues, offline playback, retry on foreground |
+| `f5` | Purple | Special / Infrastructure — payment gateway, timers, auth, system-level |
+
+### Component uniqueness
+
+Each named component appears **at most once** per layer column per scenario card. Showing the same chip twice in two differently-colored rows creates a false signal — the color implies the component belongs to that flow exclusively, when it participates in multiple.
+
+### Consecutive reuse — rowspan + flow dots
+
+When the same component participates in N **consecutive** flows:
+
+1. Merge the N cells with `rowspan="N"`.
+2. Render the chip with `.chip.shared` (neutral `var(--text)` color — no flow color).
+3. Add a `<div class="flow-dots">` beneath the chip — one `<span class="flow-dot">` per participating flow, tinted with that flow's CSS variable.
+
+This preserves "which flows use this component" without claiming the component is owned by any single flow.
+
+### Non-consecutive reuse — ref badge
+
+When the same component appears in non-consecutive rows (e.g. rows 1 and 4 with a different component in rows 2–3), rowspan is not possible. Show the chip normally in the first row; in each later non-consecutive row show the chip again followed by `<span class="ref-badge">↑</span>` to signal reuse.
+
+### Rowspan decision criteria
+
+**Rowspan when:**
+- The chip is the sole or primary component in the cell (no two distinct components mixed in one cell)
+- It appears in 2+ consecutive rows
+
+**Do not rowspan:**
+- DataSource cells — per-flow sub-notes carry distinct recall details (upsert strategy, FetchPolicy, retry behavior)
+- External (network) cells — endpoints are always unique per flow
+- Mixed-component cells (e.g. `APIClient + NWPathMonitor`)
+
+### Flow color on unspanned rows
+
+Chips in non-rowspanned cells inherit `currentColor` from `tr.f1–f5`. Only rowspanned chips use `.chip.shared` neutral color.
+
+---
+
 ## Step 2 — Extract the recall data from each scenario `.md`
 
 For each scenario, derive the data that maps into the recall card. Extract from three sections:
@@ -83,16 +153,14 @@ Use the same color as the current recall card if the flow already exists and the
 
 For each flow, extract the component at each layer column. Use this mapping:
 
-**Storage column** — What local store is read or written in this flow?
-- Source: `LocalDataSource` mentions in the data flow pseudocode, or the storage tech listed in the Architecture section for this component
-- Values: `CoreData`, `Realm`, `GRDB`, `disk file://`, `SDWebImage disk cache`, `Keychain`, `UserDefaults` — or `—` if no local storage
-- Sub-label: brief annotation (e.g. `"cache · offline restore"`, `"isSent=false → true on confirm"`, `"SSOT — render instant from cache"`)
-
-**Network column** — What endpoint or transport does this flow use?
-- Source: `## API Design` section — find the endpoint that this flow calls
-- Values: `GET /path`, `POST /path`, `PATCH /path`, `WS /path`, `SSE /path`, `S3 CDN image URLs`, `Stripe SDK → token → POST /path` — or `—` if no network call
-- Sub-label: most important constraint or note for interview recall (e.g. `"idempotencyKey = UUID() at Param call site"`, `"delta only — not full reload"`, `"cursor stable on insertions"`)
-- Use `&amp;` for `&` in HTML
+**External column** — What external resources (local store + network) does this flow touch?
+- This single column merges Storage and Network — columns represent layers, and neither storage nor network is an app layer.
+- Show storage chip first (if any), then network chip (if any), stacked vertically in the same `<td>`.
+- Storage values: `CoreData`, `Realm`, `GRDB`, `disk file://`, `SDWebImage disk cache`, `Keychain`, `UserDefaults`
+- Network values: `GET /path`, `POST /path`, `PATCH /path`, `WS /path`, `SSE /path`, `S3 CDN image URLs`, `Stripe SDK → token → POST /path`
+- Sub-labels go immediately after the chip they annotate (e.g. `"cache · offline restore"`, `"idempotencyKey = UUID() at Param call site"`, `"cursor stable on insertions"`)
+- Use `—` only if neither storage nor network is involved in this flow.
+- Use `&amp;` for `&` in HTML.
 
 **Infrastructure column** — What Infrastructure-layer component handles the transport?
 - Source: Infrastructure section in Architecture, or the `Gateway`/SDK mentions in the data flow
@@ -160,6 +228,7 @@ Changes:
 - The scenario tag is missing a concept that's in the `.md` delta table
 - A chip type is wrong (solid vs dashed, wrong color class)
 - A layer cell has `—` in the recall but has a real component in the `.md` (or vice versa)
+- The recall card has separate **Storage** and **Network** columns instead of a single **External** column — this is always drift; the columns must represent layers only
 
 After the per-scenario reports, show a summary table:
 
@@ -210,8 +279,7 @@ For each approved scenario card, produce the full `<div class="scenario-card">..
     <table class="arch-table">
       <thead><tr>
         <th></th>
-        <th class="col-storage">Storage</th>
-        <th class="col-network">Network</th>
+        <th class="col-external">External</th>
         <th class="col-infra">Infrastructure</th>
         <th>Data</th>
         <th>Domain</th>
@@ -225,6 +293,8 @@ For each approved scenario card, produce the full `<div class="scenario-card">..
 </div>
 ```
 
+**Column count is always 5 + the flow label** = 6 `<th>` cells total. Never split External back into Storage and Network.
+
 **Scenario tag color** — assign `var(--color)` based on the dominant scenario type:
 - Orange `--orange`: write-heavy or booking (Uber Eats, Hotel Booking)
 - Accent `--accent`: read-heavy or real-time read (Messenger, Story Viewer)
@@ -233,13 +303,14 @@ For each approved scenario card, produce the full `<div class="scenario-card">..
 
 **Chip rules:**
 
-| Component type | Class | Border |
-|---|---|---|
-| UseCase, Repository | `.chip` | solid |
-| Service (Domain), DataSource | `.chip.svc` / `.chip.ds` | dashed |
-| Infrastructure Gateway/SDK | `.chip.infra` | solid, purple tint |
-| Network endpoint | `.chip.ep` | solid, neutral |
-| Storage / DB | `.chip.st` | dashed, neutral |
+| Component type | Column | Class | Border |
+|---|---|---|---|
+| UseCase, Repository | Data / Domain | `.chip` | solid |
+| Service (Domain), DataSource | Data / Domain | `.chip.svc` / `.chip.ds` | dashed |
+| Infrastructure Gateway/SDK | Infrastructure | `.chip.infra` | solid, purple tint |
+| Network endpoint | External | `.chip.ep` | solid, neutral |
+| Storage / DB | External | `.chip.st` | dashed, neutral |
+| Shared (spans multiple flows) | any | `.chip.shared` | neutral + flow dots |
 
 **Sub-labels** use `<div class="sub">` immediately after the chip they annotate.
 
@@ -257,7 +328,7 @@ For each approved scenario card, produce the full `<div class="scenario-card">..
 </div>
 ```
 
-**Empty cells** use `<td class="col-storage empty">—</td>` (with the appropriate `col-*` class on storage/network/infra columns; plain `<td class="empty">` for data/domain/presentation).
+**Empty cells** use `<td class="col-external empty">—</td>` for the External column and `<td class="col-infra empty">—</td>` for Infrastructure; plain `<td class="empty">` for Data / Domain / Presentation.
 
 **Flow label cell** always uses:
 ```html

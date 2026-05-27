@@ -300,7 +300,8 @@
     <li><code>async/await</code> for I/O; Combine for reactive binding to <code>@Published</code> state</li>
     <li>Idempotency keys on mutations — client-generated UUID at <code>Param</code> call site for any retryable mutation</li>
     <li>HTTP <code>409 ≠ 5xx</code> — concurrency conflicts and transient server errors must never share a code path</li>
-    <li>Infrastructure layer (<code>Gateway</code> suffix) — Domain defines protocol; concrete in Infrastructure; nothing depends on Gateway except DI wiring in Application</li>
+    <li>Infrastructure layer (<code>Gateway</code> suffix) — Gateway trigger is cross-layer span, not SDK imports; single-layer SDKs wrap in their natural layer (DataSource or Service); Domain defines protocol; concrete in Infrastructure; nothing depends on Gateway except DI wiring in Application</li>
+    <li>External layer (outermost ring) — actual SDKs and OS frameworks; UIKit / SwiftUI / Combine need no wrapper (reactive/UI primitives used directly); all other SDKs always wrapped; wrapper placement scope-based: single-layer SDK → DataSource or Service, cross-layer SDK → Gateway in Infrastructure</li>
   </ul>
 
   <h3>What this scenario adds</h3>
@@ -452,7 +453,8 @@
     <div class="stack-row"><div class="stack-name">Presentation</div><div class="stack-desc"><code>FeedViewController</code> · <code>FeedViewModel</code> (@MainActor, UICollectionViewDataSource/Delegate) · <code>FeedCellUIModel</code> · <code>PhotoCell</code> · <code>AlbumCell</code></div></div>
     <div class="stack-row"><div class="arrow">↓</div><div class="stack-name">Domain</div><div class="stack-desc"><code>FetchFeedUseCase</code> · <code>LikePostUseCase</code> · <code>LikeService</code> (app-scoped) · <code>Post</code> · <code>User</code> · <code>Like</code> · <code>FeedParam</code></div></div>
     <div class="stack-row"><div class="arrow">↓</div><div class="stack-name">Data</div><div class="stack-desc"><code>NewsFeedRepository</code> · <code>LikeRepository</code> · <code>FeedRemoteDataSource</code> · <code>FeedLocalDataSource</code> (Core Data) · <code>PostDTO</code> · <code>PostMapper</code></div></div>
-    <div class="stack-row"><div class="arrow">↓</div><div class="stack-name">ThirdParty</div><div class="stack-desc"><code>ImageSDKDataSource</code> (wraps SDWebImage) · called from cells via protocol, never SDK directly</div></div>
+    <div class="stack-row"><div class="stack-name">Infrastructure</div><div class="stack-desc">None — <code>ImageSDKDataSource</code> wraps SDWebImage as a single-layer Data concern; no cross-layer wrappers in this scenario</div></div>
+    <div class="stack-row"><div class="stack-name">External</div><div class="stack-desc"><code>SDWebImage</code> → <code>ImageSDKDataSource</code> (Data) · <code>CoreData</code> → <code>FeedLocalDataSource</code> (Data) · <code>URLSession</code> → <code>APIClient</code> (Data)</div></div>
     <div class="stack-row"><div class="arrow">↓</div><div class="stack-name">Application</div><div class="stack-desc"><code>AppCoordinator</code> · <code>AppDelegate</code> · manual init injection (composition root)</div></div>
   </div>
 

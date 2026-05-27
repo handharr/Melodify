@@ -266,6 +266,7 @@
   <a class="toc-sub" href="#data">Data</a>
   <a class="toc-sub" href="#infrastructure">Infrastructure</a>
   <a class="toc-sub" href="#application">Application</a>
+  <a class="toc-sub" href="#external">External</a>
   <a href="#di">Dependency Injection</a>
   <a href="#flows">Generic Data Flows</a>
   <a class="toc-sub" href="#read-flow">Read flow (offline-first)</a>
@@ -286,10 +287,11 @@
     <div class="stack-row"><div class="stack-name">Presentation</div><div class="stack-desc">ViewController + ViewModel (Combine <code>@Published</code>)</div></div>
     <div class="stack-row"><div class="stack-name">Domain</div><div class="stack-desc">UseCase + Service + Protocol + Model + Param + FetchPolicy</div></div>
     <div class="stack-row"><div class="stack-name">Data</div><div class="stack-desc">Repository + DataSource + DTO + Mapper + APIClient</div></div>
-    <div class="stack-row"><div class="stack-name">Infrastructure</div><div class="stack-desc">Gateway (external SDK + OS framework facades)</div></div>
+    <div class="stack-row"><div class="stack-name">Infrastructure</div><div class="stack-desc">Gateway (cross-layer SDK wrappers)</div></div>
     <div class="stack-row"><div class="stack-name">Application</div><div class="stack-desc">AppDelegate + Coordinator + DI (manual init injection)</div></div>
+    <div class="stack-row"><div class="stack-name">External</div><div class="stack-desc">SDKs + OS Frameworks (Stripe, CoreData, AVFoundation, Firebase…)</div></div>
   </div>
-  <div class="rule"><strong>Layer dependency rule: Presentation → Domain ← Data. Infrastructure conforms to Domain protocols. Domain depends on nothing.</strong> Data knows Domain models (via Mapper). Presentation knows Domain models (via UseCase). Infrastructure implements Domain protocols but is never imported by Domain, Data, or Presentation — only wired by Application.</div>
+  <div class="rule"><strong>Layer dependency rule: Presentation → Domain ← Data. Infrastructure conforms to Domain protocols. Domain depends on nothing. External is the outermost ring — only wrapper layers (Gateway, DataSource, Service) import from it; nothing in Domain or Presentation touches External directly.</strong> Data knows Domain models (via Mapper). Presentation knows Domain models (via UseCase). Infrastructure implements Domain protocols but is never imported by Domain, Data, or Presentation — only wired by Application. External depends on nothing inside the app; it is the dependency.</div>
 </section>
 
 <!-- WHY THESE CHOICES -->
@@ -301,7 +303,8 @@
   <div class="callout"><strong>New app → SwiftUI.</strong> SwiftUI is the current default for greenfield iOS development. State-driven rendering and declarative layout fit cleanly with MVVM — the ViewModel exposes <code>@Published</code> state; the View subscribes with no extra Combine boilerplate.</div>
   <div class="callout"><strong>Legacy app → stay on UIKit.</strong> Migrating an existing UIKit codebase is high risk for low gain. New screens in a UIKit app should remain UIKit unless there is a specific team mandate to migrate.</div>
   <div class="callout"><strong>UIKit is still the right call even in a new app</strong> for: granular scroll lifecycle (<code>willDisplay cell</code> for paginated fetches), complex custom transitions, direct <code>AVPlayerViewController</code> / <code>AVPlayerLayer</code> integration, or pixel-level layout fidelity SwiftUI can't match.</div>
-  <div class="callout"><strong>Infrastructure as the fourth layer.</strong> The three-layer model (Presentation → Domain ← Data) is a simplification of Clean Architecture's four-ring model. Infrastructure is the explicit fourth layer for SDKs that <em>span multiple layers</em> — Stripe owns both Presentation (card collection UI) and Data (token API call): neither layer alone is the right home. The Gateway trigger is <strong>cross-layer span</strong>, not the presence of a third-party import. Single-layer SDKs wrap where they naturally live: CoreData → <code>LocalDataSource</code> (Data); AVFoundation playback → <code>PlayerService</code> (Domain). <strong>Why Gateway as the suffix?</strong> <code>Service</code> is claimed by Domain. <code>DataSource</code> is claimed by Data. <code>Gateway</code> is unclaimed and precise — it is the entry point to a cross-layer external system the app doesn't own.</div>
+  <div class="callout"><strong>Infrastructure as the fourth layer.</strong> The three-layer model (Presentation → Domain ← Data) is a simplification of Clean Architecture's four-ring model. Infrastructure is the explicit fourth layer for SDKs that <em>span multiple layers</em> — Stripe owns both Presentation (card collection UI) and Data (token API call): neither layer alone is the right home. The Gateway trigger is <strong>cross-layer span</strong>, not the presence of a third-party import. <strong>Why Gateway as the suffix?</strong> <code>Service</code> is claimed by Domain. <code>DataSource</code> is claimed by Data. <code>Gateway</code> is unclaimed and precise — it is the entry point to a cross-layer external system the app doesn't own.</div>
+  <div class="callout"><strong>External as the fifth layer (outermost ring).</strong> External is the actual SDKs and OS frameworks the app depends on — Stripe, CoreData, AVFoundation, Firebase, etc. It corresponds to the "Frameworks &amp; Drivers" ring in Clean Architecture's original four-ring model. <strong>Step 1 — Is a wrapper required?</strong> UIKit / SwiftUI / Combine → no wrapper; these are the UI and reactive primitives — they appear in every file by design, wrapping them is impractical and adds no benefit. Everything else → always wrap, including Apple's own AVFoundation, CoreData, URLSession, MapKit. "Apple-made" is not the criterion — "bounded scope" is. <strong>Step 2 — Where does the wrapper live?</strong> Count the layers it must touch. One layer → wrap there: Data networking → <code>APIClient</code> / <code>WebSocketClient</code>; Data persistence → <code>DataSource</code>; Domain logic → <code>Service</code>. Two or more layers → <code>Gateway</code> in Infrastructure (e.g. Stripe spans Presentation card UI + Data token call → <code>StripePaymentGateway</code>). <strong>Counter-example:</strong> URLSessionWebSocketTask has no Presentation footprint — it is networking transport only. Wrap it as <code>WebSocketClient</code> in Data, not as a Gateway. A persistent connection does not change the layer count.</div>
   <div class="callout"><strong>Hybrid UIKit/SwiftUI</strong> is valid screen-by-screen. Coordinator wires them together. UIKit hosts SwiftUI via <code>UIHostingController</code>; SwiftUI embeds UIKit via <code>UIViewRepresentable</code>. <strong>Rule of thumb:</strong> lifecycle control needed → UIKit. Reactive state → UI → SwiftUI.</div>
 </section>
 
@@ -322,7 +325,7 @@
   <h3 id="domain">Domain</h3>
   <div class="stack">
     <div class="stack-row"><div class="stack-name">UseCase</div><div class="stack-desc">One public method: <code>execute(policy:param:) async throws → Output</code>. Stateless — created per call or injected. Orchestrates one business action. Calls Repository methods. Never touches networking or storage directly.</div></div>
-    <div class="stack-row"><div class="stack-name">Domain Service</div><div class="stack-desc">Stateful or long-lived logic not tied to a single user action. Injected, lives as long as needed (often app-scoped). Pure Swift — no UIKit, no SDK imports. Examples: PlayerService, SessionService, AuthService.</div></div>
+    <div class="stack-row"><div class="stack-name">Domain Service</div><div class="stack-desc">Stateful or long-lived logic not tied to a single user action. Injected, lives as long as needed (often app-scoped). No UIKit, no third-party SDK imports; Foundation always fine; stable Apple frameworks (AVFoundation, CoreData) acceptable when logic genuinely belongs here — inject via protocol so tests never touch the real framework. Examples: PlayerService, SessionService, AuthService.</div></div>
     <div class="stack-row"><div class="stack-name">Model</div><div class="stack-desc">Pure Swift structs — no <code>import UIKit</code>, no Foundation networking types. The only type that crosses all layers.</div></div>
     <div class="stack-row"><div class="stack-name">Param</div><div class="stack-desc">Typed struct for every UseCase input. Split into <code>path:</code> and <code>query:</code> sub-structs. Adding a field never breaks existing call sites.</div></div>
     <div class="stack-row"><div class="stack-name">FetchPolicy</div><div class="stack-desc"><code>.fresh</code> always hits network. <code>.cached</code> returns cache if available, else network. <code>.strict</code> cache only, throws on miss. Travels ViewModel → UseCase → Repository. Repository is the only place that interprets it.</div></div>
@@ -334,7 +337,7 @@
       <tr><td>Triggered by</td><td>User action</td><td>Another component</td></tr>
       <tr><td>State</td><td>Stateless</td><td>Can be stateful</td></tr>
       <tr><td>Lifetime</td><td>Per call</td><td>Injected, lives as needed</td></tr>
-      <tr><td>Imports</td><td>Nothing</td><td>Nothing (pure Swift)</td></tr>
+      <tr><td>Imports</td><td>Nothing</td><td>No UIKit, no third-party SDKs; Foundation + stable Apple frameworks via protocol</td></tr>
       <tr><td>Example</td><td><code>SearchTracksUseCase</code></td><td><code>PlayerService</code>, <code>SessionService</code></td></tr>
     </table>
   </div>
@@ -384,7 +387,7 @@
     <table>
       <tr><th></th><th>Domain Service</th><th>Gateway</th></tr>
       <tr><td>Owns</td><td>Business logic + state</td><td>Cross-layer external system interaction</td></tr>
-      <tr><td>Imports</td><td>Nothing (pure Swift)</td><td>UIKit, SDK, OS frameworks</td></tr>
+      <tr><td>Imports</td><td>No UIKit, no third-party SDKs; Foundation + stable Apple frameworks via protocol</td><td>UIKit, SDK, OS frameworks</td></tr>
       <tr><td>Layer</td><td>Domain</td><td>Infrastructure</td></tr>
       <tr><td>Protocol lives in</td><td>Domain</td><td>Domain</td></tr>
       <tr><td>Concrete lives in</td><td>Domain</td><td>Infrastructure</td></tr>
@@ -392,7 +395,7 @@
     </table>
   </div>
 
-  <div class="rule"><strong>The rule — scope-based, not import-based.</strong> The Gateway trigger is cross-layer span, not the presence of a third-party import. Use a Gateway when an SDK touches multiple layers — Stripe owns Presentation (card collection UI) and Data (token API call), so neither layer alone is the right home. Single-layer SDKs wrap where they naturally live: CoreData → <code>LocalDataSource</code> (Data), AVFoundation playback → <code>PlayerService</code> (Domain). Domain defines the protocol; Infrastructure provides the concrete.</div>
+  <div class="rule"><strong>The rule — always wrap, then count layers.</strong> UIKit / SwiftUI / Combine: no wrapper — they are the UI and reactive primitives, appearing in every file by design. Everything else — including Apple's own AVFoundation, CoreData, URLSession — always wrap. "Apple-made" is not the criterion, "bounded scope" is. Then count layers: one layer → wrap there (<code>APIClient</code> / <code>DataSource</code> in Data, <code>Service</code> in Domain); two or more layers → <code>Gateway</code> in Infrastructure. Domain defines the protocol; Infrastructure provides the concrete for cross-layer cases.</div>
 
 <pre><code><span class="cm">// Domain — defines the contract, no SDK imports</span>
 <span class="kw">protocol</span> <span class="ty">PaymentGatewayProtocol</span> {
@@ -418,6 +421,7 @@
       <tr><td><code>Repository</code></td><td>Data</td><td><code>TrackRepository</code></td></tr>
       <tr><td><code>DataSource</code></td><td>Data</td><td><code>TrackRemoteDataSource</code></td></tr>
       <tr><td><code>Gateway</code></td><td>Infrastructure</td><td><code>StripePaymentGateway</code>, <code>APNsNotificationGateway</code></td></tr>
+      <tr><td><em>(SDK name itself)</em></td><td>External</td><td><code>Stripe</code>, <code>CoreData</code>, <code>AVFoundation</code></td></tr>
     </table>
   </div>
 
@@ -429,6 +433,28 @@
     <div class="stack-row"><div class="stack-name">Coordinator</div><div class="stack-desc">Owns navigation logic — ViewControllers never push/present directly. Creates UseCases and ViewModels (DI composition root). One Coordinator per flow.</div></div>
     <div class="stack-row"><div class="stack-name">DI (manual init injection)</div><div class="stack-desc">No DI framework. Dependencies passed through <code>init</code>. No default concrete arguments on Repository or UseCase inits. DataSources and APIClient composed at Coordinator level.</div></div>
   </div>
+
+  <hr class="divider">
+
+  <h3 id="external">External</h3>
+  <p>The outermost ring. External is the actual SDKs and OS frameworks — the real dependencies the app imports via SPM or CocoaPods. <strong>No wrapper: UIKit, SwiftUI, and Combine only.</strong> These are the UI and reactive primitives — they span every file by design. <strong>Always wrap everything else</strong>, including Apple's own service frameworks (AVFoundation, CoreData, URLSession, MapKit). "Apple-made" is not the criterion — "bounded scope" is.</p>
+
+  <div class="table-wrap">
+    <table>
+      <tr><th>External SDK / Framework</th><th>No-wrap?</th><th>Wrapper</th><th>Layer (reason)</th></tr>
+      <tr><td>SwiftUI / UIKit / Combine</td><td>✅</td><td>—</td><td>Used directly — platform-native</td></tr>
+      <tr><td>Stripe</td><td></td><td><code>StripePaymentGateway</code></td><td>Infrastructure — spans Presentation + Data</td></tr>
+      <tr><td>Firebase (Auth + Analytics)</td><td></td><td><code>FirebaseGateway</code></td><td>Infrastructure — spans multiple layers</td></tr>
+      <tr><td>APNs / UNUserNotification</td><td></td><td><code>APNsGateway</code></td><td>Infrastructure — spans OS + Data</td></tr>
+      <tr><td>CoreData</td><td></td><td><code>TrackLocalDataSource</code></td><td>Data — persistence only</td></tr>
+      <tr><td>Realm</td><td></td><td><code>TrackLocalDataSource</code></td><td>Data — persistence only</td></tr>
+      <tr><td>AVFoundation</td><td></td><td><code>PlayerService</code></td><td>Domain — orchestration logic</td></tr>
+      <tr><td>URLSession</td><td></td><td><code>APIClient</code></td><td>Data — networking only</td></tr>
+      <tr><td>URLSessionWebSocketTask (Starscream)</td><td></td><td><code>WebSocketClient</code></td><td>Data — networking only (no Presentation footprint)</td></tr>
+    </table>
+  </div>
+
+  <div class="rule"><strong>Nothing in Domain or Presentation imports an External SDK (except SwiftUI / UIKit / Combine).</strong> The wrapper is the only crossing point. Swapping one External SDK for another (e.g. CoreData → GRDB) touches one file — the wrapper — and nothing else. The Repository, UseCase, and ViewModel are completely unaffected.</div>
 </section>
 
 <!-- DEPENDENCY INJECTION -->
@@ -636,7 +662,7 @@
     <div class="stack-row"><div class="stack-name">4. Identify Domain Services</div><div class="stack-desc">Anything stateful, long-lived, or shared across screens. App-scoped.</div></div>
     <div class="stack-row"><div class="stack-name">5. Apply FetchPolicy</div><div class="stack-desc">Does this screen need fresh data? Can it show stale? Offline-first?</div></div>
     <div class="stack-row"><div class="stack-name">6. Identify local storage need</div><div class="stack-desc">Cache only? Offline-first with user-controlled saves? File storage? LRU eviction?</div></div>
-    <div class="stack-row"><div class="stack-name">7. Identify external SDKs</div><div class="stack-desc">Does the SDK span multiple layers? If yes → Gateway in Infrastructure (e.g. Stripe: Presentation + Data). If data/persistence only → DataSource in Data (e.g. CoreData). If domain logic only → Service in Domain (e.g. AVFoundation for playback). The Gateway trigger is cross-layer span, not a third-party import.</div></div>
+    <div class="stack-row"><div class="stack-name">7. Identify external SDKs</div><div class="stack-desc">List every SDK/OS framework the scenario touches — they all go in the External layer. Then for each: (a) SwiftUI / UIKit / Combine? → no wrapper, use directly. (b) Otherwise → always wrap. (c) How many layers does the wrapper touch? One layer → wrap there (<code>Service</code> in Domain, <code>DataSource</code> / <code>APIClient</code> in Data). Two or more layers → <code>Gateway</code> in Infrastructure. The trigger for Gateway is cross-layer span, not the presence of a third-party import.</div></div>
     <div class="stack-row"><div class="stack-name">8. Draw the data flow</div><div class="stack-desc">Top to bottom, out loud, immediately after the diagram. Catches missing dependencies and edge cases live.</div></div>
   </div>
 

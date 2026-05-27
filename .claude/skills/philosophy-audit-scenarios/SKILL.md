@@ -55,7 +55,7 @@ The test: would this exact explanation appear unchanged in every other scenario?
 
 ### 2f. Architecture section — end-to-end component coverage
 
-The `## Architecture` section must always list all four layers in order: **Presentation → Domain → Data → Infrastructure**. Every layer must appear, even if unused — unused layers are marked `None`. This makes the section scannable in an interview without the reader having to guess what was considered.
+The `## Architecture` section must always list all five layers in order: **Presentation → Domain → Data → Infrastructure → External**. Every layer must appear, even if unused — unused layers are marked `None`. This makes the section scannable in an interview without the reader having to guess what was considered.
 
 Required structure:
 
@@ -74,20 +74,44 @@ Data
   DTOs / Mappers: <named>
 
 Infrastructure
-  Gateways: <named, or None>
+  Gateways: <named vendor-prefixed Gateways, or None>
+
+External
+  SDKs / Frameworks: <named, e.g. Stripe, CoreData, AVFoundation — or None>
 ```
 
 Flag as ❌ if:
-- Any of the four layers is missing entirely from the Architecture section
+- Any of the five layers is missing entirely from the Architecture section
 - A layer that has no components is omitted instead of showing `None`
 - The section only contains a general pattern statement with no named components
 - DataSources are listed without domain prefix (bare `RemoteDataSource` / `LocalDataSource`)
 
 Flag as ⚠️ if:
-- All four layers are present but one or more sublists (e.g. Services, DTOs) are missing while components for that sublayer clearly exist in the scenario
+- All five layers are present but one or more sublists (e.g. Services, DTOs) are missing while components for that sublayer clearly exist in the scenario
+
+### 2g. External SDK wrapper compliance
+
+For every External SDK or framework listed in the scenario's Architecture section:
+
+1. **No-wrapper exceptions: UIKit, SwiftUI, Combine only** — these are the UI and reactive primitives, appearing in every file by design. Flag if any other SDK (including Apple's own AVFoundation, CoreData, URLSession) is used directly without a wrapper. "Apple-made" is not the criterion — "bounded scope" is.
+2. **Always wrap:** every other SDK must have a named wrapper somewhere in the codebase.
+3. **Wrapper placement:** count how many layers the wrapper touches:
+   - One layer only:
+     - Data networking → `APIClient` / `WebSocketClient` in Data (e.g. URLSession → `APIClient`, URLSessionWebSocketTask → `WebSocketClient`)
+     - Data persistence → `*LocalDataSource` in Data (e.g. CoreData → `TrackLocalDataSource`)
+     - Domain logic → `*Service` in Domain (e.g. AVFoundation → `PlayerService`)
+   - Two or more layers → `*Gateway` in Infrastructure (e.g. Stripe spans Presentation + Data → `StripePaymentGateway`)
+
+Flag as ❌ if:
+- An External SDK (other than SwiftUI/UIKit/Combine) is imported directly in Domain or Presentation without a wrapper
+- A multi-layer SDK is wrapped as a `DataSource` or `Service` instead of a `Gateway`
+- A single-layer SDK is wrapped as a `Gateway` when it only touches one layer
+
+Flag as ⚠️ if:
+- An External SDK is listed but no wrapper name is given (unclear where it lives)
 
 ### 2c. Layer dependency rule
-Check that the dependency rule holds: **Presentation → Domain ← Data. Infrastructure conforms to Domain protocols. Domain depends on nothing.**
+Check that the dependency rule holds: **Presentation → Domain ← Data. Infrastructure conforms to Domain protocols. Domain depends on nothing. External is the outermost ring — only wrapper layers (Gateway, DataSource, Service) import from it; nothing in Domain or Presentation touches External directly.**
 
 Flag:
 - ViewModels calling Repositories directly (should go via UseCase)

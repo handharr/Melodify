@@ -22,7 +22,10 @@
 - Mock-the-layer-below testing strategy
 - `ThirdPartyDataSource` pattern — wraps third-party SDKs; app never calls SDK directly
 - `async/await` for I/O; Combine for reactive binding to `@Published` state
-- Infrastructure layer (`Gateway` suffix) — Domain defines protocol; concrete in Infrastructure; nothing depends on Gateway except DI wiring in Application
+- Infrastructure layer (`Gateway` suffix) — Gateway trigger is cross-layer span, not SDK imports; single-layer SDKs wrap in their natural layer (DataSource or Service); Domain defines protocol; concrete in Infrastructure; nothing depends on Gateway except DI wiring in Application
+- External layer (outermost ring) — actual SDKs and OS frameworks; UIKit / SwiftUI / Combine need no wrapper (reactive/UI primitives used directly); all other SDKs always wrapped; wrapper placement scope-based: single-layer SDK → DataSource or Service, cross-layer SDK → Gateway in Infrastructure
+- Idempotency keys on mutations — client-generated UUID at `Param` call site for any retryable mutation
+- HTTP `409 ≠ 5xx` — concurrency conflicts and transient server errors must never share a code path
 
 ### What this scenario adds
 
@@ -175,11 +178,14 @@ Presentation
     ├── @Published var errorMessage: String?
     ├── calls FetchStoriesUseCase
     ├── calls StoryOrderService.markAsSeen(id:)
-    └── triggers ImageSDKDataSource.prefetch(url:) for nextStory
+    └── calls PrefetchStoryImageUseCase.execute(url:) for nextStory
 
 Domain
   FetchStoriesUseCase
     └── execute(policy: FetchPolicy, param: FetchStoriesParam) async throws -> [Story]
+
+  PrefetchStoryImageUseCase
+    └── execute(url: URL) → StoryRepositoryProtocol.prefetchImage(url:) → ImageSDKDataSource
 
   StoryOrderService  ← Domain Service (stateful)
     ├── func ordered(stories: [Story]) -> [Story]  // unseen-first, then recency
@@ -194,7 +200,8 @@ Data
     ├── implements StoryRepositoryProtocol
     ├── FetchPolicy.cached → local if < 10 min old, else remote
     ├── filters expired stories (expireAt < now) before returning
-    └── maps StoryDTO → Story via StoryMapper
+    ├── maps StoryDTO → Story via StoryMapper
+    └── prefetchImage(url:) → ImageSDKDataSource.prefetch(url:)
 
   StoryRemoteDataSource
     └── GET /stories?after={cursor} → [StoryDTO]
@@ -209,12 +216,20 @@ Data
   StoryDTO    ← DTO
   StoryMapper ← Mapper
 
+Infrastructure
+  None — ImageSDKDataSource wraps SDWebImage as a single-layer Data concern; no cross-layer wrappers needed
+
+External
+  SDWebImage    →  ImageSDKDataSource (Data)
+  CoreData/JSON →  StoryLocalDataSource (Data)
+  URLSession    →  APIClient (Data, via StoryRemoteDataSource)
+
 Application
   StoryCoordinator
     └── composition root — builds full dependency graph via manual init injection
 ```
 
-**Dependency rule:** `StoryViewController` → `StoryViewModel` → `FetchStoriesUseCase` → `StoryRepositoryProtocol` ← `StoryRepository` → `StoryRemoteDataSource` + `StoryLocalDataSource`. Domain depends on nothing.
+**Dependency rule:** `StoryViewController` → `StoryViewModel` → `FetchStoriesUseCase` / `PrefetchStoryImageUseCase` → `StoryRepositoryProtocol` ← `StoryRepository` → `StoryRemoteDataSource` + `StoryLocalDataSource` + `ImageSDKDataSource`. Domain depends on nothing.
 
 ---
 
@@ -237,7 +252,7 @@ StoryViewController.viewDidLoad()
       → StoryOrderService.ordered(stories:) → sorted [Story] (unseen-first, recency)
       → ViewModel maps Story → StoryUIModel
       → @Published currentStory updated → ViewController renders
-      → ImageSDKDataSource.prefetch(url: nextStory.photoURL)
+      → PrefetchStoryImageUseCase.execute(url: nextStory.photoURL)  // ViewModel → UseCase → StoryRepository → ImageSDKDataSource
       → defer: isLoading = false
 ```
 
@@ -349,7 +364,7 @@ This is implemented entirely at the Repository level. The ViewModel always uses 
 
 ### Pre-fetching
 
-`StoryViewModel` calls `ImageSDKDataSource.prefetch(url: nextStory.photoURL)` immediately after rendering the current story. By the time the user swipes, the next image is already decoded in SDWebImage's memory cache — zero visible latency.
+`StoryViewModel` calls `PrefetchStoryImageUseCase.execute(url: nextStory.photoURL)` immediately after rendering the current story. The UseCase delegates to `StoryRepository.prefetchImage(url:)` → `ImageSDKDataSource.prefetch(url:)`. By the time the user swipes, the next image is already decoded in SDWebImage's memory cache — zero visible latency. ViewModel never calls the DataSource directly (no Presentation → Data bypass).
 
 ### Viewed-State and Delta Merge
 

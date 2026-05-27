@@ -296,7 +296,10 @@
     <li>Mock-the-layer-below testing strategy</li>
     <li><code>ThirdPartyDataSource</code> pattern — wraps third-party SDKs; app never calls SDK directly</li>
     <li><code>async/await</code> for I/O; Combine for reactive binding to <code>@Published</code> state</li>
-    <li>Infrastructure layer (<code>Gateway</code> suffix) — Domain defines protocol; concrete in Infrastructure; nothing depends on Gateway except DI wiring in Application</li>
+    <li>Infrastructure layer (<code>Gateway</code> suffix) — Gateway trigger is cross-layer span, not SDK imports; single-layer SDKs wrap in their natural layer (DataSource or Service); Domain defines protocol; concrete in Infrastructure; nothing depends on Gateway except DI wiring in Application</li>
+    <li>External layer (outermost ring) — actual SDKs and OS frameworks; UIKit / SwiftUI / Combine need no wrapper (reactive/UI primitives used directly); all other SDKs always wrapped; wrapper placement scope-based: single-layer SDK → DataSource or Service, cross-layer SDK → Gateway in Infrastructure</li>
+    <li>Idempotency keys on mutations — client-generated UUID at <code>Param</code> call site for any retryable mutation</li>
+    <li>HTTP <code>409 ≠ 5xx</code> — concurrency conflicts and transient server errors must never share a code path</li>
   </ul>
 
   <h3>What this scenario adds</h3>
@@ -495,6 +498,30 @@
     <div class="stack-row">
       <div class="stack-name">ImageSDKDataSource</div>
       <div class="stack-desc"><strong>ThirdPartyDataSource</strong> wrapping SDWebImage · <code>load(url:into:completion:)</code> → delivers decoded <code>UIImage</code> on main thread · <code>prefetch(url:)</code> · rest of app calls <code>ImageDataSourceProtocol</code>, never SDWebImage directly</div>
+    </div>
+  </div>
+
+  <h3>Infrastructure</h3>
+  <div class="stack">
+    <div class="stack-row">
+      <div class="stack-name">Infrastructure</div>
+      <div class="stack-desc">None — <code>ImageSDKDataSource</code> wraps SDWebImage as a single-layer Data concern; no cross-layer SDK wrappers needed in this scenario</div>
+    </div>
+  </div>
+
+  <h3>External</h3>
+  <div class="stack">
+    <div class="stack-row">
+      <div class="stack-name">SDWebImage</div>
+      <div class="stack-desc">→ <code>ImageSDKDataSource</code> (Data)</div>
+    </div>
+    <div class="stack-row">
+      <div class="stack-name">CoreData / JSON</div>
+      <div class="stack-desc">→ <code>StoryLocalDataSource</code> (Data)</div>
+    </div>
+    <div class="stack-row">
+      <div class="stack-name">URLSession</div>
+      <div class="stack-desc">→ <code>APIClient</code> (Data, via <code>StoryRemoteDataSource</code>)</div>
     </div>
   </div>
 

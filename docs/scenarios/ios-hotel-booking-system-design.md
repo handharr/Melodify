@@ -24,7 +24,8 @@
 - `ThirdPartyDataSource` (SDK facade) — wraps third-party SDKs as a `RemoteDataSource`; app calls protocol, never SDK directly
 - Idempotency keys on mutations — client-generated UUID at `Param` call site for any retryable mutation
 - HTTP 409 ≠ 5xx — concurrency conflicts and transient server errors must never share a code path
-- Infrastructure layer (`Gateway` suffix) — Domain defines protocol; concrete in Infrastructure; nothing depends on Gateway except DI wiring in Application
+- Infrastructure layer (`Gateway` suffix) — Gateway trigger is cross-layer span, not SDK imports; single-layer SDKs wrap in their natural layer (DataSource or Service); Domain defines protocol; concrete in Infrastructure; nothing depends on Gateway except DI wiring in Application
+- External layer (outermost ring) — actual SDKs and OS frameworks; UIKit / SwiftUI / Combine need no wrapper (reactive/UI primitives used directly); all other SDKs always wrapped; wrapper placement scope-based: single-layer SDK → DataSource or Service, cross-layer SDK → Gateway in Infrastructure
 
 ### What this scenario adds
 
@@ -32,8 +33,8 @@
 |---|---|---|
 | Image storage | Not in generic | Two-tier cache: `ImageFileDataSource` (disk) + CoreData metadata index (`url → filePath + savedAt` for TTL) |
 | Offline storage | Not in generic | `ReservationLocalDataSource` (CoreData) — read-only offline reservation history |
-| Domain Services | `Service` suffix — stateful/long-lived, pure Swift, no SDK imports | `ReservationService` (hold timer + live state) · `ImageService` (two-tier image cache) · `PaymentService` (orchestrates payment flow: injects `PaymentGatewayProtocol`, delegates to `ProcessPaymentUseCase`) |
-| Infrastructure | Not typically in scope | `StripePaymentGateway: PaymentGatewayProtocol` — the only class that imports the Stripe SDK; wired by Application, never imported by Domain |
+| Domain Services | `Service` suffix — stateful/long-lived, no UIKit/third-party SDK imports; Foundation + stable Apple frameworks via protocol OK | `ReservationService` (hold timer + live state) · `ImageService` (two-tier image cache) · `PaymentService` (orchestrates payment flow: injects `PaymentGatewayProtocol`, delegates to `ProcessPaymentUseCase`) |
+| Infrastructure | Cross-layer SDKs → `Gateway` in Infrastructure; single-layer SDKs wrap in their natural layer (DataSource or Service) | `StripePaymentGateway: PaymentGatewayProtocol` — the only class that imports the Stripe SDK; wired by Application, never imported by Domain |
 | Hold timer | Not in generic | Server-authoritative 15-min lock; client counts down using server's `expiration_time` |
 | Idempotency key | Documented in generic — UUID at `Param` call site for retryable mutations | Client-generated `local_id` UUID on every mutation — prevents duplicate reservations/charges on network retry |
 | Pagination | Not in generic | Offset-limit — simpler; BE controls sort order; data doesn't move mid-scroll (no cross-device sync) |
@@ -262,6 +263,9 @@ struct Reservation {
 | Infrastructure | `StripePaymentGateway: PaymentGatewayProtocol` — only class that imports Stripe SDK; wired by Application |
 | Data — Repository | `HotelRepository` · `ReservationRepository` · `AmenityRepository` · `ImageRepository` · `PaymentRepository` |
 | Data — DataSource | `HotelRemoteDataSource` · `HotelLocalDataSource` · `ReservationRemoteDataSource` · `ReservationLocalDataSource` · `AmenityLocalDataSource` · `MediaRemoteDataSource` · `ImageLocalDataSource` · `ImageFileDataSource` · `PaymentRemoteDataSource` |
+| Data — DTO | `HotelListingsDTO` · `HotelListingDTO` · `HotelDTO` · `MediaUrlsDTO` · `AmenityDTO` · `RoomDTO` · `ReservationDTO` · `OfflineReservationDTO` |
+| Data — Mapper | `HotelListingMapper` · `HotelMapper` · `AmenityMapper` · `RoomMapper` · `ReservationMapper` |
+| External | `Stripe` → `StripePaymentGateway` (Infrastructure) · `CoreData` → `ReservationLocalDataSource` · `ImageLocalDataSource` (Data) · `URLSession` → `APIClient` (Data) |
 | Application | `AppDelegate` · `Coordinator` (per flow) · Swinject DI container |
 
 ### Swinject Scoping

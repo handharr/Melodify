@@ -24,7 +24,8 @@
 - `async/await` for I/O; Combine for reactive binding to `@Published` state
 - Idempotency keys on mutations — client-generated UUID at `Param` call site for any retryable mutation
 - HTTP `409 ≠ 5xx` — concurrency conflicts and transient server errors must never share a code path
-- Infrastructure layer (`Gateway` suffix) — Domain defines protocol; concrete in Infrastructure; nothing depends on Gateway except DI wiring in Application
+- Infrastructure layer (`Gateway` suffix) — Gateway trigger is cross-layer span, not SDK imports; single-layer SDKs wrap in their natural layer (DataSource or Service); Domain defines protocol; concrete in Infrastructure; nothing depends on Gateway except DI wiring in Application
+- External layer (outermost ring) — actual SDKs and OS frameworks; UIKit / SwiftUI / Combine need no wrapper (reactive/UI primitives used directly); all other SDKs always wrapped; wrapper placement scope-based: single-layer SDK → DataSource or Service, cross-layer SDK → Gateway in Infrastructure
 
 ### What this scenario adds
 
@@ -174,13 +175,15 @@ struct AlbumCellUIModel {
 ## Architecture
 
 ```
-Presentation  →  ViewController + FeedViewModel (@MainActor)
-                 FeedViewModel implements UICollectionViewDataSource + UICollectionViewDelegate
-Domain        →  FetchFeedUseCase · LikePostUseCase · LikeService (app-scoped)
-Data          →  NewsFeedRepository · LikeRepository
-                 FeedRemoteDataSource · FeedLocalDataSource (Core Data)
-                 ImageSDKDataSource (ThirdPartyDataSource — SDWebImage)
-Application   →  AppDelegate · AppCoordinator · manual init injection
+Presentation    →  ViewController + FeedViewModel (@MainActor)
+                   FeedViewModel implements UICollectionViewDataSource + UICollectionViewDelegate
+Domain          →  FetchFeedUseCase · LikePostUseCase · LikeService (app-scoped)
+Data            →  NewsFeedRepository · LikeRepository
+                   FeedRemoteDataSource · FeedLocalDataSource (Core Data)
+                   ImageSDKDataSource (wraps SDWebImage — single-layer Data concern)
+Infrastructure  →  None
+External        →  SDWebImage (via ImageSDKDataSource · Data) · CoreData (via FeedLocalDataSource · Data) · URLSession (via APIClient · Data)
+Application     →  AppDelegate · AppCoordinator · manual init injection
 ```
 
 **Layer dependency rule: Presentation → Domain ← Data. Domain depends on nothing.**
@@ -191,8 +194,9 @@ Application   →  AppDelegate · AppCoordinator · manual init injection
 |---|---|
 | Presentation | `FeedViewController`, `FeedViewModel`, `FeedCellUIModel` (enum), `PhotoCell`, `AlbumCell` |
 | Domain | `FetchFeedUseCase`, `LikePostUseCase`, `LikeService`, `Post`, `User`, `Like`, `FeedParam` |
-| Data | `NewsFeedRepository`, `LikeRepository`, `FeedRemoteDataSource`, `FeedLocalDataSource`, `PostDTO`, `PostMapper` |
-| ThirdParty | `ImageSDKDataSource` (wraps SDWebImage) |
+| Data | `NewsFeedRepository`, `LikeRepository`, `FeedRemoteDataSource`, `LikeRemoteDataSource`, `FeedLocalDataSource`, `PostDTO`, `PostMapper` |
+| Infrastructure | None — SDWebImage is a single-layer SDK; no cross-layer wrappers in this scenario |
+| External | `SDWebImage` → `ImageSDKDataSource` (Data) · `CoreData` → `FeedLocalDataSource` (Data) · `URLSession` → `APIClient` (Data) |
 | Application | `AppCoordinator`, `AppDelegate` |
 
 ### Architecture Diagram

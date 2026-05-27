@@ -13,13 +13,14 @@ Scenario-specific docs extend this — they describe the delta, not a replacemen
 Presentation    →  ViewController + ViewModel (Combine @Published)
 Domain          →  UseCase + Service + Protocol + Model + Param + FetchPolicy
 Data            →  Repository + DataSource + DTO + Mapper + APIClient
-Infrastructure  →  Gateway (external SDK + OS framework facades)
+Infrastructure  →  Gateway (cross-layer SDK wrappers)
 Application     →  AppDelegate + Coordinator + DI (manual init injection)
+External        →  SDKs + OS Frameworks (Stripe, CoreData, AVFoundation, Firebase…)
 ```
 
-**Layer dependency rule: Presentation → Domain ← Data. Infrastructure conforms to Domain protocols. Domain depends on nothing.**
+**Layer dependency rule: Presentation → Domain ← Data. Infrastructure conforms to Domain protocols. Domain depends on nothing. External is the outermost ring — only wrapper layers (Gateway, DataSource, Service) import from it; nothing in Domain or Presentation touches External directly.**
 
-The Data layer knows Domain models (via Mapper). The Presentation layer knows Domain models (via UseCase). Infrastructure implements Domain protocols but is never imported by Domain, Data, or Presentation — only wired by Application.
+The Data layer knows Domain models (via Mapper). The Presentation layer knows Domain models (via UseCase). Infrastructure implements Domain protocols but is never imported by Domain, Data, or Presentation — only wired by Application. External depends on nothing inside the app; it is the dependency.
 
 ---
 
@@ -37,10 +38,29 @@ VIPER splits a screen into 5 objects. The overhead is justified for very large t
 ### Infrastructure as the fourth layer
 The three-layer model (Presentation → Domain ← Data) is a simplification of Clean Architecture's four-ring model. It breaks down for SDKs that span multiple layers — Stripe owns both Presentation (card collection UI) and Data (token API call): neither layer alone is the right home. Infrastructure is the explicit fourth layer for these cross-layer wrappers. The Gateway trigger is **cross-layer span**, not the presence of a third-party import.
 
-**SDK placement rule — scope-based, not import-based:**
-- SDK spans multiple layers (Presentation + Data, etc.) → **Gateway** in Infrastructure (e.g. Stripe, Firebase with Auth + Analytics UI)
-- SDK is data/persistence only → **DataSource** in Data (e.g. CoreData, Realm)
-- SDK is domain logic only → **Service** in Domain (e.g. AVFoundation for playback orchestration)
+### External as the fifth layer (outermost ring)
+External is the actual SDKs and OS frameworks the app depends on — Stripe, CoreData, AVFoundation, Firebase, etc. It corresponds to the "Frameworks & Drivers" ring in Clean Architecture's original four-ring model. External lives outside all app code: it depends on nothing inside the app, and nothing inside the app imports it directly except through its designated wrapper.
+
+**Step 1 — Is a wrapper required?**
+
+| SDK type | Rule |
+|---|---|
+| UIKit, SwiftUI, Combine only | **No wrapper.** These are the UI and reactive primitives — they appear in every file by design. Wrapping them is impractical and adds no benefit. |
+| Everything else — including Apple's own AVFoundation, CoreData, URLSession, MapKit | **Always wrap.** "Apple-made" is not the criterion — "bounded scope" is. Wrapping enforces testability, stability (one file to update when the SDK changes), and scalability (swap the SDK without touching business logic). |
+
+**Step 2 — Where does the wrapper live? (scope-based, not import-based)**
+
+Count how many layers the wrapper must touch:
+
+- **One layer → wrap in that layer:**
+  - Data concern (networking) → `APIClient` / `WebSocketClient` in Data (e.g. URLSession → `APIClient`, URLSessionWebSocketTask → `WebSocketClient`)
+  - Data concern (persistence/storage) → `DataSource` in Data (e.g. CoreData → `TrackLocalDataSource`, Realm → `TrackLocalDataSource`)
+  - Domain concern (business logic, stateful orchestration) → `Service` in Domain (e.g. AVFoundation → `PlayerService`)
+
+- **Two or more layers → `Gateway` in Infrastructure:**
+  - e.g. Stripe spans Presentation (card collection UI) + Data (token API call) → `StripePaymentGateway`
+  - e.g. Firebase with Auth UI + Analytics spans Presentation + Data → `FirebaseAnalyticsGateway`
+  - **Counter-example:** URLSessionWebSocketTask (Starscream) has no Presentation footprint — it is networking transport only. Wrap it as `WebSocketClient` in Data (peer to `APIClient`), not as a Gateway. The connection being persistent does not change the layer count.
 
 **Why not `Manager`?** `Manager` became a dumping ground with no clear boundary — `NetworkManager`, `DataManager`, `AppManager`. Infrastructure is precise: every Gateway there answers the question *which cross-layer external system am I hiding?*
 
@@ -97,7 +117,8 @@ UseCase
 Domain Service
   └─ stateful or long-lived logic not tied to a single user action
   └─ injected and lives as long as needed (often app-scoped)
-  └─ pure Swift — no UIKit imports, no SDK imports
+  └─ no UIKit, no third-party SDK imports; Foundation always fine
+  └─ stable Apple frameworks (AVFoundation, CoreData) acceptable when logic genuinely belongs here — inject via protocol so tests never touch the real framework
   └─ examples: PlayerService, SessionService, AuthService
 
 Model
@@ -195,7 +216,7 @@ Gateway
 | | Domain Service | Gateway |
 |---|---|---|
 | Owns | Business logic + state | External system interaction |
-| Imports | Nothing (pure Swift) | UIKit, SDK, OS frameworks |
+| Imports | No UIKit, no third-party SDKs; Foundation + stable Apple frameworks via protocol | UIKit, SDK, OS frameworks |
 | Layer | Domain | Infrastructure |
 | Protocol lives in | Domain | Domain |
 | Concrete lives in | Domain | Infrastructure |
@@ -230,6 +251,7 @@ final class TrackLocalDataSource: TrackLocalDataSourceProtocol {
 | `Repository` | Data | `TrackRepository` |
 | `DataSource` | Data | `TrackRemoteDataSource` |
 | `Gateway` | Infrastructure | `StripePaymentGateway` |
+| *(SDK name itself)* | External | `Stripe`, `CoreData`, `AVFoundation` |
 
 ### Application
 
@@ -248,6 +270,28 @@ DI (manual init injection)
   └─ no default concrete arguments on Repository or UseCase inits
   └─ DataSources and APIClient composed at Coordinator level
 ```
+
+### External
+
+The outermost ring. External is the actual SDKs and OS frameworks — the real dependencies the app imports via SPM or CocoaPods.
+
+**No wrapper: UIKit, SwiftUI, and Combine only.** These are the UI and reactive primitives — they span every file by design. Wrapping them is impractical and adds no benefit. **Always wrap everything else**, including Apple's own service frameworks (AVFoundation, CoreData, URLSession, MapKit). "Apple-made" is not the criterion — "bounded scope" is. The wrapper placement depends on how many layers the SDK touches (see "Why These Choices → External as the fifth layer" above).
+
+```
+External SDK / Framework    No-wrap?  Wrapper              Lives in
+────────────────────────────────────────────────────────────────────────────────
+SwiftUI / UIKit / Combine   ✅        —                    (used directly)
+Stripe                                StripePaymentGateway  Infrastructure (Presentation + Data)
+Firebase (Auth + Analytics)           FirebaseGateway       Infrastructure (multiple layers)
+APNs / UNUserNotification             APNsGateway           Infrastructure (OS + Data)
+CoreData                              TrackLocalDataSource  Data (persistence only)
+Realm                                 TrackLocalDataSource  Data (persistence only)
+AVFoundation                          PlayerService         Domain (orchestration logic)
+URLSession                            APIClient             Data (networking only)
+URLSessionWebSocketTask (Starscream)  WebSocketClient       Data (networking only)
+```
+
+**Nothing in Domain or Presentation imports an External SDK (except SwiftUI/UIKit/Combine).** The wrapper is the only crossing point. Swapping one External SDK for another (e.g. CoreData → GRDB) touches one file — the wrapper — and nothing else.
 
 ---
 
@@ -471,56 +515,8 @@ When given an interview problem, map it onto this architecture:
 4. **Identify Domain Services** — anything stateful, long-lived, or shared across screens
 5. **Apply FetchPolicy** — does this screen need fresh data? Can it show stale?
 6. **Identify the local storage need** — cache only, or offline-first with user-controlled saves?
-7. **Identify external SDKs** — does the SDK span multiple layers? If yes → Gateway in Infrastructure (e.g. Stripe: Presentation + Data). If data/persistence only → DataSource in Data (e.g. CoreData). If domain logic only → Service in Domain (e.g. AVFoundation for playback). The Gateway trigger is cross-layer span, not a third-party import.
+7. **Identify external SDKs** — list every SDK/OS framework the scenario touches; they all go in the External layer. Then for each: (a) Is it SwiftUI / UIKit / Combine? → no wrapper needed, use directly. (b) Otherwise → always wrap. (c) How many layers does the wrapper touch? One layer → wrap there (`Service` in Domain, `DataSource`/`APIClient` in Data). Two or more layers → `Gateway` in Infrastructure. The trigger for Gateway is cross-layer span, not the presence of a third-party import.
 8. **Draw the data flow** — top to bottom, out loud, immediately after the diagram
 
 The scenario doc fills in the specifics. This doc is the skeleton.
 
----
-
-## Recall Table — Visual Rules
-
-The `system-design-recall.html` summary table follows these rules to keep the diagram unambiguous.
-
-### Column structure
-
-9 columns, left to right:
-
-```
-Flow | Storage | Network | Infrastructure | Repository | DataSource | UseCase | Service | Presentation
-```
-
-Data and Domain are each split into two sub-columns so each entity type is independently scannable top-to-bottom.
-
-### Component uniqueness
-
-Each named component appears **at most once** per layer column per scenario card. Showing the same chip twice in two differently-colored rows creates a false signal — the color implies the component belongs to that flow exclusively, when it participates in multiple.
-
-### Consecutive reuse — rowspan + flow dots
-
-When the same component participates in N **consecutive** flows:
-
-1. Merge the N cells with `rowspan="N"`.
-2. Render the chip with `.chip.shared` (neutral `var(--text)` color — no flow color).
-3. Add a `<div class="flow-dots">` beneath the chip — one `<span class="flow-dot">` per participating flow, tinted with that flow's CSS variable.
-
-This preserves "which flows use this component" without claiming the component is owned by any single flow.
-
-### Non-consecutive reuse — ref badge
-
-When the same component appears in non-consecutive rows (e.g. rows 1 and 4 with a different component in rows 2–3), rowspan is not possible. Show the chip normally in the first row; in each later non-consecutive row show the chip again followed by `<span class="ref-badge">↑</span>` to signal reuse.
-
-### Rowspan decision criteria
-
-**Rowspan when:**
-- The chip is the sole or primary component in the cell (no two distinct components mixed in one cell)
-- It appears in 2+ consecutive rows
-
-**Do not rowspan:**
-- DataSource cells — per-flow sub-notes carry distinct recall details (upsert strategy, FetchPolicy, retry behavior)
-- Network cells — endpoints are always unique per flow
-- Mixed-component cells (e.g. `APIClient + NWPathMonitor`)
-
-### Flow color on unspanned rows
-
-Chips in non-rowspanned cells inherit `currentColor` from `tr.f1–f5` as before. Only rowspanned chips use `.chip.shared` neutral color.

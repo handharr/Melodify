@@ -53,13 +53,18 @@ Compare the existing scenario `.md` against the current generic architecture doc
 - Repositories, UseCases, or Services using old naming patterns
 
 **Content drift** — sections that are stale or incomplete:
-- "Same as generic architecture" list missing patterns that are now in the generic doc
+- "Same as generic architecture" list missing patterns that are now in the generic doc, or existing entries that no longer match the current generic doc
 - Delta table "Generic" column descriptions that no longer match the generic doc
-- Architecture section missing one or more of the four required layers
+- Architecture section missing one or more of the five required layers (Presentation / Domain / Data / Infrastructure / External)
 - DataSources listed without domain prefix in layer breakdowns or data flow pseudocode
 
+**SDK wrapper compliance** — External SDK usage that violates wrapper placement rules:
+- External SDK (other than UIKit/SwiftUI/Combine) used directly without a named wrapper
+- Single-layer SDK (touches one layer) wrapped as a `Gateway` instead of `DataSource`/`APIClient` (Data) or `Service` (Domain)
+- Multi-layer SDK (touches two or more layers) wrapped as a `DataSource` or `Service` instead of a `*Gateway` in Infrastructure
+
 **Redundant generic content** — explanations that belong only in the philosophy doc, not here:
-- "Why MVVM over MVP?" / "Why Clean Architecture over MVC?"
+- "Why MVVM over MVP?" / "Why MVVM over VIPER?" / "Why Clean Architecture over MVC?"
 - "Why FetchPolicy over hardcoding?"
 - "UseCase vs Domain Service" or "Domain Service vs Gateway" comparison tables
 
@@ -79,7 +84,12 @@ Present the full findings to the user before making any changes:
 
 #### Content drift
 - [ ] Delta "Same as generic" list: add `ThirdPartyDataSource facade pattern` (added to generic doc)
+- [ ] Delta "Same as generic" list: entry `FetchPolicy` no longer matches generic doc — update wording
 - [ ] Architecture section: Infrastructure layer missing — add `None` or fill in Gateway
+
+#### SDK wrapper compliance
+- [ ] AVFoundation is multi-layer (Domain + Presentation) — wrap as `AVPlayerGateway` in Infrastructure, not a `Service`
+- [ ] CoreLocation is single-layer (Data) — wrap as `LocationLocalDataSource`, not a `Gateway`
 
 #### Redundant content to remove
 - [ ] "Why MVVM over MVP?" section (lines ~120–135) — belongs only in philosophy doc
@@ -102,18 +112,20 @@ For each approved item:
 
 ### R-Step 4 — Cross-check
 
-Verify the updated doc:
-- All four layers present in Architecture section (Presentation / Domain / Data / Infrastructure)
-- All DataSources are domain-prefixed in every section
-- No generic "Why" explanations remain
-- Delta section accurately reflects what's same vs scenario-specific
-- No dependency rule violations (or annotated with `⚠️` if present)
+Verify the updated doc against every category from R-Step 2:
+- All five layers present in Architecture section (Presentation / Domain / Data / Infrastructure / External), unused layers marked `None`
+- All DataSources are domain-prefixed in every section (layer breakdowns, data flows, code examples)
+- No naming drift remains — all component names match current generic architecture conventions
+- No generic "Why" explanations remain (MVVM, FetchPolicy, UseCase vs Domain Service, etc.)
+- Delta "Same as generic" list is accurate and complete against the current generic doc
+- No dependency rule violations (or annotated with `⚠️ + correct fix` if present)
+- Every External SDK (except SwiftUI/UIKit/Combine) has a named wrapper; single-layer SDKs are in Data/Domain, multi-layer SDKs are in Infrastructure as `*Gateway`
 
 ### R-Step 5 — Regenerate the HTML deck
 
 Using `docs/deck/scenarios/music-streaming-system-design.html` as the style reference, regenerate the full HTML deck at `docs/deck/scenarios/<scenario-name>.html` from the updated `.md`.
 
-Follow the same HTML generation rules as the Create mode (see below) — CSS verbatim, `.callout`/`.rule`/`.warn` mapping, four-layer architecture rendering, syntax highlighting.
+Follow the same HTML generation rules as the Create mode (see below) — CSS verbatim, `.callout`/`.rule`/`.warn` mapping, five-layer architecture rendering (Presentation / Domain / Data / Infrastructure / External), syntax highlighting.
 
 ### R-Step 6 — Report
 
@@ -169,12 +181,13 @@ Use the generic architecture doc as the source of truth for the user's naming co
 - Navigation objects → `Coordinator`
 - Screen state objects → `ViewModel (@MainActor, @Published)`
 - Infrastructure SDK wrappers → `<Vendor><Domain>Gateway` (e.g. `StripePaymentGateway`) — conforms to a `<Domain>GatewayProtocol` defined in Domain
+- External SDKs → always wrap except UIKit / SwiftUI / Combine (UI and reactive primitives, used directly — "Apple-made" is not the criterion, "bounded scope" is). Wrapper lives in the layer matching the SDK's scope: one layer → `DataSource`/`APIClient`/`WebSocketClient` (Data) or `Service` (Domain); two or more layers → `Gateway` (Infrastructure)
 
 Flag any component in the notes that has no clear equivalent in the generic architecture — these are likely scenario-specific additions (delta candidates).
 
 ### C-Step 3 — Layer audit
 
-Check every component in the notes against the dependency rule: **Presentation → Domain ← Data. Infrastructure conforms to Domain protocols. Domain depends on nothing.**
+Check every component in the notes against the dependency rule: **Presentation → Domain ← Data. Infrastructure conforms to Domain protocols. Domain depends on nothing. External is the outermost ring — only wrapper layers (Gateway, DataSource, Service) import from it; nothing in Domain or Presentation touches External directly.**
 
 Flag violations:
 - A ViewModel calling a Repository directly (should go via UseCase)
@@ -254,6 +267,9 @@ Data
 Infrastructure
   Gateways: <named vendor-prefixed Gateways, or None>
 
+External
+  SDKs / Frameworks: <named, e.g. Stripe, CoreData, AVFoundation — or None>
+
 ## Data Flow
 
 ## <Scenario-Specific Deep Dives>
@@ -261,7 +277,7 @@ Infrastructure
 ## Interviewer Feedback / Key Takeaways
 ```
 
-All four layers must always appear in Architecture — write `None` for unused sublists. Never omit a layer.
+All five layers must always appear in Architecture (Presentation, Domain, Data, Infrastructure, External) — write `None` for unused sublists. Never omit a layer.
 
 ### C-Step 6 — Cross-check
 
@@ -276,6 +292,7 @@ Before writing any file, verify:
   - "UseCase vs Domain Service" comparison table
   - "Domain Service vs Gateway" comparison table
   - Keep only reasoning that is unique to this specific scenario
+- **External SDK wrapper compliance:** every External SDK listed (except SwiftUI/UIKit/Combine) must have a named wrapper. Single-layer SDKs → `DataSource`/`APIClient` (Data) or `Service` (Domain). Multi-layer SDKs → `Gateway` (Infrastructure). Flag any SDK used directly without a wrapper.
 
 ### C-Step 7 — Produce the HTML deck
 

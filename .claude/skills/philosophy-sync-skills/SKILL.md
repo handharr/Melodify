@@ -75,8 +75,25 @@ Does the skill's "do not include in scenarios" list cover every item in the bloc
 **Scenario template link** — applies to: `refactor-scenario-design`
 Does the template `> Scenario extension of [...]` link match the current philosophy doc path (`../ios-app-system-design-philosophy.md`)?
 
-**Architecture section four-layer structure** — applies to: `audit-scenarios`, `refactor-scenario-design`, `sync-scenarios`
-Does the skill enforce the required four-layer structure for `## Architecture` sections: `Presentation → Domain → Data → Infrastructure`, with all four layers always present and unused layers marked `None`?
+**Architecture section five-layer structure** — applies to: `audit-scenarios`, `refactor-scenario-design`, `sync-scenarios`
+Does the skill enforce the required five-layer structure for `## Architecture` sections: `Presentation → Domain → Data → Infrastructure → External`, with all five layers always present and unused layers marked `None`?
+
+**SDK wrapper placement rules** — applies to: `audit-scenarios`, `refactor-scenario-design`, `sync-scenarios`
+Does the skill carry the current SDK wrapper placement rules from the philosophy doc?
+- No-wrapper exceptions: UIKit, SwiftUI, Combine only
+- Single-layer SDK → `*DataSource` / `APIClient` / `WebSocketClient` (Data) or `*Service` (Domain)
+- Multi-layer SDK → `*Gateway` in Infrastructure
+If the philosophy doc changes these rules, update all three skills.
+
+**Three-skill triad consistency** — applies to: `audit-scenarios`, `refactor-scenario-design`, `sync-scenarios`
+These three skills form a triad: `audit-scenarios` defines the full check list; `sync-scenarios` Pass B mirrors those checks; `refactor-scenario-design` R-Step 2 also mirrors them. If any check exists in `audit-scenarios` but is absent from Pass B or R-Step 2, flag it.
+Checks that must appear in all three:
+- 5-layer Architecture completeness
+- Domain-prefixed DataSource naming
+- Redundant generic content blocklist
+- SDK wrapper placement
+- "Same as generic" accuracy (both directions: missing entries AND drifted existing entries)
+- Layer dependency rule
 
 **Frontmatter description**
 Does the `description:` field in the frontmatter reference the correct philosophy filename?

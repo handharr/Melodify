@@ -23,14 +23,15 @@
 - `ThirdPartyDataSource` facade pattern — app calls protocol, never SDK directly
 - Idempotency keys on mutations — `POST /orders` is retryable; generate UUID at `Param` call site
 - HTTP `409 ≠ 5xx` — concurrency conflicts and transient server errors must never share a code path
-- Infrastructure layer (`Gateway` suffix) — Domain defines protocol; concrete in Infrastructure; nothing depends on Gateway except DI wiring in Application
+- Infrastructure layer (`Gateway` suffix) — Gateway trigger is cross-layer span, not SDK imports; single-layer SDKs wrap in their natural layer (DataSource or Service); Domain defines protocol; concrete in Infrastructure; nothing depends on Gateway except DI wiring in Application
+- External layer (outermost ring) — actual SDKs and OS frameworks; UIKit / SwiftUI / Combine need no wrapper (reactive/UI primitives used directly); all other SDKs always wrapped; wrapper placement scope-based: single-layer SDK → DataSource or Service, cross-layer SDK → Gateway in Infrastructure
 
 ### What this scenario adds
 
 | Concept | Generic | Uber Eats |
 |---|---|---|
-| Real-time updates | Not in generic | `OrderService` opens a persistent SSE connection; publishes `AnyPublisher<Order, AppError>` |
-| SSE stream pattern | Not in generic | Multi-fire publisher (vs single-value UseCase); screen lifecycle scopes the connection |
+| Real-time updates | Not in generic | `OrderService` opens a persistent SSE connection via `OrderSSEDataSource`; publishes `AnyPublisher<Order, AppError>` |
+| SSE stream pattern | Not in generic | Multi-fire publisher (vs single-value UseCase); screen lifecycle scopes the connection; `SSEClient` in Data (transport-only, same as `WebSocketClient` in Messenger) |
 | Server-hosted basket | Not in generic | Basket lives on backend for cross-device continuity; `BasketRepository` always writes remote on mutation |
 | Image loading | Not in generic | `UIImageView` extension wrapping SDWebImage/Kingfisher — same facade pattern as `ThirdPartyDataSource` |
 | Cross-device session state | Not in generic | `lastUsedAddress` on `User` drives restaurant list without an extra fetch |
@@ -124,7 +125,8 @@ struct Order {
     let orderID: Int
     let status: OrderStatus
     let basket: Basket
-    let courierLocation: CLLocationCoordinate2D  // updated via SSE
+    let courierLatitude: Double     // updated via SSE
+    let courierLongitude: Double    // updated via SSE
 }
 
 enum OrderStatus {
@@ -189,7 +191,7 @@ Domain
 
   Domain Service (stateful / long-lived)
     OrderService
-      └─ opens SSE connection via OrderSSEGatewayProtocol.stream(orderID:)
+      └─ opens SSE connection via OrderSSEDataSourceProtocol.stream(orderID:)
       └─ closes SSE connection on stopTracking()
       └─ publishes AnyPublisher<Order, AppError> for ViewModel to bind
       └─ must be scoped to the Order Status screen, not app-scoped
@@ -227,11 +229,20 @@ Data
     └─ UserLocalDataSource         → Core Data (session cache — single record, refreshed on launch)
     └─ UserMapper
 
-Infrastructure
-  URLSessionSSEGateway: OrderSSEGatewayProtocol
-    └─ wraps URLSession SSE stream (no third-party library needed)
+  OrderSSEDataSource  : OrderSSEDataSourceProtocol
+    └─ SSEClient (wraps URLSession persistent GET with text/event-stream)
     └─ returns AsyncStream<OrderSSEEventDTO>
-    └─ Domain defines the protocol; only Application wires the concrete
+    └─ SSE is networking-transport only (no Presentation footprint) → Data, not Infrastructure
+    └─ OrderService calls via OrderSSEDataSourceProtocol, never URLSession directly
+
+  SSEClient
+    └─ wraps URLSession (persistent GET, text/event-stream content-type)
+    └─ receive() → AsyncStream<Data> / disconnect()
+    └─ transport-only peer to APIClient — same rationale as WebSocketClient in Messenger
+
+Infrastructure
+  None — SSE is transport-only (no Presentation footprint); wraps as SSEClient +
+  OrderSSEDataSource in Data. OrderService calls OrderSSEDataSourceProtocol (Domain).
 
 Application
   AppCoordinator
@@ -242,6 +253,12 @@ Application
   RestaurantCoordinator, BasketCoordinator, OrderCoordinator
     └─ each owns its UseCase composition
     └─ handles push/pop and state passing between screens
+
+External
+  URLSession (SSE)       →  SSEClient (Data, via OrderSSEDataSource)
+  URLSession (HTTP)      →  APIClient (Data)
+  CoreData               →  RestaurantLocalDataSource · DishLocalDataSource · BasketLocalDataSource · UserLocalDataSource (Data)
+  SDWebImage/Kingfisher  →  UIImageView extension (Presentation-layer helper — UIImageView is UIKit; wraps SDK behind a UIImageView method; same isolation principle as ThirdPartyDataSource)
 ```
 
 ### High-Level Diagram
@@ -250,7 +267,7 @@ Application
 ViewController ──→ ViewModel ──→ UseCases ──→ Repository ──→ RemoteDataSource ──http──→ REST API
                         │                                  └─→ LocalDataSource ──→ Core Data
                         │
-                        └──→ OrderService ──→ URLSessionSSEGateway ──sse──→ SSE API
+                        └──→ OrderService ──→ OrderSSEDataSource ──sse──→ SSE API
 
 ViewController ──→ UIImageView extension ──→ SDWebImage/Kingfisher ──http──→ Image CDN
 
@@ -267,12 +284,11 @@ DI: Coordinator composes all dependencies via manual init injection (no framewor
 | `Router` | `Coordinator` | Direct equivalent. One Coordinator per flow. |
 | `RestaurantService` | `FetchRestaurantsUseCase` + `RestaurantRepository` | Stateless per-action logic → UseCase. Data access → Repository. |
 | `BasketService` | `CreateBasketUseCase` / `UpdateBasketUseCase` + `BasketRepository` | Same split. |
-| `OrderService` (with SSE) | `OrderService` + `URLSessionSSEGateway` | Stateful/long-lived → Domain Service. SSE client → Infrastructure Gateway (`URLSessionSSEGateway: OrderSSEGatewayProtocol`). |
+| `OrderService` (with SSE) | `OrderService` + `OrderSSEDataSource` + `SSEClient` | Stateful/long-lived → Domain Service. SSE client → Data (`SSEClient` wrapped by `OrderSSEDataSource: OrderSSEDataSourceProtocol`). |
 | `AuthService` | `Domain Service: SessionService` | Stateful session — app-scoped Domain Service. |
 | `Network Client (Alamofire)` | `APIClient` (URLSession-based) | Generic HTTP client. Alamofire is a valid implementation detail inside `RemoteDataSource`. |
-| `Mapper` | `Mapper` | Same name, same role. `static func toDomain(_ dto: DTO) -> Model?` |
 | `Storage Facade / Core Data` | `RestaurantLocalDataSource`, `DishLocalDataSource`, `BasketLocalDataSource` wrapping Core Data | Each domain entity gets its own named `LocalDataSource`. Swapping Core Data for GRDB touches those files only. |
-| `SSE Client` | `URLSessionSSEGateway: OrderSSEGatewayProtocol` (Infrastructure) | Wraps URLSession SSE stream; returns `AsyncStream<DTO>`; Domain defines the protocol; rest of app never sees the library. |
+| `SSE Client` | `SSEClient` + `OrderSSEDataSource: OrderSSEDataSourceProtocol` (Data) | `SSEClient` wraps URLSession SSE stream; `OrderSSEDataSource` returns `AsyncStream<DTO>` to `OrderService`; same transport-only pattern as `WebSocketClient` in Messenger. |
 | `UIImageView Extension` | `ThirdPartyDataSource` facade pattern | Same isolation principle — call site calls `imageView.setImage(url:)`, never the library directly. |
 | `Swinject DI container` | Manual init injection via `Coordinator` | User's arch avoids framework DI. Swinject adds a dependency and potential init-time crashes. |
 
@@ -322,7 +338,7 @@ BasketViewModel.placeOrder()
 OrderStatusViewController.viewDidAppear()
      → OrderStatusViewModel.startTracking(orderID:)
          → OrderService.startTracking(orderID:)
-             → orderSSEGateway.stream(orderID:) → AsyncStream<OrderSSEEventDTO>   // OrderSSEGatewayProtocol (Infrastructure)
+             → orderSSEDataSource.stream(orderID:) → AsyncStream<OrderSSEEventDTO>   // OrderSSEDataSourceProtocol (Data)
              → for await event in stream → OrderMapper.toDomain(event) → Order
              → publishes Order via AnyPublisher<Order, AppError>
          → ViewModel.orderUpdates sink → maps Order → OrderUIModel
@@ -389,7 +405,6 @@ The basket lives on the backend (primary source of truth) but is also cached in 
 ## Common Pitfalls / Gotchas
 
 - **Not closing SSE on screen exit.** Stream stays open, drains battery, holds a server connection. Always close in the ViewController's `viewDidDisappear` equivalent — call `stopTracking()` on the ViewModel, which calls `OrderService.stopTracking()`.
-- **ViewModel must not hold a reference to its View.** This is the core MVVM contract — ViewController subscribes to `@Published` state via Combine, ViewModel has no back-reference to the View. The MVP pattern (`weak var view: ViewProtocol?`) creates two-way coupling that makes the ViewModel untestable without a mock View.
 - **UseCases and Domain Services must not call networking directly.** Networking belongs in `RemoteDataSource`. The correct chain is `UseCase → Repository → RemoteDataSource → APIClient`. A service that calls `NetworkClient` directly bypasses the Repository abstraction and couples the Domain layer to the Data layer.
 - **Swinject init-time crashes.** Registrations missing at app startup cause crashes only at first use, not at boot — making them hard to detect in testing. Manual init injection via Coordinator exposes all dependencies at compile time.
 - **No idempotency key on order creation.** POST /orders is the highest-risk mutation — a network timeout on the client while the server succeeded creates a duplicate order. Always generate a UUID at the `CreateOrderParam` call site.
@@ -401,7 +416,6 @@ The basket lives on the backend (primary source of truth) but is also cached in 
 
 - The core data flow is: address → restaurant list → menu → basket (server-hosted, locally cached) → order (with idempotency key) → SSE stream for live tracking.
 - SSE is the correct choice for courier tracking — unidirectional, persistent, no polling overhead. Justify it against polling and WebSockets.
-- MVVM keeps the ViewModel testable without a mock View. MVP's back-reference to View is the specific weakness MVVM eliminates.
 - Every Repository and Domain Service is injected via protocol — Coordinators compose the full graph at the composition root. No framework DI needed.
 - The basket on the backend is the key cross-platform decision. Local cache (Core Data) provides fast UI restore; the backend is the source of truth.
 - In the interview, communicate continuously — propose a direction, pause for feedback, then build. State architecture rationale before drawing the diagram. Walk the data flow end-to-end immediately after finishing the diagram.
