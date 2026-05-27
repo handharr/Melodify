@@ -301,7 +301,7 @@
   <div class="callout"><strong>New app → SwiftUI.</strong> SwiftUI is the current default for greenfield iOS development. State-driven rendering and declarative layout fit cleanly with MVVM — the ViewModel exposes <code>@Published</code> state; the View subscribes with no extra Combine boilerplate.</div>
   <div class="callout"><strong>Legacy app → stay on UIKit.</strong> Migrating an existing UIKit codebase is high risk for low gain. New screens in a UIKit app should remain UIKit unless there is a specific team mandate to migrate.</div>
   <div class="callout"><strong>UIKit is still the right call even in a new app</strong> for: granular scroll lifecycle (<code>willDisplay cell</code> for paginated fetches), complex custom transitions, direct <code>AVPlayerViewController</code> / <code>AVPlayerLayer</code> integration, or pixel-level layout fidelity SwiftUI can't match.</div>
-  <div class="callout"><strong>Infrastructure as the fourth layer.</strong> The three-layer model (Presentation → Domain ← Data) is a simplification of Clean Architecture's four-ring model. Third-party SDKs like Stripe, Firebase, APNs, and LocalAuthentication span concerns — they may present UI, make network calls, or interact with OS services. Data handles the app's own networking and storage. Domain must remain pure Swift. Infrastructure is the explicit fourth layer for classes that wrap external systems the app doesn't control. Domain defines the protocol; Infrastructure provides the concrete. Swapping an SDK = one file change. <strong>Why Gateway as the suffix?</strong> <code>Service</code> is claimed by Domain. <code>DataSource</code> is claimed by Data. <code>Gateway</code> is unclaimed and precise — it is the entry point to an external system the app doesn't own.</div>
+  <div class="callout"><strong>Infrastructure as the fourth layer.</strong> The three-layer model (Presentation → Domain ← Data) is a simplification of Clean Architecture's four-ring model. Infrastructure is the explicit fourth layer for SDKs that <em>span multiple layers</em> — Stripe owns both Presentation (card collection UI) and Data (token API call): neither layer alone is the right home. The Gateway trigger is <strong>cross-layer span</strong>, not the presence of a third-party import. Single-layer SDKs wrap where they naturally live: CoreData → <code>LocalDataSource</code> (Data); AVFoundation playback → <code>PlayerService</code> (Domain). <strong>Why Gateway as the suffix?</strong> <code>Service</code> is claimed by Domain. <code>DataSource</code> is claimed by Data. <code>Gateway</code> is unclaimed and precise — it is the entry point to a cross-layer external system the app doesn't own.</div>
   <div class="callout"><strong>Hybrid UIKit/SwiftUI</strong> is valid screen-by-screen. Coordinator wires them together. UIKit hosts SwiftUI via <code>UIHostingController</code>; SwiftUI embeds UIKit via <code>UIViewRepresentable</code>. <strong>Rule of thumb:</strong> lifecycle control needed → UIKit. Reactive state → UI → SwiftUI.</div>
 </section>
 
@@ -369,11 +369,21 @@
     <div class="stack-row"><div class="stack-name">Gateway</div><div class="stack-desc">Concrete implementation of a Domain protocol (<code>XxxGatewayProtocol</code>). Wraps one external system — SDK, OS framework, or third-party service. May import UIKit, SDKs, OS frameworks — Domain never does. Nothing depends on Gateway except DI wiring in Application.</div></div>
   </div>
 
+  <h4>SDK placement — scope-based decision</h4>
+  <div class="table-wrap">
+    <table>
+      <tr><th>SDK scope</th><th>Where to wrap</th><th>Component</th><th>Example</th></tr>
+      <tr><td>Spans multiple layers (Presentation + Data)</td><td>Infrastructure</td><td><code>Gateway</code></td><td>Stripe, Firebase Auth+UI</td></tr>
+      <tr><td>Data / persistence only</td><td>Data</td><td><code>DataSource</code></td><td>CoreData, Realm</td></tr>
+      <tr><td>Domain logic only</td><td>Domain</td><td><code>Service</code></td><td>AVFoundation (playback orchestration)</td></tr>
+    </table>
+  </div>
+
   <h4>Domain Service vs Gateway — when to use which</h4>
   <div class="table-wrap">
     <table>
       <tr><th></th><th>Domain Service</th><th>Gateway</th></tr>
-      <tr><td>Owns</td><td>Business logic + state</td><td>External system interaction</td></tr>
+      <tr><td>Owns</td><td>Business logic + state</td><td>Cross-layer external system interaction</td></tr>
       <tr><td>Imports</td><td>Nothing (pure Swift)</td><td>UIKit, SDK, OS frameworks</td></tr>
       <tr><td>Layer</td><td>Domain</td><td>Infrastructure</td></tr>
       <tr><td>Protocol lives in</td><td>Domain</td><td>Domain</td></tr>
@@ -382,16 +392,21 @@
     </table>
   </div>
 
-  <div class="rule"><strong>The rule:</strong> if a class needs to import an external SDK or OS framework to do its job, it belongs in Infrastructure, not Domain. Domain defines what it needs via protocol; Infrastructure provides the concrete.</div>
+  <div class="rule"><strong>The rule — scope-based, not import-based.</strong> The Gateway trigger is cross-layer span, not the presence of a third-party import. Use a Gateway when an SDK touches multiple layers — Stripe owns Presentation (card collection UI) and Data (token API call), so neither layer alone is the right home. Single-layer SDKs wrap where they naturally live: CoreData → <code>LocalDataSource</code> (Data), AVFoundation playback → <code>PlayerService</code> (Domain). Domain defines the protocol; Infrastructure provides the concrete.</div>
 
-<pre><code><span class="cm">// Domain — no SDK imports, defines the contract</span>
+<pre><code><span class="cm">// Domain — defines the contract, no SDK imports</span>
 <span class="kw">protocol</span> <span class="ty">PaymentGatewayProtocol</span> {
     <span class="kw">func</span> <span class="nm">collectToken</span>() <span class="kw">async throws</span> -> <span class="ty">String</span>
 }
 
-<span class="cm">// Infrastructure — imports Stripe SDK, fulfills the contract</span>
+<span class="cm">// Infrastructure — Stripe spans Presentation + Data, so Gateway is the right home</span>
 <span class="kw">final class</span> <span class="ty">StripePaymentGateway</span>: <span class="ty">PaymentGatewayProtocol</span> {
     <span class="kw">func</span> <span class="nm">collectToken</span>() <span class="kw">async throws</span> -> <span class="ty">String</span> { ... }
+}
+
+<span class="cm">// Data — CoreData is persistence-only, no Gateway needed</span>
+<span class="kw">final class</span> <span class="ty">TrackLocalDataSource</span>: <span class="ty">TrackLocalDataSourceProtocol</span> {
+    <span class="kw">private let</span> context: <span class="ty">NSManagedObjectContext</span>  <span class="cm">// CoreData import stays in Data</span>
 }</code></pre>
 
   <h4>Suffix clarity — one suffix per layer</h4>
@@ -621,7 +636,7 @@
     <div class="stack-row"><div class="stack-name">4. Identify Domain Services</div><div class="stack-desc">Anything stateful, long-lived, or shared across screens. App-scoped.</div></div>
     <div class="stack-row"><div class="stack-name">5. Apply FetchPolicy</div><div class="stack-desc">Does this screen need fresh data? Can it show stale? Offline-first?</div></div>
     <div class="stack-row"><div class="stack-name">6. Identify local storage need</div><div class="stack-desc">Cache only? Offline-first with user-controlled saves? File storage? LRU eviction?</div></div>
-    <div class="stack-row"><div class="stack-name">7. Identify Infrastructure</div><div class="stack-desc">Which third-party SDKs or OS frameworks does this scenario require? Each gets a Gateway. Define the protocol in Domain, the concrete in Infrastructure.</div></div>
+    <div class="stack-row"><div class="stack-name">7. Identify external SDKs</div><div class="stack-desc">Does the SDK span multiple layers? If yes → Gateway in Infrastructure (e.g. Stripe: Presentation + Data). If data/persistence only → DataSource in Data (e.g. CoreData). If domain logic only → Service in Domain (e.g. AVFoundation for playback). The Gateway trigger is cross-layer span, not a third-party import.</div></div>
     <div class="stack-row"><div class="stack-name">8. Draw the data flow</div><div class="stack-desc">Top to bottom, out loud, immediately after the diagram. Catches missing dependencies and edge cases live.</div></div>
   </div>
 

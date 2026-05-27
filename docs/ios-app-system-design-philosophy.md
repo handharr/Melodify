@@ -35,11 +35,16 @@ In MVP the Presenter holds a reference back to the View via protocol — two-way
 VIPER splits a screen into 5 objects. The overhead is justified for very large teams where each layer is owned by a different person. For a small team, MVVM + UseCase gives the same testability with half the files.
 
 ### Infrastructure as the fourth layer
-The three-layer model (Presentation → Domain ← Data) is a simplification of Clean Architecture's four-ring model. It breaks down for third-party SDKs like Stripe, Firebase, APNs, or LocalAuthentication — they span concerns: UI presentation, OS-level callbacks, proprietary networking. Neither Data (the app's own storage and networking) nor Domain (pure Swift, no external imports) is the right home. Infrastructure is the explicit fourth layer for classes that wrap external systems the app doesn't control. Domain defines the protocol; Infrastructure provides the concrete. Swapping an SDK touches one file.
+The three-layer model (Presentation → Domain ← Data) is a simplification of Clean Architecture's four-ring model. It breaks down for SDKs that span multiple layers — Stripe owns both Presentation (card collection UI) and Data (token API call): neither layer alone is the right home. Infrastructure is the explicit fourth layer for these cross-layer wrappers. The Gateway trigger is **cross-layer span**, not the presence of a third-party import.
 
-**Why not `Manager`?** `Manager` became a dumping ground with no clear boundary — `NetworkManager`, `DataManager`, `AppManager`. Infrastructure is precise: every class there answers the question *which external system am I hiding?*
+**SDK placement rule — scope-based, not import-based:**
+- SDK spans multiple layers (Presentation + Data, etc.) → **Gateway** in Infrastructure (e.g. Stripe, Firebase with Auth + Analytics UI)
+- SDK is data/persistence only → **DataSource** in Data (e.g. CoreData, Realm)
+- SDK is domain logic only → **Service** in Domain (e.g. AVFoundation for playback orchestration)
 
-**Why `Gateway` as the suffix?** `Service` is claimed by Domain Services. `DataSource` is claimed by the Data layer. `Gateway` is unclaimed and semantically accurate — it is the entry point to an external system the app doesn't own.
+**Why not `Manager`?** `Manager` became a dumping ground with no clear boundary — `NetworkManager`, `DataManager`, `AppManager`. Infrastructure is precise: every Gateway there answers the question *which cross-layer external system am I hiding?*
+
+**Why `Gateway` as the suffix?** `Service` is claimed by Domain Services. `DataSource` is claimed by the Data layer. `Gateway` is unclaimed and semantically accurate — it is the entry point to an external system that spans layers the app doesn't own.
 
 ### UIKit vs SwiftUI — Which to Default To
 
@@ -196,17 +201,23 @@ Gateway
 | Concrete lives in | Domain | Infrastructure |
 | Example | `PlayerService`, `ReservationService` | `StripePaymentGateway`, `APNsNotificationGateway` |
 
-**The rule:** if a class needs to import an external SDK or OS framework to do its job, it belongs in Infrastructure, not Domain. Domain defines what it needs via protocol; Infrastructure provides the concrete.
+**The rule:** the Gateway trigger is cross-layer span, not the presence of a third-party import. Use a Gateway when an SDK touches multiple layers — Stripe owns Presentation (card collection UI) and Data (token API call), so neither layer alone is the right home. Single-layer SDKs wrap where they naturally live: CoreData → `LocalDataSource` (Data), AVFoundation playback → `PlayerService` (Domain). Domain defines the protocol; Infrastructure provides the concrete.
 
 ```swift
-// Domain — no SDK imports, defines the contract
+// Domain — defines the contract, no SDK imports
 protocol PaymentGatewayProtocol {
     func collectToken() async throws -> String
 }
 
-// Infrastructure — imports Stripe SDK, fulfills the contract
+// Infrastructure — wraps Stripe (spans Presentation + Data), fulfills the contract
 final class StripePaymentGateway: PaymentGatewayProtocol {
     func collectToken() async throws -> String { ... }
+}
+
+// Data — CoreData is persistence-only, wraps directly in DataSource (no Gateway needed)
+final class TrackLocalDataSource: TrackLocalDataSourceProtocol {
+    private let context: NSManagedObjectContext  // CoreData import stays in Data layer
+    ...
 }
 ```
 
@@ -460,7 +471,56 @@ When given an interview problem, map it onto this architecture:
 4. **Identify Domain Services** — anything stateful, long-lived, or shared across screens
 5. **Apply FetchPolicy** — does this screen need fresh data? Can it show stale?
 6. **Identify the local storage need** — cache only, or offline-first with user-controlled saves?
-7. **Identify Infrastructure dependencies** — which third-party SDKs or OS frameworks does this scenario require? Each gets a Gateway. Define the protocol in Domain, the concrete in Infrastructure.
+7. **Identify external SDKs** — does the SDK span multiple layers? If yes → Gateway in Infrastructure (e.g. Stripe: Presentation + Data). If data/persistence only → DataSource in Data (e.g. CoreData). If domain logic only → Service in Domain (e.g. AVFoundation for playback). The Gateway trigger is cross-layer span, not a third-party import.
 8. **Draw the data flow** — top to bottom, out loud, immediately after the diagram
 
 The scenario doc fills in the specifics. This doc is the skeleton.
+
+---
+
+## Recall Table — Visual Rules
+
+The `system-design-recall.html` summary table follows these rules to keep the diagram unambiguous.
+
+### Column structure
+
+9 columns, left to right:
+
+```
+Flow | Storage | Network | Infrastructure | Repository | DataSource | UseCase | Service | Presentation
+```
+
+Data and Domain are each split into two sub-columns so each entity type is independently scannable top-to-bottom.
+
+### Component uniqueness
+
+Each named component appears **at most once** per layer column per scenario card. Showing the same chip twice in two differently-colored rows creates a false signal — the color implies the component belongs to that flow exclusively, when it participates in multiple.
+
+### Consecutive reuse — rowspan + flow dots
+
+When the same component participates in N **consecutive** flows:
+
+1. Merge the N cells with `rowspan="N"`.
+2. Render the chip with `.chip.shared` (neutral `var(--text)` color — no flow color).
+3. Add a `<div class="flow-dots">` beneath the chip — one `<span class="flow-dot">` per participating flow, tinted with that flow's CSS variable.
+
+This preserves "which flows use this component" without claiming the component is owned by any single flow.
+
+### Non-consecutive reuse — ref badge
+
+When the same component appears in non-consecutive rows (e.g. rows 1 and 4 with a different component in rows 2–3), rowspan is not possible. Show the chip normally in the first row; in each later non-consecutive row show the chip again followed by `<span class="ref-badge">↑</span>` to signal reuse.
+
+### Rowspan decision criteria
+
+**Rowspan when:**
+- The chip is the sole or primary component in the cell (no two distinct components mixed in one cell)
+- It appears in 2+ consecutive rows
+
+**Do not rowspan:**
+- DataSource cells — per-flow sub-notes carry distinct recall details (upsert strategy, FetchPolicy, retry behavior)
+- Network cells — endpoints are always unique per flow
+- Mixed-component cells (e.g. `APIClient + NWPathMonitor`)
+
+### Flow color on unspanned rows
+
+Chips in non-rowspanned cells inherit `currentColor` from `tr.f1–f5` as before. Only rowspanned chips use `.chip.shared` neutral color.
