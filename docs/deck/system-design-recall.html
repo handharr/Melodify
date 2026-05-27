@@ -291,7 +291,7 @@
 <div class="scenario-card">
   <div class="scenario-head">
     <div>
-      <div class="scenario-tag" style="color:var(--orange)">Food Delivery · SSE · Server-hosted Basket</div>
+      <div class="scenario-tag" style="color:var(--orange)">Food Delivery · SSE · Server-Hosted Basket · OrderService · Idempotency</div>
       <h2>Uber Eats</h2>
     </div>
     <a href="scenarios/uber-eats-system-design.html" class="deck-link">Full deck →</a>
@@ -312,7 +312,7 @@
           <td class="lbl"><div class="flow-name">Load Restaurants</div></td>
           <td class="col-external" rowspan="4">
             <div class="comp">
-              <span class="chip st">Storage</span>
+              <span class="chip st shared">Storage</span>
               <div class="flow-dots">
                 <span class="flow-dot" style="background:var(--accent)"></span>
                 <span class="flow-dot" style="background:var(--orange)"></span>
@@ -320,32 +320,26 @@
               <div class="sub">CoreData — cache · offline restore · basket local mirror</div>
             </div>
             <div class="comp">
-              <span class="chip ep">API</span>
+              <span class="chip ep shared">API</span>
               <div class="flow-dots">
                 <span class="flow-dot" style="background:var(--accent)"></span>
                 <span class="flow-dot" style="background:var(--orange)"></span>
                 <span class="flow-dot" style="background:var(--green)"></span>
               </div>
-              <div class="sub">GET /restaurants/:addressID</div>
+              <div class="sub">GET /restaurants/&lt;addressID&gt;</div>
               <div class="sub">POST /basket · PATCH /basket on update</div>
               <div class="sub">POST /orders · idempotencyKey = UUID()</div>
-              <div class="sub">SSE /live-order-status/:id · close on viewDidDisappear</div>
+              <div class="sub">SSE /live-order-status/&lt;orderID&gt; · close on viewDidDisappear</div>
             </div>
           </td>
-          <td class="col-infra" rowspan="4">
+          <td class="col-infra" rowspan="3">
             <div class="comp">
-              <span class="chip infra">APIClient</span>
+              <span class="chip infra shared">APIClient</span>
               <div class="flow-dots">
                 <span class="flow-dot" style="background:var(--accent)"></span>
                 <span class="flow-dot" style="background:var(--orange)"></span>
+                <span class="flow-dot" style="background:var(--orange)"></span>
               </div>
-            </div>
-            <div class="comp">
-              <span class="chip infra">SSEClient</span>
-              <div class="flow-dots">
-                <span class="flow-dot" style="background:var(--green)"></span>
-              </div>
-              <div class="sub">URLSession text/event-stream · transport-only</div>
             </div>
           </td>
           <td rowspan="4">
@@ -367,7 +361,7 @@
             <div class="comp">
               <span class="chip ds">OrderSSEDataSource</span>
               <div class="flow-dots"><span class="flow-dot" style="background:var(--green)"></span></div>
-              <div class="sub">AsyncStream&lt;OrderSSEEventDTO&gt; · Domain defines protocol</div>
+              <div class="sub">wraps SSEClient · AsyncStream&lt;OrderSSEEventDTO&gt; · Domain defines protocol</div>
             </div>
           </td>
           <td rowspan="4">
@@ -419,6 +413,7 @@
 
         <tr class="f3">
           <td class="lbl"><div class="flow-name">Track Courier</div></td>
+          <td class="col-infra empty">—</td>
         </tr>
 
       </tbody>
@@ -451,17 +446,17 @@
           <td class="lbl"><div class="flow-name">Load Thread</div></td>
           <td class="col-external" rowspan="4">
             <div class="comp">
-              <span class="chip st">Storage</span>
+              <span class="chip st shared">Realm</span>
               <div class="flow-dots">
                 <span class="flow-dot" style="background:var(--accent)"></span>
                 <span class="flow-dot" style="background:var(--orange)"></span>
                 <span class="flow-dot" style="background:var(--green)"></span>
                 <span class="flow-dot" style="background:var(--red)"></span>
               </div>
-              <div class="sub">Realm — SSOT · live query drives all VM updates</div>
+              <div class="sub">SSOT · live query drives all VM updates</div>
             </div>
             <div class="comp">
-              <span class="chip ep">API</span>
+              <span class="chip ep shared">API</span>
               <div class="flow-dots">
                 <span class="flow-dot" style="background:var(--accent)"></span>
                 <span class="flow-dot" style="background:var(--orange)"></span>
@@ -492,7 +487,7 @@
           </td>
           <td rowspan="4">
             <div class="comp">
-              <span class="chip">MessageRepo</span>
+              <span class="chip shared">MessageRepo</span>
               <div class="flow-dots">
                 <span class="flow-dot" style="background:var(--accent)"></span>
                 <span class="flow-dot" style="background:var(--orange)"></span>
@@ -501,6 +496,11 @@
               </div>
               <div class="sub">MessageLocalDS — upsert by id · never append · isSent flag</div>
               <div class="sub">MessageRemoteDS — delta sync · retry on foreground</div>
+            </div>
+            <div class="comp">
+              <span class="chip ds">MessageStreamDS</span>
+              <div class="flow-dots"><span class="flow-dot" style="background:var(--green)"></span></div>
+              <div class="sub">wraps WebSocketClient · decodes frames → MessageDTO</div>
             </div>
           </td>
           <td rowspan="4">
@@ -557,7 +557,7 @@
 <div class="scenario-card">
   <div class="scenario-head">
     <div>
-      <div class="scenario-tag" style="color:var(--purple)">Media · HLS · AVPlayer · Two-tier LRU</div>
+      <div class="scenario-tag" style="color:var(--purple)">AVPlayer · HLS · PlayerService · GRDB · Two-tier LRU · cursor pagination</div>
       <h2>Music Streaming</h2>
     </div>
     <a href="scenarios/music-streaming-system-design.html" class="deck-link">Full deck →</a>
@@ -622,10 +622,17 @@
               <div class="sub">LibraryLocalDS · LibraryRemoteDS background refresh</div>
             </div>
             <div class="comp">
-              <span class="chip">DownloadRepo</span>
+              <span class="chip">PlayableItemRepo</span>
               <div class="flow-dots">
                 <span class="flow-dot" style="background:var(--green)"></span>
                 <span class="flow-dot" style="background:var(--red)"></span>
+              </div>
+              <div class="sub">PlayableItemLocalDS — .strict policy · queue build only</div>
+            </div>
+            <div class="comp">
+              <span class="chip">DownloadRepo</span>
+              <div class="flow-dots">
+                <span class="flow-dot" style="background:var(--green)"></span>
                 <span class="flow-dot" style="background:var(--red)"></span>
               </div>
               <div class="sub">MediaRemoteDS — signed manifest · short-lived expiresAt</div>
@@ -694,7 +701,7 @@
 <div class="scenario-card">
   <div class="scenario-head">
     <div>
-      <div class="scenario-tag" style="color:var(--green)">Social Feed · Optimistic UI · Cursor · SDWebImage</div>
+      <div class="scenario-tag" style="color:var(--green)">Social Feed · Optimistic Like · Cursor Pagination · SDWebImage · Prefetch</div>
       <h2>Instagram News Feed</h2>
     </div>
     <a href="scenarios/instagram-news-feed-system-design.html" class="deck-link">Full deck →</a>
@@ -715,90 +722,75 @@
           <td class="lbl"><div class="flow-name">Load Feed</div></td>
           <td class="col-external" rowspan="4">
             <div class="comp">
-              <span class="chip st">Storage</span>
+              <span class="chip st">CoreData</span>
               <div class="flow-dots">
                 <span class="flow-dot" style="background:var(--accent)"></span>
+                <span class="flow-dot" style="background:var(--accent)"></span>
                 <span class="flow-dot" style="background:var(--orange)"></span>
-                <span class="flow-dot" style="background:var(--red)"></span>
               </div>
-              <div class="sub">CoreData — write-through · fetchedAt TTL · Like queue · successfullySent flag</div>
-              <div class="sub">SDWebImage disk cache — decoded UIImage · zero-cost repeat display</div>
+              <div class="sub">write-through · fetchedAt 2-min TTL · Like queue · successfullySent flag</div>
             </div>
             <div class="comp">
-              <span class="chip ep">API</span>
+              <span class="chip ep">GET /users/:id/feed</span>
               <div class="flow-dots">
                 <span class="flow-dot" style="background:var(--accent)"></span>
+                <span class="flow-dot" style="background:var(--accent)"></span>
+              </div>
+              <div class="sub">postID cursor · limit=20 · cursor stable on insertions</div>
+            </div>
+            <div class="comp">
+              <span class="chip ep">POST /users/:id/likes</span>
+              <div class="flow-dots">
                 <span class="flow-dot" style="background:var(--orange)"></span>
+              </div>
+              <div class="sub">batch array body · batch on connectivity restore</div>
+            </div>
+            <div class="comp">
+              <span class="chip ep">S3 CDN image URLs</span>
+              <div class="flow-dots">
                 <span class="flow-dot" style="background:var(--red)"></span>
               </div>
-              <div class="sub">GET /users/:id/feed</div>
-              <div class="sub">GET /feed?postID=cursor&amp;limit=20 · cursor stable on insertions</div>
-              <div class="sub">POST /users/:id/likes · batch array body</div>
-              <div class="sub">S3 CDN image URLs · from PostDTO.photoURLs</div>
+              <div class="sub">PostDTO.photoURLs · resolved by FeedImageDataSource</div>
             </div>
           </td>
-          <td class="col-infra" rowspan="4">
+          <td class="col-infra" rowspan="3">
             <div class="comp">
               <span class="chip infra">APIClient</span>
               <div class="flow-dots">
                 <span class="flow-dot" style="background:var(--accent)"></span>
-                <span class="flow-dot" style="background:var(--orange)"></span>
-              </div>
-              <div class="sub">NWPathMonitor — retry on connectivity restore</div>
-            </div>
-            <div class="comp">
-              <span class="chip infra">SDWebImage</span>
-              <div class="flow-dots"><span class="flow-dot" style="background:var(--red)"></span></div>
-            </div>
-          </td>
-          <td rowspan="4">
-            <div class="comp">
-              <span class="chip">NewsFeedRepo</span>
-              <div class="flow-dots">
-                <span class="flow-dot" style="background:var(--accent)"></span>
-                <span class="flow-dot" style="background:var(--accent)"></span>
-              </div>
-              <div class="sub">FeedLocalDS — 2-min TTL · FeedRemoteDS if stale · cancel on prefetch cancel</div>
-            </div>
-            <div class="comp">
-              <span class="chip">LikeRepo</span>
-              <div class="flow-dots"><span class="flow-dot" style="background:var(--orange)"></span></div>
-              <div class="sub">FeedLocalDS — Like{successfullySent=false} · LikeRemoteDS on flush</div>
-            </div>
-            <div class="comp">
-              <span class="chip ds">ImageSDKDataSource</span>
-              <div class="flow-dots"><span class="flow-dot" style="background:var(--red)"></span></div>
-              <div class="sub">ThirdPartyDataSource — wraps SDWebImage behind protocol</div>
-            </div>
-          </td>
-          <td rowspan="4">
-            <div class="comp">
-              <span class="chip">FetchFeedUC</span>
-              <div class="flow-dots">
-                <span class="flow-dot" style="background:var(--accent)"></span>
-                <span class="flow-dot" style="background:var(--accent)"></span>
-              </div>
-            </div>
-            <div class="comp">
-              <span class="chip svc">LikeService</span>
-              <div class="flow-dots"><span class="flow-dot" style="background:var(--orange)"></span></div>
-              <div class="sub">app-scoped · retry queue survives app kill</div>
-            </div>
-          </td>
-          <td rowspan="4">
-            <div class="comp">
-              <span class="chip">FeedVM</span>
-              <div class="flow-dots">
-                <span class="flow-dot" style="background:var(--accent)"></span>
                 <span class="flow-dot" style="background:var(--accent)"></span>
                 <span class="flow-dot" style="background:var(--orange)"></span>
               </div>
-              <div class="sub">UICollectionViewDataSource · DataSourcePrefetching · optimistic toggle</div>
             </div>
+          </td>
+          <td rowspan="2">
             <div class="comp">
-              <span class="chip">UICollectionViewCell</span>
-              <div class="flow-dots"><span class="flow-dot" style="background:var(--red)"></span></div>
-              <div class="sub">sd_cancelCurrentImageLoad in prepareForReuse</div>
+              <span class="chip shared">NewsFeedRepo</span>
+              <div class="flow-dots">
+                <span class="flow-dot" style="background:var(--accent)"></span>
+                <span class="flow-dot" style="background:var(--accent)"></span>
+              </div>
+              <div class="sub">FeedLocalDS — 2-min TTL check · write-through</div>
+              <div class="sub">FeedRemoteDS — fetch if stale · cancel on prefetch cancel</div>
+            </div>
+          </td>
+          <td rowspan="2">
+            <div class="comp">
+              <span class="chip shared">FetchFeedUC</span>
+              <div class="flow-dots">
+                <span class="flow-dot" style="background:var(--accent)"></span>
+                <span class="flow-dot" style="background:var(--accent)"></span>
+              </div>
+            </div>
+          </td>
+          <td rowspan="2">
+            <div class="comp">
+              <span class="chip shared">FeedVM</span>
+              <div class="flow-dots">
+                <span class="flow-dot" style="background:var(--accent)"></span>
+                <span class="flow-dot" style="background:var(--accent)"></span>
+              </div>
+              <div class="sub">UICollectionViewDataSource · DataSourcePrefetching</div>
             </div>
           </td>
         </tr>
@@ -809,10 +801,48 @@
 
         <tr class="f2">
           <td class="lbl"><div class="flow-name">Like Post</div></td>
+          <td>
+            <div class="comp">
+              <span class="chip">LikeRepo</span>
+              <div class="sub">FeedLocalDS — Like{successfullySent=false}</div>
+              <div class="sub">LikeRemoteDS — flush on connectivity restore</div>
+            </div>
+          </td>
+          <td>
+            <div class="comp">
+              <span class="chip svc">LikeService</span>
+              <div class="sub">app-scoped · retry queue survives app kill</div>
+            </div>
+          </td>
+          <td>
+            <div class="comp">
+              <span class="chip">FeedVM</span> <span class="ref-badge">↑</span>
+              <div class="sub">optimistic toggle — instant UI before server ack</div>
+            </div>
+          </td>
         </tr>
 
         <tr class="f4">
           <td class="lbl"><div class="flow-name">Load Images</div></td>
+          <td class="col-infra">
+            <div class="comp">
+              <span class="chip infra">SDWebImage</span>
+              <div class="sub">decoded UIImage · memory + disk cache</div>
+            </div>
+          </td>
+          <td>
+            <div class="comp">
+              <span class="chip ds">FeedImageDataSource</span>
+              <div class="sub">ThirdPartyDataSource — wraps SDWebImage behind protocol</div>
+            </div>
+          </td>
+          <td class="empty">—</td>
+          <td>
+            <div class="comp">
+              <span class="chip">UICollectionViewCell</span>
+              <div class="sub">sd_cancelCurrentImageLoad in prepareForReuse</div>
+            </div>
+          </td>
         </tr>
 
       </tbody>
@@ -824,7 +854,7 @@
 <div class="scenario-card">
   <div class="scenario-head">
     <div>
-      <div class="scenario-tag" style="color:var(--orange)">Booking · Hold Timer · Stripe Facade · Offset Pagination</div>
+      <div class="scenario-tag" style="color:var(--orange)">Booking · Hold Timer · Stripe Facade · Offset Pagination · Idempotency · 409 Conflict</div>
       <h2>Hotel Booking</h2>
     </div>
     <a href="scenarios/hotel-booking-system-design.html" class="deck-link">Full deck →</a>
@@ -845,24 +875,33 @@
           <td class="lbl"><div class="flow-name">Search Hotels</div></td>
           <td class="col-external" rowspan="4">
             <div class="comp">
-              <span class="chip st">Storage</span>
+              <span class="chip st">CoreData</span>
               <div class="flow-dots">
                 <span class="flow-dot" style="background:var(--accent)"></span>
                 <span class="flow-dot" style="background:var(--orange)"></span>
               </div>
-              <div class="sub">CoreData — search cache · OfflineReservationDTO read-only history · offline record before Payment</div>
+              <div class="sub">search cache · OfflineReservationDTO read-only history · offline record before Payment</div>
             </div>
             <div class="comp">
-              <span class="chip ep">API</span>
+              <span class="chip ep">GET /hotels</span>
               <div class="flow-dots">
                 <span class="flow-dot" style="background:var(--accent)"></span>
+              </div>
+              <div class="sub">offset=&amp;limit=25 · offset pagination · BE owns sort</div>
+            </div>
+            <div class="comp">
+              <span class="chip ep">POST /reservations</span>
+              <div class="flow-dots">
                 <span class="flow-dot" style="background:var(--orange)"></span>
+              </div>
+              <div class="sub">local_id=UUID() · 409 Conflict → room unavailable · expiration_time server-authoritative</div>
+            </div>
+            <div class="comp">
+              <span class="chip ep">POST /reservations/payment</span>
+              <div class="flow-dots">
                 <span class="flow-dot" style="background:var(--purple)"></span>
               </div>
-              <div class="sub">GET /hotels?offset=&amp;limit=25 · offset pagination · BE owns sort</div>
-              <div class="sub">POST /reservations · 409 Conflict → room unavailable</div>
-              <div class="sub">expiration_time in POST /reservations response · server-authoritative</div>
-              <div class="sub">Stripe SDK → token → POST /reservations/payment · app never handles raw card data</div>
+              <div class="sub">Stripe SDK → token · app never handles raw card data</div>
             </div>
           </td>
           <td class="col-infra" rowspan="4">
@@ -893,7 +932,7 @@
             <div class="comp">
               <span class="chip">ReservationRepo</span>
               <div class="flow-dots"><span class="flow-dot" style="background:var(--orange)"></span></div>
-              <div class="sub">ReservationLocalDS — write offline record before Payment · ReservationRemoteDS</div>
+              <div class="sub">ReservationRemoteDS · ReservationLocalDS — write offline record before Payment</div>
             </div>
             <div class="comp">
               <span class="chip">PaymentRepo</span>
@@ -919,13 +958,23 @@
             <div class="comp">
               <span class="chip svc">PaymentService</span>
               <div class="flow-dots"><span class="flow-dot" style="background:var(--purple)"></span></div>
-              <div class="sub">calls PaymentGatewayProtocol — Domain never imports Stripe SDK</div>
+              <div class="sub">calls PaymentGatewayProtocol → delegates to ProcessPaymentUC</div>
+            </div>
+            <div class="comp">
+              <span class="chip">ProcessPaymentUC</span>
+              <div class="flow-dots"><span class="flow-dot" style="background:var(--purple)"></span></div>
+              <div class="sub">PaymentRepo → PaymentRemoteDS independently testable</div>
             </div>
           </td>
           <td rowspan="4">
             <div class="comp">
               <span class="chip">SearchVM</span>
               <div class="flow-dots"><span class="flow-dot" style="background:var(--accent)"></span></div>
+            </div>
+            <div class="comp">
+              <span class="chip">HotelListVM</span>
+              <div class="flow-dots"><span class="flow-dot" style="background:var(--accent)"></span></div>
+              <div class="sub">UIKit UITableView · offset pagination lifecycle</div>
             </div>
             <div class="comp">
               <span class="chip">ReservationVM</span>
@@ -962,7 +1011,7 @@
 <div class="scenario-card">
   <div class="scenario-head">
     <div>
-      <div class="scenario-tag" style="color:var(--accent)">Ephemeral · Single Endpoint · View Recycling · 10-min Guard</div>
+      <div class="scenario-tag" style="color:var(--accent)">Ephemeral · Single Endpoint · StoryOrderService · View Recycling · 10-min Guard</div>
       <h2>Story Viewer</h2>
     </div>
     <a href="scenarios/story-viewer-system-design.html" class="deck-link">Full deck →</a>
@@ -983,29 +1032,32 @@
           <td class="lbl"><div class="flow-name">Initial Load</div></td>
           <td class="col-external" rowspan="4">
             <div class="comp">
-              <span class="chip st">Storage</span>
+              <span class="chip st shared">Storage</span>
               <div class="flow-dots">
                 <span class="flow-dot" style="background:var(--accent)"></span>
-                <span class="flow-dot" style="background:var(--red)"></span>
+                <span class="flow-dot" style="background:var(--accent)"></span>
               </div>
               <div class="sub">CoreData — merge deltas · filter expireAt &lt; now on every read</div>
               <div class="sub">SDWebImage disk cache — decoded UIImage ready before user swipes</div>
             </div>
             <div class="comp">
-              <span class="chip ep">API</span>
+              <span class="chip ep shared">API</span>
               <div class="flow-dots">
                 <span class="flow-dot" style="background:var(--accent)"></span>
+                <span class="flow-dot" style="background:var(--accent)"></span>
+                <span class="flow-dot" style="background:var(--purple)"></span>
                 <span class="flow-dot" style="background:var(--red)"></span>
               </div>
               <div class="sub">GET /stories · cursor=nil · full 24h window · ~50 KB</div>
               <div class="sub">GET /stories?after=latestID · new stories bubble to front</div>
-              <div class="sub">S3 CDN · prefetch(url: nextStory.photoURL) — zero latency on swipe</div>
+              <div class="sub">S3 CDN · image binary via StoryImageDataSource (Swipe + Prefetch)</div>
             </div>
           </td>
           <td class="col-infra" rowspan="4">
             <div class="comp">
-              <span class="chip infra">APIClient</span>
+              <span class="chip infra shared">APIClient</span>
               <div class="flow-dots">
+                <span class="flow-dot" style="background:var(--accent)"></span>
                 <span class="flow-dot" style="background:var(--accent)"></span>
               </div>
             </div>
@@ -1015,33 +1067,48 @@
               <div class="sub">starts after image download — not on transition</div>
             </div>
             <div class="comp">
-              <span class="chip infra">SDWebImage</span>
-              <div class="flow-dots"><span class="flow-dot" style="background:var(--red)"></span></div>
+              <span class="chip infra shared">SDWebImage</span>
+              <div class="flow-dots">
+                <span class="flow-dot" style="background:var(--purple)"></span>
+                <span class="flow-dot" style="background:var(--red)"></span>
+              </div>
+              <div class="sub">wraps decoded UIImage · background download</div>
             </div>
           </td>
           <td rowspan="4">
             <div class="comp">
-              <span class="chip">StoryRepo</span>
+              <span class="chip shared">StoryRepo</span>
               <div class="flow-dots">
                 <span class="flow-dot" style="background:var(--accent)"></span>
                 <span class="flow-dot" style="background:var(--accent)"></span>
+                <span class="flow-dot" style="background:var(--purple)"></span>
+                <span class="flow-dot" style="background:var(--red)"></span>
               </div>
               <div class="sub">10-min throttle guard · filters expireAt &lt; now</div>
               <div class="sub">StoryLocalDS · StoryRemoteDS — merge deltas · filter expired</div>
+              <div class="sub">prefetchImage(url:) → StoryImageDataSource</div>
             </div>
             <div class="comp">
-              <span class="chip ds">ImageSDKDataSource</span>
-              <div class="flow-dots"><span class="flow-dot" style="background:var(--red)"></span></div>
-              <div class="sub">ThirdPartyDataSource — wraps SDWebImage behind protocol</div>
+              <span class="chip ds">StoryImageDataSource</span>
+              <div class="flow-dots">
+                <span class="flow-dot" style="background:var(--purple)"></span>
+                <span class="flow-dot" style="background:var(--red)"></span>
+              </div>
+              <div class="sub">wraps SDWebImage · load(url:into:completion:) · prefetch(url:)</div>
             </div>
           </td>
           <td rowspan="4">
             <div class="comp">
-              <span class="chip">FetchStoriesUC</span>
+              <span class="chip shared">FetchStoriesUC</span>
               <div class="flow-dots">
                 <span class="flow-dot" style="background:var(--accent)"></span>
                 <span class="flow-dot" style="background:var(--accent)"></span>
               </div>
+            </div>
+            <div class="comp">
+              <span class="chip">PrefetchStoryImageUC</span>
+              <div class="flow-dots"><span class="flow-dot" style="background:var(--red)"></span></div>
+              <div class="sub">execute(url:) → StoryRepo.prefetchImage</div>
             </div>
             <div class="comp">
               <span class="chip svc">StoryOrderService</span>
@@ -1051,10 +1118,11 @@
           </td>
           <td rowspan="4">
             <div class="comp">
-              <span class="chip">StoryVM</span>
+              <span class="chip shared">StoryVM</span>
               <div class="flow-dots">
                 <span class="flow-dot" style="background:var(--accent)"></span>
                 <span class="flow-dot" style="background:var(--accent)"></span>
+                <span class="flow-dot" style="background:var(--purple)"></span>
                 <span class="flow-dot" style="background:var(--red)"></span>
               </div>
               <div class="sub">triggers prefetch on every display cycle</div>
