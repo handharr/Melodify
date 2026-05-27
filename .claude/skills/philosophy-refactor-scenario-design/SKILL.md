@@ -4,35 +4,155 @@ description: Refactors a raw iOS system design notes file (from a YouTube video 
 user-invocable: true
 ---
 
-The user has raw system design notes from an external source (YouTube video, mock interview, article). The notes may have inconsistent structure, use different naming conventions, or reference architectural patterns that differ from the user's standard approach.
+The user provides a file path as the argument. Your job depends on where that path lives:
 
-Your job is to refactor those notes into:
-1. A clean `.md` scenario doc at `docs/scenarios/`
-2. A matching HTML deck file at `docs/deck/`
+| Input path | Mode | What happens |
+|---|---|---|
+| Inside `docs/scenarios/` | **Refactor mode** | Update the existing scenario `.md` in place, then regenerate its HTML deck |
+| Outside `docs/scenarios/` | **Create mode** | Treat as raw notes; produce a new scenario `.md` + HTML deck from scratch |
 
-Both outputs must:
-- Align with the user's generic iOS architecture (`docs/ios-app-system-design-philosophy.md`)
-- Open with an explicit delta section (what's the same, what this scenario adds)
-- Use the user's naming conventions throughout
-- Preserve all domain-specific knowledge and rationale from the original notes
+Both modes must produce output that:
+- Aligns with the user's generic iOS architecture (`docs/ios-app-system-design-philosophy.md`)
+- Opens with an explicit delta section (what's the same, what this scenario adds)
+- Uses the user's naming conventions throughout
+- Preserves all domain-specific knowledge and rationale
+
+---
 
 ## Inputs
 
-The user will provide a file path as the argument to this skill. The file may have any structure — do not assume a specific format. Read it as-is and extract what's useful.
+The user provides a file path as the argument to this skill.
 
-If no path is provided, ask the user for the file path before proceeding.
+**If no path is provided:** list all files in `docs/scenarios/` and ask: "Which scenario do you want to refactor, or provide a path to raw notes for a new scenario?"
 
-## Step 1 — Read all reference files
+**Mode detection:**
+- Path starts with `docs/scenarios/` or resolves to a file inside that directory → **Refactor mode**
+- Any other path → **Create mode**
 
-Read the raw notes file provided by the user.
+---
 
-Also read these reference files:
-- `docs/ios-app-system-design-philosophy.md` — generic architecture (source of truth for naming and patterns)
-- `docs/deck/music-streaming-system-design.html` — style reference for the HTML output (CSS, component classes, layout patterns)
+## REFACTOR MODE — updating an existing scenario doc
+
+Use this mode when the input file is already a clean scenario `.md` inside `docs/scenarios/`.
+
+### R-Step 1 — Read source files
+
+Read:
+1. The existing scenario `.md` at the provided path
+2. `docs/ios-app-system-design-philosophy.md` — source of truth for current naming and patterns
+3. The existing HTML deck at `docs/deck/<scenario-name>.html` — to understand what the current HTML looks like
+4. `docs/deck/music-streaming-system-design.html` — CSS/style reference
+
+### R-Step 2 — Identify what needs updating
+
+Compare the existing scenario `.md` against the current generic architecture doc. Find:
+
+**Naming drift** — components whose names no longer match current conventions:
+- DataSources not domain-prefixed (bare `RemoteDataSource` / `LocalDataSource` as class names)
+- Gateways not vendor-prefixed
+- Repositories, UseCases, or Services using old naming patterns
+
+**Content drift** — sections that are stale or incomplete:
+- "Same as generic architecture" list missing patterns that are now in the generic doc
+- Delta table "Generic" column descriptions that no longer match the generic doc
+- Architecture section missing one or more of the four required layers
+- DataSources listed without domain prefix in layer breakdowns or data flow pseudocode
+
+**Redundant generic content** — explanations that belong only in the philosophy doc, not here:
+- "Why MVVM over MVP?" / "Why Clean Architecture over MVC?"
+- "Why FetchPolicy over hardcoding?"
+- "UseCase vs Domain Service" or "Domain Service vs Gateway" comparison tables
+
+**Structural gaps** — missing required sections or subsections:
+- No `## Delta` section
+- Architecture section missing required four-layer structure
+- No `## Data Flow` section
+
+Present the full findings to the user before making any changes:
+
+```
+### Refactor plan — <scenario name>
+
+#### Naming drift
+- [ ] `RemoteDataSource` → `RestaurantRemoteDataSource` (3 occurrences in Architecture + Data Flow)
+- [ ] `LocalDataSource` → `MessageLocalDataSource` (2 occurrences)
+
+#### Content drift
+- [ ] Delta "Same as generic" list: add `ThirdPartyDataSource facade pattern` (added to generic doc)
+- [ ] Architecture section: Infrastructure layer missing — add `None` or fill in Gateway
+
+#### Redundant content to remove
+- [ ] "Why MVVM over MVP?" section (lines ~120–135) — belongs only in philosophy doc
+
+#### Structural gaps
+- [ ] None
+```
+
+Ask: **"Apply all changes? Or select specific items?"**
+
+### R-Step 3 — Apply approved changes
+
+For each approved item:
+- Apply naming renames throughout (Architecture, Data Flow, code examples, all sections)
+- Update the "Same as generic architecture" list to match the current generic doc
+- Update delta table rows where the "Generic" column description changed
+- Remove redundant generic content
+- Add missing layers/sections with `None` where appropriate
+- Do NOT remove or alter scenario-specific content — only fix alignment issues
+
+### R-Step 4 — Cross-check
+
+Verify the updated doc:
+- All four layers present in Architecture section (Presentation / Domain / Data / Infrastructure)
+- All DataSources are domain-prefixed in every section
+- No generic "Why" explanations remain
+- Delta section accurately reflects what's same vs scenario-specific
+- No dependency rule violations (or annotated with `⚠️` if present)
+
+### R-Step 5 — Regenerate the HTML deck
+
+Using `docs/deck/music-streaming-system-design.html` as the style reference, regenerate the full HTML deck at `docs/deck/<scenario-name>.html` from the updated `.md`.
+
+Follow the same HTML generation rules as the Create mode (see below) — CSS verbatim, `.callout`/`.rule`/`.warn` mapping, four-layer architecture rendering, syntax highlighting.
+
+### R-Step 6 — Report
+
+```
+## Refactor Complete — <scenario name>
+
+### Files updated
+- `docs/scenarios/<filename>.md`
+- `docs/deck/<filename>.html`
+
+### Changes applied
+- Renamed: `RemoteDataSource` → `RestaurantRemoteDataSource` (5 occurrences)
+- Delta "same" list: added ThirdPartyDataSource facade pattern
+- Removed: "Why MVVM over MVP?" section
+- Architecture: added Infrastructure layer (None — no Gateways in this scenario)
+
+### Skipped
+- <item> — skipped per user selection
+
+### Recommended follow-up
+- Run /philosophy-sync-recall-html <scenario-name> to update the recall card for this scenario
+```
+
+---
+
+## CREATE MODE — producing a new scenario from raw notes
+
+Use this mode when the input file is raw notes from a YouTube video, mock interview, or article — located anywhere outside `docs/scenarios/`.
+
+### C-Step 1 — Read source files
+
+Read:
+1. The raw notes file provided by the user
+2. `docs/ios-app-system-design-philosophy.md` — generic architecture (source of truth for naming and patterns)
+3. `docs/deck/music-streaming-system-design.html` — style reference for the HTML output (CSS, component classes, layout patterns)
 
 If `docs/ios-app-system-design-philosophy.md` does not exist, check `../docs/ios-app-system-design-philosophy.md` relative to the notes file, then ask the user for the correct path.
 
-## Step 2 — Vocabulary mapping
+### C-Step 2 — Vocabulary mapping
 
 Scan the raw notes for every architectural component, layer, or pattern named. Build a translation table:
 
@@ -52,7 +172,7 @@ Use the generic architecture doc as the source of truth for the user's naming co
 
 Flag any component in the notes that has no clear equivalent in the generic architecture — these are likely scenario-specific additions (delta candidates).
 
-## Step 3 — Layer audit
+### C-Step 3 — Layer audit
 
 Check every component in the notes against the dependency rule: **Presentation → Domain ← Data. Infrastructure conforms to Domain protocols. Domain depends on nothing.**
 
@@ -64,7 +184,7 @@ Flag violations:
 
 Note violations but do not remove them from the output — instead annotate them with a `⚠️` and the correct fix.
 
-## Step 4 — Delta identification
+### C-Step 4 — Delta identification
 
 Identify what this scenario requires that the generic architecture does not cover. These become the delta section. Common delta categories:
 
@@ -80,9 +200,9 @@ For each delta item, capture:
 - Why it's needed for this scenario specifically
 - How it maps onto the generic architecture (which layer it lives in)
 
-## Step 5 — Produce the output doc
+### C-Step 5 — Produce the `.md` doc
 
-Write a clean `.md` file. Save it at `docs/scenarios/ios-<scenario-name>-system-design.md` relative to the project root. If `docs/scenarios/` does not exist, create it. Use a descriptive kebab-case scenario name derived from the content (e.g. `ios-ride-sharing-system-design.md`).
+Write a clean `.md` file. Save it at `docs/scenarios/ios-<scenario-name>-system-design.md` relative to the project root. Use a descriptive kebab-case scenario name derived from the content (e.g. `ios-ride-sharing-system-design.md`).
 
 Structure:
 
@@ -111,20 +231,13 @@ Structure:
 ---
 
 ## Requirements
-(from notes)
 
 ## API Design
-(from notes, translated to user's conventions)
 
 ## Data Model
-(from notes, translated to user's conventions)
 
 ## Architecture
-(all four layers always present; unused layers show `None`)
 
-**Required structure — no exceptions:**
-
-```
 Presentation
   <named ViewControllers and ViewModels>
 
@@ -140,43 +253,37 @@ Data
 
 Infrastructure
   Gateways: <named vendor-prefixed Gateways, or None>
-```
-
-Every layer must appear even when unused — write `None` for empty sublists. Never omit a layer.
 
 ## Data Flow
-(end-to-end, using user's component names)
 
 ## <Scenario-Specific Deep Dives>
-(preserve any technical depth from the notes — HLS, pagination, offline, etc.)
 
 ## Interviewer Feedback / Key Takeaways
-(if present in notes)
 ```
 
-## Step 6 — Cross-check
+All four layers must always appear in Architecture — write `None` for unused sublists. Never omit a layer.
+
+### C-Step 6 — Cross-check
 
 Before writing any file, verify:
-- No scenario component violates the dependency rule (or is annotated if it does)
+- No scenario component violates the dependency rule (or annotated with `⚠️` if it does)
 - All naming follows the generic architecture conventions; all DataSources are domain-prefixed
 - The delta table is complete — nothing scenario-specific leaked into "same as generic"
 - The generic architecture doc does not need updating (if the scenario revealed a gap in the generic doc, call it out explicitly to the user)
-- **No generic "Why" explanations are in the scenario output.** The following belong only in `ios-app-system-design-philosophy.md` / `ios-app-system-design-philosophy.html` and must NOT appear in a scenario doc:
+- **No generic "Why" explanations are in the output.** Strip:
   - "Why MVVM over MVP?" / "Why MVVM over VIPER?" / "Why Clean Architecture over MVC?"
   - "Why FetchPolicy over hardcoding network/cache logic per ViewModel?"
   - "UseCase vs Domain Service" comparison table
   - "Domain Service vs Gateway" comparison table
-  - Keep only reasoning that is unique to this specific scenario — e.g. why UIKit vs SwiftUI for this screen type, why a specific storage backend, why SSE vs polling for this use case.
+  - Keep only reasoning that is unique to this specific scenario
 
-## Step 7 — Produce the HTML deck
+### C-Step 7 — Produce the HTML deck
 
 Using `docs/deck/music-streaming-system-design.html` as the style reference, produce a matching HTML file at `docs/deck/<scenario-name>.html`.
 
-### CSS and styling
-Copy the full `<style>` block verbatim from the reference HTML — do not modify or inline different styles. The design system is fixed.
+**CSS and styling:** copy the full `<style>` block verbatim — do not modify or abbreviate it.
 
-### Available component classes (from the reference HTML)
-Use these exactly as they appear in the reference:
+**Component classes:**
 
 | Class | Use for |
 |---|---|
@@ -186,12 +293,11 @@ Use these exactly as they appear in the reference:
 | `.warn` | Orange — gotchas, common mistakes |
 | `.table-wrap` + `table` | Comparison tables |
 | `pre` + `code` | Code blocks with syntax highlighting |
-| `.toc` | Table of contents |
+| `.toc` | Table of contents — `#delta` must be first entry |
 | `nav` | Breadcrumb at top |
 | `.bottom-nav` | Prev/next navigation at bottom |
 
-### Syntax highlighting inside `<pre><code>`
-Use these span classes for code:
+**Syntax highlighting inside `<pre><code>`:**
 - `.kw` — keywords (`struct`, `func`, `let`, `class`, `enum`, `case`)
 - `.ty` — type names (`TrackRepository`, `FetchPolicy`, `URL`)
 - `.st` — strings and values (`"HLS"`, `file://`)
@@ -199,31 +305,37 @@ Use these span classes for code:
 - `.nm` — method/property names
 - `.gr` — HTTP verbs (`GET`, `POST`)
 
-### HTML structure per section
-Mirror the section structure of the `.md` output:
+**HTML structure:**
 1. `<nav>` breadcrumb — link back to `index.html`
 2. `<header>` — title, subtitle
-3. `.toc` — all section anchors including `#delta` first
-4. `<section id="delta">` — delta section with same/adds table and key decision `.rule`/`.callout` divs
+3. `.toc` — all section anchors, `#delta` first
+4. `<section id="delta">` — delta section with `.rule`/`.callout` divs for key decisions
 5. Remaining sections matching the `.md` structure
 6. `<section id="feedback">` — key takeaways as `.rule` divs
-7. `.bottom-nav` — link back to `index.html` on the left; leave right side empty or link to a related deck if obvious
+7. `.bottom-nav` — `← Home` on the left; right side empty or link to a related deck
 
-### Nav breadcrumb
-```html
-<nav>
-  <a href="index.html">Home</a>
-  <span class="sep">›</span>
-  <span class="current"><Scenario Title></span>
-</nav>
-```
+Write the HTML file after the `.md` is complete — use the `.md` as the content source.
 
-Write the HTML file after the `.md` file is complete — use the `.md` as the content source so both outputs stay in sync.
-
-## Output to user
+### C-Step 8 — Report
 
 After writing both files:
-1. State both output file paths (`.md` and `.html`)
-2. Show the delta table (most useful thing to scan quickly before an interview)
-3. List any violations found in step 3 with their fixes
-4. List any gaps found in the generic architecture doc (step 6)
+
+```
+## Created — <scenario name>
+
+### Files created
+- `docs/scenarios/<filename>.md`
+- `docs/deck/<filename>.html`
+
+### Delta table
+<paste the delta table here — most useful pre-interview scan>
+
+### Layer violations (annotated in the doc)
+- <violation> → <correct fix>
+
+### Gaps found in the generic architecture doc
+- <gap> — recommend adding to docs/ios-app-system-design-philosophy.md
+
+### Recommended follow-up
+- Run /philosophy-sync-recall-html <scenario-name> to add this scenario to the recall page
+```

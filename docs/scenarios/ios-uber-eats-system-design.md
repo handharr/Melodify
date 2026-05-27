@@ -19,6 +19,7 @@
 - `[weak self]` in all closures to avoid retain cycles
 - Coordinator-based navigation, manual init injection
 - Mock-the-layer-below testing strategy
+- `async/await` for I/O; Combine for reactive binding to `@Published` state
 - `ThirdPartyDataSource` facade pattern — app calls protocol, never SDK directly
 - Idempotency keys on mutations — `POST /orders` is retryable; generate UUID at `Param` call site
 - HTTP `409 ≠ 5xx` — concurrency conflicts and transient server errors must never share a code path
@@ -194,6 +195,13 @@ Domain
       └─ must be scoped to the Order Status screen, not app-scoped
          (no global playback state — only active while tracking screen is visible)
 
+  Models:     User, Address, Restaurant, Dish, Basket, Order, OrderStatus
+  Params:     FetchRestaurantsParam(addressID:), FetchDishesParam(restaurantID:),
+              CreateBasketParam(userID:, restaurantID:, dishID:, count:),
+              UpdateBasketParam(basketID:, dishID:, count:),
+              FetchBasketParam(basketID:),
+              CreateOrderParam(userID:, basketID:, idempotencyKey: UUID)
+
 Data
   RestaurantRepository  : RestaurantRepositoryProtocol
     └─ RestaurantRemoteDataSource  → APIClient → GET /restaurants/<addressID>
@@ -214,9 +222,14 @@ Data
     └─ OrderRemoteDataSource       → APIClient → POST/GET /orders
     └─ OrderMapper
 
+  UserRepository        : UserRepositoryProtocol
+    └─ UserRemoteDataSource        → APIClient → GET /users/<userID>
+    └─ UserLocalDataSource         → Core Data (session cache — single record, refreshed on launch)
+    └─ UserMapper
+
 Infrastructure
-  OrderSSEGateway: OrderSSEGatewayProtocol
-    └─ wraps SSE client library
+  URLSessionSSEGateway: OrderSSEGatewayProtocol
+    └─ wraps URLSession SSE stream (no third-party library needed)
     └─ returns AsyncStream<OrderSSEEventDTO>
     └─ Domain defines the protocol; only Application wires the concrete
 
@@ -237,7 +250,7 @@ Application
 ViewController ──→ ViewModel ──→ UseCases ──→ Repository ──→ RemoteDataSource ──http──→ REST API
                         │                                  └─→ LocalDataSource ──→ Core Data
                         │
-                        └──→ OrderService ──→ OrderSSEGateway ──sse──→ SSE API
+                        └──→ OrderService ──→ URLSessionSSEGateway ──sse──→ SSE API
 
 ViewController ──→ UIImageView extension ──→ SDWebImage/Kingfisher ──http──→ Image CDN
 
@@ -254,12 +267,12 @@ DI: Coordinator composes all dependencies via manual init injection (no framewor
 | `Router` | `Coordinator` | Direct equivalent. One Coordinator per flow. |
 | `RestaurantService` | `FetchRestaurantsUseCase` + `RestaurantRepository` | Stateless per-action logic → UseCase. Data access → Repository. |
 | `BasketService` | `CreateBasketUseCase` / `UpdateBasketUseCase` + `BasketRepository` | Same split. |
-| `OrderService` (with SSE) | `OrderService` + `OrderSSEGateway` | Stateful/long-lived → Domain Service. SSE client → Infrastructure Gateway (`OrderSSEGateway: OrderSSEGatewayProtocol`). |
+| `OrderService` (with SSE) | `OrderService` + `URLSessionSSEGateway` | Stateful/long-lived → Domain Service. SSE client → Infrastructure Gateway (`URLSessionSSEGateway: OrderSSEGatewayProtocol`). |
 | `AuthService` | `Domain Service: SessionService` | Stateful session — app-scoped Domain Service. |
 | `Network Client (Alamofire)` | `APIClient` (URLSession-based) | Generic HTTP client. Alamofire is a valid implementation detail inside `RemoteDataSource`. |
 | `Mapper` | `Mapper` | Same name, same role. `static func toDomain(_ dto: DTO) -> Model?` |
 | `Storage Facade / Core Data` | `RestaurantLocalDataSource`, `DishLocalDataSource`, `BasketLocalDataSource` wrapping Core Data | Each domain entity gets its own named `LocalDataSource`. Swapping Core Data for GRDB touches those files only. |
-| `SSE Client` | `OrderSSEGateway: OrderSSEGatewayProtocol` (Infrastructure) | Wraps SSE library; returns `AsyncStream<DTO>`; Domain defines the protocol; rest of app never sees the library. |
+| `SSE Client` | `URLSessionSSEGateway: OrderSSEGatewayProtocol` (Infrastructure) | Wraps URLSession SSE stream; returns `AsyncStream<DTO>`; Domain defines the protocol; rest of app never sees the library. |
 | `UIImageView Extension` | `ThirdPartyDataSource` facade pattern | Same isolation principle — call site calls `imageView.setImage(url:)`, never the library directly. |
 | `Swinject DI container` | Manual init injection via `Coordinator` | User's arch avoids framework DI. Swinject adds a dependency and potential init-time crashes. |
 

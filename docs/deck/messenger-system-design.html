@@ -303,6 +303,7 @@
     <li><code>async/await</code> for I/O; Combine for reactive binding to <code>@Published</code> state</li>
     <li><code>ThirdPartyDataSource</code> facade pattern — wraps third-party SDKs; app calls protocol, never SDK directly</li>
     <li>Idempotency keys on mutations — client-generated UUID at <code>Param</code> call site for any retryable mutation</li>
+    <li>HTTP <code>409 ≠ 5xx</code> — concurrency conflicts and transient server errors must never share a code path</li>
     <li>Infrastructure layer (<code>Gateway</code> suffix) — Domain defines protocol; concrete in Infrastructure; nothing depends on Gateway except DI wiring in Application</li>
   </ul>
 
@@ -442,11 +443,14 @@ WS   /chat/{chat_id}                          → event stream after REST sync</
 
   <h3>Layer Breakdown</h3>
   <div class="stack">
-    <div class="stack-row"><div class="stack-name">Presentation</div><div class="stack-desc">ViewController + ViewModel (<code>@MainActor</code>, <code>@Published var state: ViewState&lt;T&gt;</code>)</div></div>
-    <div class="stack-row"><div class="arrow">↓</div><div class="stack-name">UseCase</div><div class="stack-desc">Single user action — <code>FetchChatsUseCase</code>, <code>FetchMessagesUseCase</code>, <code>SendMessageUseCase</code></div></div>
-    <div class="stack-row"><div class="arrow">↓</div><div class="stack-name">Domain Service</div><div class="stack-desc">Stateful, app-scoped — <code>MessageStreamService</code> (WebSocket) · <code>MessageSyncService</code> (offline queue)</div></div>
-    <div class="stack-row"><div class="arrow">↓</div><div class="stack-name">Repository</div><div class="stack-desc">Coordinates Remote + Local DataSources · applies FetchPolicy · converts DTO → Domain via Mapper</div></div>
-    <div class="stack-row"><div class="arrow">↓</div><div class="stack-name">DataSource</div><div class="stack-desc">Remote: <code>MessageRemoteDataSource</code> (APIClient) · Local: <code>MessageLocalDataSource</code> (Realm) · <code>AttachmentFileDataSource</code> (attachments)</div></div>
+    <div class="stack-row"><div class="stack-name">Presentation</div><div class="stack-desc"><code>ChatListViewController</code> → <code>ChatListViewModel</code> → <code>FetchChatsUseCase</code> · <code>MessageStreamService.subscribe()</code><br><code>ChatThreadViewController</code> → <code>ChatThreadViewModel</code> → <code>FetchMessagesUseCase</code> · <code>SendMessageUseCase</code> · <code>MarkReadUseCase</code> · <code>MessageStreamService</code> · <code>MessageSyncService</code></div></div>
+    <div class="stack-row"><div class="arrow">↓</div><div class="stack-name">UseCases</div><div class="stack-desc"><code>FetchChatsUseCase</code> → <code>ChatRepositoryProtocol</code> · <code>FetchMessagesUseCase</code> → <code>MessageRepositoryProtocol</code> · <code>SendMessageUseCase</code> → <code>MessageRepositoryProtocol</code> · <code>MarkReadUseCase</code> → <code>MessageRepositoryProtocol</code></div></div>
+    <div class="stack-row"><div class="arrow">↓</div><div class="stack-name">Domain Services</div><div class="stack-desc"><code>MessageStreamService</code> (app-scoped) — connect/disconnect · subscribe(chatId:) → <code>AnyPublisher&lt;Message, Never&gt;</code> · calls <code>WebSocketGatewayProtocol</code><br><code>MessageSyncService</code> (app-scoped) — syncPending() on foreground · calls <code>SendMessageUseCase</code> for retries</div></div>
+    <div class="stack-row"><div class="stack-name">Domain Models</div><div class="stack-desc"><code>Chat</code>, <code>Message</code>, <code>User</code>, <code>Attachment</code>, <code>ChatStatus</code>, <code>AttachmentType</code></div></div>
+    <div class="stack-row"><div class="stack-name">Domain Params</div><div class="stack-desc"><code>ChatListParam()</code> · <code>ChatParam(chatId:)</code> · <code>SendMessageParam(chatId:,message:)</code> · <code>MarkReadParam(chatId:,messageIds:)</code></div></div>
+    <div class="stack-row"><div class="arrow">↓</div><div class="stack-name">Repositories</div><div class="stack-desc"><code>MessageRepository: MessageRepositoryProtocol</code> — <code>MessageRemoteDataSource</code> (APIClient) + <code>MessageLocalDataSource</code> (Realm, SSOT) + <code>MessageMapper</code><br><code>ChatRepository: ChatRepositoryProtocol</code> — <code>ChatRemoteDataSource</code> (APIClient) + <code>ChatLocalDataSource</code> (Realm live query) + <code>ChatMapper</code><br><code>AttachmentFileDataSource</code> — binary files on disk; only URL stored in <code>MessageLocalDataSource</code></div></div>
+    <div class="stack-row"><div class="arrow">↓</div><div class="stack-name">Infrastructure</div><div class="stack-desc"><code>WebSocketGateway: WebSocketGatewayProtocol</code> — wraps <code>URLSessionWebSocketTask</code> (or Starscream) · exposes connect / disconnect / send / receive · Domain defines the protocol; only Application wires the concrete · <code>MessageStreamService</code> calls via <code>WebSocketGatewayProtocol</code>, never imports WebSocket library directly</div></div>
+    <div class="stack-row"><div class="stack-name">Application</div><div class="stack-desc"><code>AppCoordinator</code> + <code>ChatCoordinator</code> (navigation only) + DI via manual init injection</div></div>
   </div>
 
   <h3>Vocabulary Translation</h3>
@@ -635,7 +639,7 @@ WS   /chat/{chat_id}                          → event stream after REST sync</
   <h3 id="websocket">1. WebSocket Lifecycle</h3>
   <p><code>MessageStreamService</code> is a Domain Service — stateful, app-scoped, long-lived:</p>
 <pre><code><span class="kw">class</span> <span class="ty">MessageStreamService</span> {
-    <span class="kw">private var</span> socket: <span class="ty">WebSocketConnection</span>
+    <span class="kw">private let</span> gateway: <span class="ty">WebSocketGatewayProtocol</span>   <span class="cm">// Infrastructure — injected via DI</span>
 
     <span class="kw">func</span> <span class="nm">connect</span>()
     <span class="kw">func</span> <span class="nm">subscribe</span>(to chatId: <span class="ty">String</span>) -> <span class="ty">AnyPublisher</span>&lt;<span class="ty">Message</span>, <span class="ty">Never</span>&gt;

@@ -22,6 +22,7 @@
 - `async/await` for I/O; Combine for reactive binding to `@Published` state
 - `ThirdPartyDataSource` facade pattern — wraps third-party SDKs; app calls protocol, never SDK directly
 - Idempotency keys on mutations — client-generated UUID at `Param` call site for any retryable mutation
+- HTTP `409 ≠ 5xx` — concurrency conflicts and transient server errors must never share a code path
 - Infrastructure layer (`Gateway` suffix) — Domain defines protocol; concrete in Infrastructure; nothing depends on Gateway except DI wiring in Application
 
 ### What this scenario adds
@@ -171,10 +172,52 @@ Mappers (`ChatMapper`, `MessageMapper`) are the only types that know both DTO an
 ### Layer Breakdown
 
 ```
-Presentation   ViewController + ViewModel (@MainActor, @Published)
-Domain         UseCase + Domain Service + Model + Param + FetchPolicy
-Data           Repository + RemoteDataSource + LocalDataSource + DTO + Mapper + APIClient
-Application    AppCoordinator + ChatCoordinator (navigation only) + DI
+Presentation
+  ChatListViewController       → ChatListViewModel
+      FetchChatsUseCase · MessageStreamService.subscribe()
+  ChatThreadViewController     → ChatThreadViewModel
+      FetchMessagesUseCase · SendMessageUseCase · MarkReadUseCase
+      MessageStreamService (same app-scoped instance) · MessageSyncService
+
+Domain
+  UseCases (stateless):
+    FetchChatsUseCase          execute(policy:param:) → [Chat]      → ChatRepositoryProtocol
+    FetchMessagesUseCase       execute(policy:param:) → [Message]   → MessageRepositoryProtocol
+    SendMessageUseCase         execute(param:)                      → MessageRepositoryProtocol
+    MarkReadUseCase            execute(param:)                      → MessageRepositoryProtocol
+
+  Domain Services (stateful / app-scoped):
+    MessageStreamService       connect/disconnect · subscribe(chatId:) → AnyPublisher<Message, Never>
+                               calls WebSocketGatewayProtocol — never touches WebSocket library directly
+    MessageSyncService         syncPending() on foreground — flushes isSent=false messages
+                               calls SendMessageUseCase for retries
+
+  Models:   Chat, Message, User, Attachment, ChatStatus, AttachmentType
+  Params:   ChatListParam(), ChatParam(chatId:), SendMessageParam(chatId:, message:),
+            MarkReadParam(chatId:, messageIds:)
+
+Data
+  MessageRepository   : MessageRepositoryProtocol
+    └─ MessageRemoteDataSource  → APIClient (three-tier REST endpoints)
+    └─ MessageLocalDataSource   → Realm (SSOT — upsert by message.id)
+    └─ MessageMapper
+
+  ChatRepository      : ChatRepositoryProtocol
+    └─ ChatRemoteDataSource     → APIClient (GET /chat/all with cursor)
+    └─ ChatLocalDataSource      → Realm (live query drives ChatListViewModel)
+    └─ ChatMapper
+
+  AttachmentFileDataSource — binary files on disk; only URL stored in MessageLocalDataSource
+
+Infrastructure
+  WebSocketGateway: WebSocketGatewayProtocol
+    └─ wraps URLSessionWebSocketTask (or Starscream)
+    └─ exposes connect() / disconnect() / send(_:) / receive() → AnyPublisher<Data, Never>
+    └─ Domain defines the protocol; only Application wires the concrete
+    └─ MessageStreamService calls via WebSocketGatewayProtocol — never imports WebSocket library
+
+Application
+  AppCoordinator + ChatCoordinator (navigation only) + DI via manual init injection
 ```
 
 ### Vocabulary Translation
@@ -401,7 +444,7 @@ User opens ChatThread (or scrolls to bottom, viewing latest messages)
 
 ```swift
 class MessageStreamService {
-    private var socket: WebSocketConnection
+    private let gateway: WebSocketGatewayProtocol   // Infrastructure — injected via DI
 
     func connect()
     func subscribe(to chatId: String) -> AnyPublisher<Message, Never>

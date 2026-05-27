@@ -254,12 +254,14 @@ struct Reservation {
 
 | Layer | What lives here |
 |---|---|
-| Presentation | `ViewController` + `ViewModel` (@MainActor, @Published) · SwiftUI Views |
+| Presentation | `SearchViewController` + `SearchViewModel` (SwiftUI) · `HotelListViewController` + `HotelListViewModel` (UIKit `UITableView`) · `HotelDetailViewController` + `HotelDetailViewModel` (SwiftUI) · `ReservationViewController` + `ReservationViewModel` (SwiftUI) · `PaymentViewController` + `PaymentViewModel` (SwiftUI) — all `@MainActor`, `@Published` |
 | Domain — UseCase | `SearchHotelsUseCase` · `FetchHotelDetailUseCase` · `FetchAmenitiesUseCase` · `CreateReservationUseCase` · `ProcessPaymentUseCase` |
-| Domain — Service | `ReservationService` (hold timer + live state) · `ImageService` (two-tier cache) · `PaymentService` (orchestrates payment via `PaymentGatewayProtocol` → `ProcessPaymentUseCase`) |
+| Domain — Service | `ReservationService` (hold timer + live state) · `ImageService` (two-tier cache — calls `ImageRepositoryProtocol`) · `PaymentService` (orchestrates payment via `PaymentGatewayProtocol` → `ProcessPaymentUseCase`) |
+| Domain — Model | `HotelListing` · `Hotel` · `Amenity` · `Room` · `Reservation` |
+| Domain — Param | `SearchHotelsParam` · `FetchHotelDetailParam(hotelId:)` · `FetchAmenitiesParam` · `CreateReservationParam(localId: UUID, hotelId:, roomIds:, guestCount:)` · `ProcessPaymentParam(token:)` |
 | Infrastructure | `StripePaymentGateway: PaymentGatewayProtocol` — only class that imports Stripe SDK; wired by Application |
-| Data — Repository | `HotelRepository` · `ReservationRepository` · `AmenityRepository` · `ImageRepository` |
-| Data — DataSource | `HotelRemoteDataSource` · `HotelLocalDataSource` · `ReservationRemoteDataSource` · `ReservationLocalDataSource` · `AmenityLocalDataSource` · `MediaRemoteDataSource` · `ImageLocalDataSource` · `ImageFileDataSource` |
+| Data — Repository | `HotelRepository` · `ReservationRepository` · `AmenityRepository` · `ImageRepository` · `PaymentRepository` |
+| Data — DataSource | `HotelRemoteDataSource` · `HotelLocalDataSource` · `ReservationRemoteDataSource` · `ReservationLocalDataSource` · `AmenityLocalDataSource` · `MediaRemoteDataSource` · `ImageLocalDataSource` · `ImageFileDataSource` · `PaymentRemoteDataSource` |
 | Application | `AppDelegate` · `Coordinator` (per flow) · Swinject DI container |
 
 ### Swinject Scoping
@@ -385,6 +387,9 @@ PaymentViewModel.pay()
 
 ```
 Image Request (via ImageService)
+     │
+     ▼
+ImageRepository.loadImage(url:)   // ImageRepositoryProtocol — Domain Service never calls DataSources directly
      │
      ▼
 ImageFileDataSource (disk)

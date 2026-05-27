@@ -270,6 +270,7 @@ Domain
   DomainServices:
               PlayerService               owns PlaybackState, queue, shuffle/repeat logic
                                           app-scoped singleton — survives screen transitions
+                                          calls AVPlayerGatewayProtocol for actual audio playback
               StreamRefreshService        pure logic — given StreamInfo.expiresAt,
                                           decides when to trigger FetchStreamInfoUseCase
 
@@ -300,6 +301,14 @@ Data
     CollectionMapper.toDomain(_:)
     PlayableItemMapper.toDomain(_:)    ← handles Track vs Episode polymorphism
     StreamInfoMapper.toDomain(_:)
+
+Infrastructure
+  AVPlayerGateway: AVPlayerGatewayProtocol
+    └─ wraps AVPlayer + AVAudioSession (AVFoundation)
+    └─ exposes play(url:), pause(), stop(), seek(to:), configure(audioSessionCategory:)
+    └─ the only class in the playback path that imports AVFoundation
+    └─ Domain defines the protocol; only Application wires the concrete
+    └─ PlayerService calls via AVPlayerGatewayProtocol — Domain never imports AVFoundation
 ```
 
 ### FetchPolicy applies here too
@@ -336,7 +345,7 @@ PlayerViewModel.play(item, at: index)
       1. builds queue via PlayableItemRepository (PlayableItemRepositoryProtocol, policy: .strict)
       2. resolves asset:
            DownloadRepository (DownloadRepositoryProtocol): downloaded?
-             ├─ yes → file:// URL → PlayerEngine → AVPlayer
+             ├─ yes → file:// URL → AVPlayerGateway → AVPlayer
              └─ no  → FetchStreamInfoUseCase → DownloadRepository (DownloadRepositoryProtocol) → MediaRemoteDataSource → HLS CDN
                        → manifest → chunks → AVPlayer streams adaptively
       3. delegates expiry check to StreamRefreshService [Domain Service]
@@ -381,7 +390,7 @@ Two separate `MediaFileDataSource` instances — offline saves can never be evic
 ```
 PlayerService triggers playback
   → PlaybackAssetResolver checks DownloadRepository (DownloadRepositoryProtocol)
-      ├─ downloaded? → file:// URL → AVPlayer
+      ├─ downloaded? → file:// URL → AVPlayerGateway → AVPlayer
       └─ not downloaded? → FetchStreamInfoUseCase → DownloadRepository (DownloadRepositoryProtocol) → MediaRemoteDataSource → HLS CDN
                              → manifest (.m3u8)
                              → quality buckets → chunks (2–10s each)
@@ -389,10 +398,10 @@ PlayerService triggers playback
 ```
 
 ### manifest `expiresAt` — Refresh During Playback
-- `PlayerEngine` checks `expiresAt` before initiating each new chunk request
+- `AVPlayerGateway` detects chunk-boundary approach; `StreamRefreshService` checks `expiresAt` before the next chunk request
 - If near expiry → background task fetches a fresh `stream-info` via `FetchStreamInfoUseCase` → `MediaRemoteDataSource`
 - Refresh happens **without interrupting the active audio buffer** — chunks already buffered keep playing while the new manifest loads
-- Owner: `PlayerService` / `PlayerEngine`, not the ViewModel
+- Owner: `PlayerService` (via `AVPlayerGatewayProtocol` + `StreamRefreshService`), not the ViewModel
 
 ### Offline Playback — Two Paths
 
@@ -657,7 +666,7 @@ Before fetching each new chunk:
   StreamRefreshService.needsRefresh(for: streamInfo)
     → checks: Date() > streamInfo.expiresAt - refreshThreshold (e.g. 60s)
     → if yes → background fetch new stream-info from API
-    → swap manifest URL in PlayerEngine
+    → swap manifest URL in AVPlayerGateway
     → buffered chunks already playing are unaffected
 ```
 
@@ -909,7 +918,7 @@ func seek(to time: TimeInterval) {
     let wasPlaying = state.status == .playing
     state = state.with(status: .seeking)    // UI shows seeking indicator
 
-    engine.seek(to: time) { [weak self] in
+    avPlayerGateway.seek(to: time) { [weak self] in
         // completion — restore previous state
         self?.state = self?.state.with(status: wasPlaying ? .playing : .paused)
     }

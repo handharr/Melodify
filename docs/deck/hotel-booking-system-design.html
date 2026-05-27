@@ -486,12 +486,14 @@ limit=&lt;int&gt;          <span class="cm">// 25 per page</span>
 
   <h3>Layer Breakdown</h3>
   <div class="stack">
-    <div class="stack-row"><div class="stack-name">Presentation</div><div class="stack-desc">ViewController + ViewModel (@MainActor, @Published) · SwiftUI Views · binds to UseCases and Domain Services</div></div>
-    <div class="stack-row"><div class="arrow">↓</div><div class="stack-name">UseCase</div><div class="stack-desc">SearchHotelsUseCase · FetchHotelDetailUseCase · FetchAmenitiesUseCase · CreateReservationUseCase · ProcessPaymentUseCase</div></div>
-    <div class="stack-row"><div class="arrow">↓</div><div class="stack-name">Domain Service</div><div class="stack-desc">ReservationService (hold timer + live state) · ImageService (two-tier cache) · PaymentService (orchestrates payment via PaymentGatewayProtocol → ProcessPaymentUseCase)</div></div>
+    <div class="stack-row"><div class="stack-name">Presentation</div><div class="stack-desc"><code>SearchViewController</code> + <code>SearchViewModel</code> (SwiftUI) · <code>HotelListViewController</code> + <code>HotelListViewModel</code> (UIKit <code>UITableView</code>) · <code>HotelDetailViewController</code> + <code>HotelDetailViewModel</code> (SwiftUI) · <code>ReservationViewController</code> + <code>ReservationViewModel</code> (SwiftUI) · <code>PaymentViewController</code> + <code>PaymentViewModel</code> (SwiftUI) — all <code>@MainActor</code>, <code>@Published</code></div></div>
+    <div class="stack-row"><div class="arrow">↓</div><div class="stack-name">UseCase</div><div class="stack-desc"><code>SearchHotelsUseCase</code> · <code>FetchHotelDetailUseCase</code> · <code>FetchAmenitiesUseCase</code> · <code>CreateReservationUseCase</code> · <code>ProcessPaymentUseCase</code></div></div>
+    <div class="stack-row"><div class="arrow">↓</div><div class="stack-name">Domain Service</div><div class="stack-desc"><code>ReservationService</code> (hold timer + live state) · <code>ImageService</code> (two-tier cache — calls <code>ImageRepositoryProtocol</code>) · <code>PaymentService</code> (orchestrates payment via <code>PaymentGatewayProtocol</code> → <code>ProcessPaymentUseCase</code>)</div></div>
+    <div class="stack-row"><div class="stack-name">Domain Models</div><div class="stack-desc"><code>HotelListing</code> · <code>Hotel</code> · <code>Amenity</code> · <code>Room</code> · <code>Reservation</code></div></div>
+    <div class="stack-row"><div class="stack-name">Domain Params</div><div class="stack-desc"><code>SearchHotelsParam</code> · <code>FetchHotelDetailParam(hotelId:)</code> · <code>FetchAmenitiesParam</code> · <code>CreateReservationParam(localId:UUID, hotelId:, roomIds:, guestCount:)</code> · <code>ProcessPaymentParam(token:)</code></div></div>
     <div class="stack-row"><div class="stack-name">Infrastructure</div><div class="stack-desc">StripePaymentGateway: PaymentGatewayProtocol — only class that imports Stripe SDK; wired by Application</div></div>
     <div class="stack-row"><div class="arrow">↓</div><div class="stack-name">Repository</div><div class="stack-desc">HotelRepository · ReservationRepository · AmenityRepository · ImageRepository · PaymentRepository</div></div>
-    <div class="stack-row"><div class="arrow">↓</div><div class="stack-name">DataSource</div><div class="stack-desc">Remote: HotelRemoteDataSource · ReservationRemoteDataSource · MediaRemoteDataSource<br>Local: HotelLocalDataSource · ReservationLocalDataSource · AmenityLocalDataSource · ImageLocalDataSource · ImageFileDataSource</div></div>
+    <div class="stack-row"><div class="arrow">↓</div><div class="stack-name">DataSource</div><div class="stack-desc">Remote: <code>HotelRemoteDataSource</code> · <code>ReservationRemoteDataSource</code> · <code>MediaRemoteDataSource</code> · <code>PaymentRemoteDataSource</code><br>Local: <code>HotelLocalDataSource</code> · <code>ReservationLocalDataSource</code> · <code>AmenityLocalDataSource</code> · <code>ImageLocalDataSource</code> · <code>ImageFileDataSource</code></div></div>
     <div class="stack-row"><div class="stack-name">Application</div><div class="stack-desc">AppDelegate · Coordinator (per flow) · Swinject DI container</div></div>
   </div>
 
@@ -604,6 +606,9 @@ limit=&lt;int&gt;          <span class="cm">// 25 per page</span>
 
   <h4>Cache lookup flow</h4>
 <pre><code>Image Request (via <span class="nm">ImageService</span>)
+     │
+     ▼
+<span class="nm">ImageRepository</span>.loadImage(url:)   <span class="cm">// ImageRepositoryProtocol — Domain Service never calls DataSources directly</span>
      │
      ▼
 <span class="nm">ImageFileDataSource</span> (disk)

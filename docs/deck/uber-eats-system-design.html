@@ -295,6 +295,7 @@
     <li><code>[weak self]</code> in all closures to avoid retain cycles</li>
     <li>Coordinator-based navigation, manual init injection (no DI framework)</li>
     <li>Mock-the-layer-below testing strategy</li>
+    <li><code>async/await</code> for I/O; Combine for reactive binding to <code>@Published</code> state</li>
     <li><code>ThirdPartyDataSource</code> facade — app calls protocol, never SDK directly</li>
     <li>Idempotency keys on mutations — UUID generated at <code>Param</code> call site</li>
     <li>HTTP <code>409 ≠ 5xx</code> — concurrency conflicts and transient server errors must never share a code path</li>
@@ -474,18 +475,27 @@
     </div>
     <div class="stack-row">
       <div class="arrow">↓</div>
+      <div class="stack-name">Domain Models</div>
+      <div class="stack-desc"><code>User</code>, <code>Address</code>, <code>Restaurant</code>, <code>Dish</code>, <code>Basket</code>, <code>Order</code>, <code>OrderStatus</code> — pure Swift structs, no UIKit or networking imports</div>
+    </div>
+    <div class="stack-row">
+      <div class="stack-name">Domain Params</div>
+      <div class="stack-desc"><code>FetchRestaurantsParam(addressID:)</code> · <code>FetchDishesParam(restaurantID:)</code> · <code>CreateBasketParam(userID:,restaurantID:,dishID:,count:)</code> · <code>UpdateBasketParam(basketID:,dishID:,count:)</code> · <code>FetchBasketParam(basketID:)</code> · <code>CreateOrderParam(userID:,basketID:,idempotencyKey:UUID)</code></div>
+    </div>
+    <div class="stack-row">
+      <div class="arrow">↓</div>
       <div class="stack-name">Repositories</div>
-      <div class="stack-desc"><code>RestaurantRepository</code>: <code>RestaurantRemoteDataSource</code> + <code>RestaurantLocalDataSource</code> · <code>DishRepository</code>: <code>DishRemoteDataSource</code> + <code>DishLocalDataSource</code> · <code>BasketRepository</code>: <code>BasketRemoteDataSource</code> + <code>BasketLocalDataSource</code> · <code>OrderRepository</code>: <code>OrderRemoteDataSource</code> · all apply <code>FetchPolicy</code>, convert DTO → Domain via Mapper</div>
+      <div class="stack-desc"><code>RestaurantRepository</code>: <code>RestaurantRemoteDataSource</code> + <code>RestaurantLocalDataSource</code> · <code>DishRepository</code>: <code>DishRemoteDataSource</code> + <code>DishLocalDataSource</code> · <code>BasketRepository</code>: <code>BasketRemoteDataSource</code> + <code>BasketLocalDataSource</code> · <code>OrderRepository</code>: <code>OrderRemoteDataSource</code> · <code>UserRepository</code>: <code>UserRemoteDataSource</code> + <code>UserLocalDataSource</code> · all apply <code>FetchPolicy</code>, convert DTO → Domain via Mapper</div>
     </div>
     <div class="stack-row">
       <div class="arrow">↓</div>
       <div class="stack-name">DataSources</div>
-      <div class="stack-desc">Remote: <code>RestaurantRemoteDataSource</code>, <code>DishRemoteDataSource</code>, <code>BasketRemoteDataSource</code>, <code>OrderRemoteDataSource</code> (all wrap <code>APIClient</code>) · Local: <code>RestaurantLocalDataSource</code>, <code>DishLocalDataSource</code>, <code>BasketLocalDataSource</code> (Core Data)</div>
+      <div class="stack-desc">Remote: <code>RestaurantRemoteDataSource</code>, <code>DishRemoteDataSource</code>, <code>BasketRemoteDataSource</code>, <code>OrderRemoteDataSource</code>, <code>UserRemoteDataSource</code> (all wrap <code>APIClient</code>) · Local: <code>RestaurantLocalDataSource</code>, <code>DishLocalDataSource</code>, <code>BasketLocalDataSource</code>, <code>UserLocalDataSource</code> (Core Data)</div>
     </div>
     <div class="stack-row">
       <div class="arrow">↓</div>
       <div class="stack-name">Infrastructure</div>
-      <div class="stack-desc"><code>OrderSSEGateway: OrderSSEGatewayProtocol</code> — wraps SSE client library; Domain defines the protocol; only Application wires the concrete</div>
+      <div class="stack-desc"><code>URLSessionSSEGateway: OrderSSEGatewayProtocol</code> — wraps URLSession SSE stream; Domain defines the protocol; only Application wires the concrete</div>
     </div>
     <div class="stack-row">
       <div class="arrow">↓</div>
@@ -502,11 +512,11 @@
       <tr><td><code>Router</code></td><td><code>Coordinator</code></td><td>Direct equivalent — one per flow.</td></tr>
       <tr><td><code>RestaurantService</code></td><td><code>FetchRestaurantsUseCase</code> + <code>RestaurantRepository</code></td><td>Stateless per-action → UseCase. Data access → Repository.</td></tr>
       <tr><td><code>BasketService</code></td><td><code>CreateBasketUseCase</code> / <code>UpdateBasketUseCase</code> + <code>BasketRepository</code></td><td>Same split.</td></tr>
-      <tr><td><code>OrderService</code> (stateful SSE)</td><td><code>OrderService</code> + <code>OrderSSEGateway</code></td><td>Stateful/long-lived → Domain Service. SSE client → Infrastructure Gateway (<code>OrderSSEGateway: OrderSSEGatewayProtocol</code>).</td></tr>
-      <tr><td><code>AuthService</code></td><td><code>SessionDomainService</code></td><td>Stateful session — app-scoped Domain Service.</td></tr>
+      <tr><td><code>OrderService</code> (stateful SSE)</td><td><code>OrderService</code> + <code>URLSessionSSEGateway</code></td><td>Stateful/long-lived → Domain Service. SSE client → Infrastructure Gateway (<code>URLSessionSSEGateway: OrderSSEGatewayProtocol</code>).</td></tr>
+      <tr><td><code>AuthService</code></td><td><code>SessionService</code></td><td>Stateful session — app-scoped Domain Service.</td></tr>
       <tr><td>Network Client (Alamofire)</td><td><code>APIClient</code> (URLSession-based)</td><td>Alamofire is a valid implementation detail inside <code>RemoteDataSource</code>.</td></tr>
       <tr><td><code>Storage Facade</code></td><td><code>RestaurantLocalDataSource</code>, <code>DishLocalDataSource</code>, <code>BasketLocalDataSource</code></td><td>Each domain entity gets its own named <code>LocalDataSource</code>. Swapping Core Data for GRDB touches those files only.</td></tr>
-      <tr><td>SSE Client</td><td><code>OrderSSEGateway: OrderSSEGatewayProtocol</code> (Infrastructure)</td><td>Wraps SSE library; Domain defines the protocol; rest of app never sees the library. Returns <code>AsyncStream&lt;OrderSSEEventDTO&gt;</code>.</td></tr>
+      <tr><td>SSE Client</td><td><code>URLSessionSSEGateway: OrderSSEGatewayProtocol</code> (Infrastructure)</td><td>Wraps URLSession SSE stream; Domain defines the protocol; rest of app never sees the implementation. Returns <code>AsyncStream&lt;OrderSSEEventDTO&gt;</code>.</td></tr>
       <tr><td>UIImageView Extension</td><td>ThirdPartyDataSource facade pattern</td><td>Same isolation principle. <code>imageView.setImage(url:)</code> — never SDWebImage directly.</td></tr>
       <tr><td>Swinject DI</td><td>Manual init injection via Coordinator</td><td>User's arch avoids DI frameworks. Coordinator IS the composition root.</td></tr>
     </table>
