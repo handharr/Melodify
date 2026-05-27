@@ -209,8 +209,20 @@
   }
 
   /* Flow dots for rowspanned cells */
-  .flow-dots { display: flex; gap: 4px; margin-top: 5px; }
-  .flow-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .flow-dots { display: flex; gap: 4px; margin-top: 5px; flex-wrap: wrap; }
+  .flow-dot {
+    width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
+    position: relative; margin-right: 16px;
+  }
+  .flow-dot::after {
+    content: '';
+    position: absolute;
+    left: 9px; top: 2px;
+    width: 14px; height: 2px;
+    border-radius: 1px;
+    background: inherit;
+  }
+
 
   /* Ref badge — non-consecutive reuse marker */
   .ref-badge {
@@ -298,89 +310,115 @@
 
         <tr class="f1">
           <td class="lbl"><div class="flow-name">Load Restaurants</div></td>
-          <td class="col-external">
-            <span class="chip st">CoreData</span>
-            <div class="sub">cache · offline restore</div>
-            <span class="chip ep">GET /restaurants/:addressID</span>
-          </td>
-          <td class="col-infra" rowspan="3">
-            <span class="chip shared infra">APIClient</span>
-            <div class="flow-dots">
-              <span class="flow-dot" style="background:var(--accent)"></span>
-              <span class="flow-dot" style="background:var(--orange)"></span>
-              <span class="flow-dot" style="background:var(--orange)"></span>
+          <td class="col-external" rowspan="4">
+            <div class="comp">
+              <span class="chip st">Storage</span>
+              <div class="flow-dots">
+                <span class="flow-dot" style="background:var(--accent)"></span>
+                <span class="flow-dot" style="background:var(--orange)"></span>
+              </div>
+              <div class="sub">CoreData — cache · offline restore · basket local mirror</div>
+            </div>
+            <div class="comp">
+              <span class="chip ep">API</span>
+              <div class="flow-dots">
+                <span class="flow-dot" style="background:var(--accent)"></span>
+                <span class="flow-dot" style="background:var(--orange)"></span>
+                <span class="flow-dot" style="background:var(--green)"></span>
+              </div>
+              <div class="sub">GET /restaurants/:addressID</div>
+              <div class="sub">POST /basket · PATCH /basket on update</div>
+              <div class="sub">POST /orders · idempotencyKey = UUID()</div>
+              <div class="sub">SSE /live-order-status/:id · close on viewDidDisappear</div>
             </div>
           </td>
-          <td>
-            <span class="chip">RestaurantRepo</span><br>
-            <span class="chip ds">RestaurantRemoteDS</span>
-            <div class="sub">RestaurantLocalDS — FetchPolicy.cached</div>
+          <td class="col-infra" rowspan="4">
+            <div class="comp">
+              <span class="chip infra">APIClient</span>
+              <div class="flow-dots">
+                <span class="flow-dot" style="background:var(--accent)"></span>
+                <span class="flow-dot" style="background:var(--orange)"></span>
+              </div>
+            </div>
+            <div class="comp">
+              <span class="chip infra">SSEClient</span>
+              <div class="flow-dots">
+                <span class="flow-dot" style="background:var(--green)"></span>
+              </div>
+              <div class="sub">URLSession text/event-stream · transport-only</div>
+            </div>
           </td>
-          <td><span class="chip">FetchRestaurantsUC</span></td>
-          <td><span class="chip">RestaurantListVM</span></td>
+          <td rowspan="4">
+            <div class="comp">
+              <span class="chip">RestaurantRepo</span>
+              <div class="flow-dots"><span class="flow-dot" style="background:var(--accent)"></span></div>
+              <div class="sub">RestaurantLocalDS — FetchPolicy.cached · RestaurantRemoteDS</div>
+            </div>
+            <div class="comp">
+              <span class="chip">BasketRepo</span>
+              <div class="flow-dots"><span class="flow-dot" style="background:var(--orange)"></span></div>
+              <div class="sub">BasketLocalDS — local mirror · BasketRemoteDS</div>
+            </div>
+            <div class="comp">
+              <span class="chip">OrderRepo</span>
+              <div class="flow-dots"><span class="flow-dot" style="background:var(--orange)"></span></div>
+              <div class="sub">OrderRemoteDS</div>
+            </div>
+            <div class="comp">
+              <span class="chip ds">OrderSSEDataSource</span>
+              <div class="flow-dots"><span class="flow-dot" style="background:var(--green)"></span></div>
+              <div class="sub">AsyncStream&lt;OrderSSEEventDTO&gt; · Domain defines protocol</div>
+            </div>
+          </td>
+          <td rowspan="4">
+            <div class="comp">
+              <span class="chip">FetchRestaurantsUC</span>
+              <div class="flow-dots"><span class="flow-dot" style="background:var(--accent)"></span></div>
+            </div>
+            <div class="comp">
+              <span class="chip">CreateBasketUC</span>
+              <div class="flow-dots"><span class="flow-dot" style="background:var(--orange)"></span></div>
+              <div class="sub">UpdateBasketUC on PATCH</div>
+            </div>
+            <div class="comp">
+              <span class="chip">CreateOrderUC</span>
+              <div class="flow-dots"><span class="flow-dot" style="background:var(--orange)"></span></div>
+            </div>
+            <div class="comp">
+              <span class="chip svc">OrderService</span>
+              <div class="flow-dots"><span class="flow-dot" style="background:var(--green)"></span></div>
+              <div class="sub">scoped to OrderCoordinator · AnyPublisher&lt;Order, AppError&gt;</div>
+            </div>
+          </td>
+          <td rowspan="4">
+            <div class="comp">
+              <span class="chip">RestaurantListVM</span>
+              <div class="flow-dots"><span class="flow-dot" style="background:var(--accent)"></span></div>
+            </div>
+            <div class="comp">
+              <span class="chip">BasketVM</span>
+              <div class="flow-dots">
+                <span class="flow-dot" style="background:var(--orange)"></span>
+                <span class="flow-dot" style="background:var(--orange)"></span>
+              </div>
+            </div>
+            <div class="comp">
+              <span class="chip">OrderStatusVM</span>
+              <div class="flow-dots"><span class="flow-dot" style="background:var(--green)"></span></div>
+            </div>
+          </td>
         </tr>
 
         <tr class="f2">
           <td class="lbl"><div class="flow-name">Manage Basket</div></td>
-          <td class="col-external">
-            <span class="chip st">CoreData</span>
-            <div class="sub">local mirror for instant restore</div>
-            <span class="chip ep">POST /basket</span>
-            <div class="sub">PATCH /basket on update</div>
-          </td>
-          <!-- Infra rowspanned -->
-          <td>
-            <span class="chip">BasketRepo</span><br>
-            <span class="chip ds">BasketRemoteDS</span>
-            <div class="sub">BasketLocalDS — local mirror for instant restore</div>
-          </td>
-          <td>
-            <span class="chip">CreateBasketUC</span>
-            <div class="sub">UpdateBasketUC on PATCH</div>
-          </td>
-          <td rowspan="2">
-            <span class="chip shared">BasketVM</span>
-            <div class="flow-dots">
-              <span class="flow-dot" style="background:var(--orange)"></span>
-              <span class="flow-dot" style="background:var(--orange)"></span>
-            </div>
-          </td>
         </tr>
 
         <tr class="f2">
           <td class="lbl"><div class="flow-name">Place Order</div></td>
-          <td class="col-external">
-            <span class="chip ep">POST /orders</span>
-            <div class="sub">idempotencyKey = UUID() at CreateOrderParam call site</div>
-          </td>
-          <!-- Infra rowspanned -->
-          <td>
-            <span class="chip">OrderRepo</span><br>
-            <span class="chip ds">OrderRemoteDS</span>
-          </td>
-          <td><span class="chip">CreateOrderUC</span></td>
-          <!-- Presentation rowspanned -->
         </tr>
 
         <tr class="f3">
           <td class="lbl"><div class="flow-name">Track Courier</div></td>
-          <td class="col-external">
-            <span class="chip ep">SSE /live-order-status/:id</span>
-            <div class="sub">close on viewDidDisappear — drains battery if left open</div>
-          </td>
-          <td class="col-infra">
-            <span class="chip infra">SSEClient</span>
-            <div class="sub">URLSession text/event-stream · transport-only</div>
-          </td>
-          <td>
-            <span class="chip ds">OrderSSEDataSource</span>
-            <div class="sub">AsyncStream&lt;OrderSSEEventDTO&gt; · Domain defines protocol</div>
-          </td>
-          <td>
-            <span class="chip svc">OrderService</span>
-            <div class="sub">scoped to OrderCoordinator · AnyPublisher&lt;Order, AppError&gt;</div>
-          </td>
-          <td><span class="chip">OrderStatusVM</span></td>
         </tr>
 
       </tbody>
@@ -411,100 +449,103 @@
 
         <tr class="f1">
           <td class="lbl"><div class="flow-name">Load Thread</div></td>
-          <td class="col-external">
-            <span class="chip st">Realm</span>
-            <div class="sub">SSOT — live query drives all VM updates</div>
-            <span class="chip ep">GET /chat/:id/all/after?timestamp=</span>
-            <div class="sub">delta only — not full reload</div>
-          </td>
-          <td class="col-infra">
-            <span class="chip infra">APIClient</span>
-          </td>
-          <td>
-            <span class="chip shared">MessageRepo</span>
-            <div class="flow-dots">
-              <span class="flow-dot" style="background:var(--accent)"></span>
-              <span class="flow-dot" style="background:var(--orange)"></span>
-              <span class="flow-dot" style="background:var(--green)"></span>
-              <span class="flow-dot" style="background:var(--red)"></span>
+          <td class="col-external" rowspan="4">
+            <div class="comp">
+              <span class="chip st">Storage</span>
+              <div class="flow-dots">
+                <span class="flow-dot" style="background:var(--accent)"></span>
+                <span class="flow-dot" style="background:var(--orange)"></span>
+                <span class="flow-dot" style="background:var(--green)"></span>
+                <span class="flow-dot" style="background:var(--red)"></span>
+              </div>
+              <div class="sub">Realm — SSOT · live query drives all VM updates</div>
             </div>
-            <br>
-            <span class="chip ds">MessageLocalDS</span>
-            <div class="sub">MessageRemoteDS — delta sync in background</div>
-          </td>
-          <td><span class="chip">FetchMessagesUC</span></td>
-          <td rowspan="3">
-            <span class="chip shared">ChatThreadVM</span>
-            <div class="flow-dots">
-              <span class="flow-dot" style="background:var(--accent)"></span>
-              <span class="flow-dot" style="background:var(--orange)"></span>
-              <span class="flow-dot" style="background:var(--green)"></span>
+            <div class="comp">
+              <span class="chip ep">API</span>
+              <div class="flow-dots">
+                <span class="flow-dot" style="background:var(--accent)"></span>
+                <span class="flow-dot" style="background:var(--orange)"></span>
+                <span class="flow-dot" style="background:var(--green)"></span>
+                <span class="flow-dot" style="background:var(--red)"></span>
+              </div>
+              <div class="sub">GET /chat/:id/all/after?timestamp= · delta only</div>
+              <div class="sub">WS /chat/:id · send (WebSocket-first) · receive (incoming push)</div>
+              <div class="sub">POST /chat/:id/message · REST fallback · offline retry</div>
             </div>
-            <div class="sub">← observes Realm live query</div>
+          </td>
+          <td class="col-infra" rowspan="4">
+            <div class="comp">
+              <span class="chip infra">APIClient</span>
+              <div class="flow-dots">
+                <span class="flow-dot" style="background:var(--accent)"></span>
+                <span class="flow-dot" style="background:var(--red)"></span>
+              </div>
+              <div class="sub">REST fallback if socket down</div>
+            </div>
+            <div class="comp">
+              <span class="chip infra">WebSocketClient</span>
+              <div class="flow-dots">
+                <span class="flow-dot" style="background:var(--orange)"></span>
+                <span class="flow-dot" style="background:var(--green)"></span>
+              </div>
+            </div>
+          </td>
+          <td rowspan="4">
+            <div class="comp">
+              <span class="chip">MessageRepo</span>
+              <div class="flow-dots">
+                <span class="flow-dot" style="background:var(--accent)"></span>
+                <span class="flow-dot" style="background:var(--orange)"></span>
+                <span class="flow-dot" style="background:var(--green)"></span>
+                <span class="flow-dot" style="background:var(--red)"></span>
+              </div>
+              <div class="sub">MessageLocalDS — upsert by id · never append · isSent flag</div>
+              <div class="sub">MessageRemoteDS — delta sync · retry on foreground</div>
+            </div>
+          </td>
+          <td rowspan="4">
+            <div class="comp">
+              <span class="chip">FetchMessagesUC</span>
+              <div class="flow-dots"><span class="flow-dot" style="background:var(--accent)"></span></div>
+            </div>
+            <div class="comp">
+              <span class="chip">SendMessageUC</span>
+              <div class="flow-dots"><span class="flow-dot" style="background:var(--orange)"></span></div>
+            </div>
+            <div class="comp">
+              <span class="chip svc">MessageStreamService</span>
+              <div class="flow-dots"><span class="flow-dot" style="background:var(--green)"></span></div>
+              <div class="sub">app-scoped · AnyPublisher&lt;Message, Never&gt;</div>
+            </div>
+            <div class="comp">
+              <span class="chip svc">MessageSyncService</span>
+              <div class="flow-dots"><span class="flow-dot" style="background:var(--red)"></span></div>
+              <div class="sub">app-scoped · fires on sceneDidBecomeActive</div>
+            </div>
+          </td>
+          <td rowspan="4">
+            <div class="comp">
+              <span class="chip">ChatThreadVM</span>
+              <div class="flow-dots">
+                <span class="flow-dot" style="background:var(--accent)"></span>
+                <span class="flow-dot" style="background:var(--orange)"></span>
+                <span class="flow-dot" style="background:var(--green)"></span>
+              </div>
+              <div class="sub">← observes Realm live query</div>
+            </div>
           </td>
         </tr>
 
         <tr class="f2">
           <td class="lbl"><div class="flow-name">Send Message</div></td>
-          <td class="col-external">
-            <span class="chip st">Realm</span><br>
-            <span class="chip ep">WS /chat/:id</span>
-            <div class="sub">WebSocket-first · POST /chat/:id/message fallback</div>
-          </td>
-          <td class="col-infra" rowspan="2">
-            <span class="chip shared infra">WebSocket client</span>
-            <div class="flow-dots">
-              <span class="flow-dot" style="background:var(--orange)"></span>
-              <span class="flow-dot" style="background:var(--green)"></span>
-            </div>
-            <div class="sub">APIClient as REST fallback if socket down</div>
-          </td>
-          <td>
-            <span class="chip ds">MessageLocalDS</span>
-            <div class="sub">upsert isSent=false first · MessageRemoteDS on success</div>
-          </td>
-          <td><span class="chip">SendMessageUC</span></td>
-          <!-- Presentation rowspanned -->
         </tr>
 
         <tr class="f3">
           <td class="lbl"><div class="flow-name">Receive via WebSocket</div></td>
-          <td class="col-external">
-            <span class="chip st">Realm</span><br>
-            <span class="chip ep">← WS /chat/:id</span>
-            <div class="sub">incoming push — no request</div>
-          </td>
-          <!-- Infra rowspanned -->
-          <td>
-            <span class="chip ds">MessageLocalDS</span>
-            <div class="sub">upsert by message.id — never append</div>
-          </td>
-          <td>
-            <span class="chip svc">MessageStreamService</span>
-            <div class="sub">app-scoped · AnyPublisher&lt;Message, Never&gt;</div>
-          </td>
-          <!-- Presentation rowspanned -->
         </tr>
 
         <tr class="f4">
           <td class="lbl"><div class="flow-name">Sync Offline Queue</div></td>
-          <td class="col-external">
-            <span class="chip st">Realm</span><br>
-            <span class="chip ep">POST /chat/:id/message</span>
-            <div class="sub">retry on foreground · leave on failure for next active</div>
-          </td>
-          <td class="col-infra">
-            <span class="chip infra">APIClient</span><span class="ref-badge">↑</span>
-          </td>
-          <td>
-            <span class="chip ds">MessageLocalDS</span>
-            <div class="sub">fetch isSent=false · MessageRemoteDS retry</div>
-          </td>
-          <td>
-            <span class="chip svc">MessageSyncService</span>
-            <div class="sub">app-scoped · fires on sceneDidBecomeActive</div>
-          </td>
-          <td class="empty">—</td>
         </tr>
 
       </tbody>
@@ -535,99 +576,113 @@
 
         <tr class="f1">
           <td class="lbl"><div class="flow-name">Load Library</div></td>
-          <td class="col-external">
-            <span class="chip st">GRDB</span>
-            <div class="sub">render instant · Combine publisher on update</div>
-            <span class="chip ep">GET /me/library?cursor=&amp;sort=</span>
-            <div class="sub">cursor pagination · opaque base64 · never parse client-side</div>
+          <td class="col-external" rowspan="4">
+            <div class="comp">
+              <span class="chip st">Storage</span>
+              <div class="flow-dots">
+                <span class="flow-dot" style="background:var(--accent)"></span>
+                <span class="flow-dot" style="background:var(--red)"></span>
+              </div>
+              <div class="sub">GRDB — render instant · Combine publisher on update</div>
+              <div class="sub">disk file:// — user saves never evicted by streaming pressure</div>
+            </div>
+            <div class="comp">
+              <span class="chip ep">API</span>
+              <div class="flow-dots">
+                <span class="flow-dot" style="background:var(--accent)"></span>
+                <span class="flow-dot" style="background:var(--green)"></span>
+                <span class="flow-dot" style="background:var(--red)"></span>
+              </div>
+              <div class="sub">GET /me/library?cursor=&amp;sort= · cursor pagination · opaque base64</div>
+              <div class="sub">GET /item/:id/stream-info · → HLS CDN .m3u8 (stream) · background on expiry</div>
+            </div>
           </td>
-          <td class="col-infra">
-            <span class="chip infra">APIClient</span>
+          <td class="col-infra" rowspan="4">
+            <div class="comp">
+              <span class="chip infra">APIClient</span>
+              <div class="flow-dots">
+                <span class="flow-dot" style="background:var(--accent)"></span>
+                <span class="flow-dot" style="background:var(--green)"></span>
+                <span class="flow-dot" style="background:var(--red)"></span>
+              </div>
+            </div>
+            <div class="comp">
+              <span class="chip infra">AVPlayer</span>
+              <div class="flow-dots">
+                <span class="flow-dot" style="background:var(--green)"></span>
+                <span class="flow-dot" style="background:var(--red)"></span>
+              </div>
+              <div class="sub">HLS · file:// playback engine</div>
+            </div>
           </td>
-          <td>
-            <span class="chip">LibraryRepo</span><br>
-            <span class="chip ds">LibraryLocalDS</span>
-            <div class="sub">LibraryRemoteDS — background refresh</div>
+          <td rowspan="4">
+            <div class="comp">
+              <span class="chip">LibraryRepo</span>
+              <div class="flow-dots"><span class="flow-dot" style="background:var(--accent)"></span></div>
+              <div class="sub">LibraryLocalDS · LibraryRemoteDS background refresh</div>
+            </div>
+            <div class="comp">
+              <span class="chip">DownloadRepo</span>
+              <div class="flow-dots">
+                <span class="flow-dot" style="background:var(--green)"></span>
+                <span class="flow-dot" style="background:var(--red)"></span>
+                <span class="flow-dot" style="background:var(--red)"></span>
+              </div>
+              <div class="sub">MediaRemoteDS — signed manifest · short-lived expiresAt</div>
+              <div class="sub">DownloadLocalDS — itemId → filePath</div>
+            </div>
           </td>
-          <td><span class="chip">FetchLibraryUC</span></td>
-          <td><span class="chip">LibraryVM</span></td>
+          <td rowspan="4">
+            <div class="comp">
+              <span class="chip">FetchLibraryUC</span>
+              <div class="flow-dots"><span class="flow-dot" style="background:var(--accent)"></span></div>
+            </div>
+            <div class="comp">
+              <span class="chip">FetchStreamInfoUC</span>
+              <div class="flow-dots">
+                <span class="flow-dot" style="background:var(--green)"></span>
+                <span class="flow-dot" style="background:var(--red)"></span>
+              </div>
+            </div>
+            <div class="comp">
+              <span class="chip svc">PlayerService</span>
+              <div class="flow-dots">
+                <span class="flow-dot" style="background:var(--green)"></span>
+                <span class="flow-dot" style="background:var(--red)"></span>
+              </div>
+              <div class="sub">app-scoped — music stops if VC-owned</div>
+            </div>
+            <div class="comp">
+              <span class="chip svc">StreamRefreshService</span>
+              <div class="flow-dots"><span class="flow-dot" style="background:var(--red)"></span></div>
+              <div class="sub">pure logic — checks expiresAt threshold</div>
+            </div>
+          </td>
+          <td rowspan="4">
+            <div class="comp">
+              <span class="chip">LibraryVM</span>
+              <div class="flow-dots"><span class="flow-dot" style="background:var(--accent)"></span></div>
+            </div>
+            <div class="comp">
+              <span class="chip">PlayerVM</span>
+              <div class="flow-dots">
+                <span class="flow-dot" style="background:var(--green)"></span>
+                <span class="flow-dot" style="background:var(--red)"></span>
+              </div>
+            </div>
+          </td>
         </tr>
 
         <tr class="f3">
           <td class="lbl"><div class="flow-name">Stream Track (online)</div></td>
-          <td class="col-external">
-            <span class="chip ep">GET /item/:id/stream-info</span>
-            <div class="sub">→ HLS CDN .m3u8 → chunks · AVPlayer adaptive bitrate</div>
-          </td>
-          <td class="col-infra">
-            <span class="chip infra">APIClient</span><span class="ref-badge">↑</span><br>
-            <span class="chip infra">AVPlayer</span>
-            <div class="sub">HLS playback engine</div>
-          </td>
-          <td>
-            <span class="chip shared">DownloadRepo</span>
-            <div class="flow-dots">
-              <span class="flow-dot" style="background:var(--green)"></span>
-              <span class="flow-dot" style="background:var(--red)"></span>
-              <span class="flow-dot" style="background:var(--red)"></span>
-            </div>
-            <br>
-            <span class="chip ds">MediaRemoteDS</span>
-            <div class="sub">fetches signed manifest · short-lived expiresAt</div>
-          </td>
-          <td>
-            <span class="chip">FetchStreamInfoUC</span><br>
-            <span class="chip svc">PlayerService</span>
-            <div class="sub">app-scoped — music stops if VC-owned</div>
-          </td>
-          <td rowspan="2">
-            <span class="chip shared">PlayerVM</span>
-            <div class="flow-dots">
-              <span class="flow-dot" style="background:var(--green)"></span>
-              <span class="flow-dot" style="background:var(--red)"></span>
-            </div>
-          </td>
         </tr>
 
         <tr class="f4">
           <td class="lbl"><div class="flow-name">Play Offline</div></td>
-          <td class="col-external">
-            <span class="chip st">disk file://</span>
-            <div class="sub">separate from LRU — user saves never evicted by streaming pressure</div>
-          </td>
-          <td class="col-infra">
-            <span class="chip infra">AVPlayer</span><span class="ref-badge">↑</span>
-            <div class="sub">file:// URL — no network request</div>
-          </td>
-          <td>
-            <span class="chip ds">DownloadLocalDS</span>
-            <div class="sub">itemId → filePath · MediaFileDataSource binary on disk</div>
-          </td>
-          <td>
-            <span class="chip svc">PlayerService</span>
-            <div class="sub">app-scoped — music stops if VC-owned</div>
-          </td>
-          <!-- Presentation rowspanned -->
         </tr>
 
         <tr class="f4">
           <td class="lbl"><div class="flow-name">Refresh Expired URL</div></td>
-          <td class="col-external">
-            <span class="chip ep">GET /item/:id/stream-info</span>
-            <div class="sub">background — buffered audio keeps playing during refresh</div>
-          </td>
-          <td class="col-infra">
-            <span class="chip infra">APIClient</span><span class="ref-badge">↑</span>
-          </td>
-          <td>
-            <span class="chip ds">MediaRemoteDS</span><span class="ref-badge">↑</span>
-          </td>
-          <td>
-            <span class="chip">FetchStreamInfoUC</span><span class="ref-badge">↑</span><br>
-            <span class="chip svc">StreamRefreshService</span>
-            <div class="sub">pure logic — checks expiresAt threshold</div>
-          </td>
-          <td class="empty">—</td>
         </tr>
 
       </tbody>
@@ -658,102 +713,106 @@
 
         <tr class="f1">
           <td class="lbl"><div class="flow-name">Load Feed</div></td>
-          <td class="col-external">
-            <span class="chip st">CoreData</span>
-            <div class="sub">write-through · fetchedAt TTL | Like queue · successfullySent flag</div>
-            <span class="chip ep">GET /users/:id/feed</span>
-          </td>
-          <td class="col-infra" rowspan="2">
-            <span class="chip shared infra">APIClient</span>
-            <div class="flow-dots">
-              <span class="flow-dot" style="background:var(--accent)"></span>
-              <span class="flow-dot" style="background:var(--accent)"></span>
+          <td class="col-external" rowspan="4">
+            <div class="comp">
+              <span class="chip st">Storage</span>
+              <div class="flow-dots">
+                <span class="flow-dot" style="background:var(--accent)"></span>
+                <span class="flow-dot" style="background:var(--orange)"></span>
+                <span class="flow-dot" style="background:var(--red)"></span>
+              </div>
+              <div class="sub">CoreData — write-through · fetchedAt TTL · Like queue · successfullySent flag</div>
+              <div class="sub">SDWebImage disk cache — decoded UIImage · zero-cost repeat display</div>
+            </div>
+            <div class="comp">
+              <span class="chip ep">API</span>
+              <div class="flow-dots">
+                <span class="flow-dot" style="background:var(--accent)"></span>
+                <span class="flow-dot" style="background:var(--orange)"></span>
+                <span class="flow-dot" style="background:var(--red)"></span>
+              </div>
+              <div class="sub">GET /users/:id/feed</div>
+              <div class="sub">GET /feed?postID=cursor&amp;limit=20 · cursor stable on insertions</div>
+              <div class="sub">POST /users/:id/likes · batch array body</div>
+              <div class="sub">S3 CDN image URLs · from PostDTO.photoURLs</div>
             </div>
           </td>
-          <td>
-            <span class="chip shared">NewsFeedRepo</span>
-            <div class="flow-dots">
-              <span class="flow-dot" style="background:var(--accent)"></span>
-              <span class="flow-dot" style="background:var(--accent)"></span>
+          <td class="col-infra" rowspan="4">
+            <div class="comp">
+              <span class="chip infra">APIClient</span>
+              <div class="flow-dots">
+                <span class="flow-dot" style="background:var(--accent)"></span>
+                <span class="flow-dot" style="background:var(--orange)"></span>
+              </div>
+              <div class="sub">NWPathMonitor — retry on connectivity restore</div>
             </div>
-            <br>
-            <span class="chip ds">FeedLocalDS</span>
-            <div class="sub">2-min TTL check · FeedRemoteDS if stale</div>
-          </td>
-          <td rowspan="2">
-            <span class="chip shared">FetchFeedUC</span>
-            <div class="flow-dots">
-              <span class="flow-dot" style="background:var(--accent)"></span>
-              <span class="flow-dot" style="background:var(--accent)"></span>
+            <div class="comp">
+              <span class="chip infra">SDWebImage</span>
+              <div class="flow-dots"><span class="flow-dot" style="background:var(--red)"></span></div>
             </div>
           </td>
-          <td rowspan="3">
-            <span class="chip shared">FeedVM</span>
-            <div class="flow-dots">
-              <span class="flow-dot" style="background:var(--accent)"></span>
-              <span class="flow-dot" style="background:var(--accent)"></span>
-              <span class="flow-dot" style="background:var(--orange)"></span>
+          <td rowspan="4">
+            <div class="comp">
+              <span class="chip">NewsFeedRepo</span>
+              <div class="flow-dots">
+                <span class="flow-dot" style="background:var(--accent)"></span>
+                <span class="flow-dot" style="background:var(--accent)"></span>
+              </div>
+              <div class="sub">FeedLocalDS — 2-min TTL · FeedRemoteDS if stale · cancel on prefetch cancel</div>
             </div>
-            <div class="sub">UICollectionViewDataSource · DataSourcePrefetching · optimistic toggle</div>
+            <div class="comp">
+              <span class="chip">LikeRepo</span>
+              <div class="flow-dots"><span class="flow-dot" style="background:var(--orange)"></span></div>
+              <div class="sub">FeedLocalDS — Like{successfullySent=false} · LikeRemoteDS on flush</div>
+            </div>
+            <div class="comp">
+              <span class="chip ds">ImageSDKDataSource</span>
+              <div class="flow-dots"><span class="flow-dot" style="background:var(--red)"></span></div>
+              <div class="sub">ThirdPartyDataSource — wraps SDWebImage behind protocol</div>
+            </div>
+          </td>
+          <td rowspan="4">
+            <div class="comp">
+              <span class="chip">FetchFeedUC</span>
+              <div class="flow-dots">
+                <span class="flow-dot" style="background:var(--accent)"></span>
+                <span class="flow-dot" style="background:var(--accent)"></span>
+              </div>
+            </div>
+            <div class="comp">
+              <span class="chip svc">LikeService</span>
+              <div class="flow-dots"><span class="flow-dot" style="background:var(--orange)"></span></div>
+              <div class="sub">app-scoped · retry queue survives app kill</div>
+            </div>
+          </td>
+          <td rowspan="4">
+            <div class="comp">
+              <span class="chip">FeedVM</span>
+              <div class="flow-dots">
+                <span class="flow-dot" style="background:var(--accent)"></span>
+                <span class="flow-dot" style="background:var(--accent)"></span>
+                <span class="flow-dot" style="background:var(--orange)"></span>
+              </div>
+              <div class="sub">UICollectionViewDataSource · DataSourcePrefetching · optimistic toggle</div>
+            </div>
+            <div class="comp">
+              <span class="chip">UICollectionViewCell</span>
+              <div class="flow-dots"><span class="flow-dot" style="background:var(--red)"></span></div>
+              <div class="sub">sd_cancelCurrentImageLoad in prepareForReuse</div>
+            </div>
           </td>
         </tr>
 
         <tr class="f1">
           <td class="lbl"><div class="flow-name">Scroll / Paginate</div></td>
-          <td class="col-external">
-            <span class="chip st">CoreData</span><br>
-            <span class="chip ep">GET /feed?postID=cursor&amp;limit=20</span>
-            <div class="sub">cursor stable on insertions — offset would duplicate</div>
-          </td>
-          <!-- Infra rowspanned -->
-          <td>
-            <span class="chip ds">FeedRemoteDS</span>
-            <div class="sub">cancel on cancelPrefetchingForItemsAt</div>
-          </td>
-          <!-- Domain rowspanned -->
-          <!-- Presentation rowspanned -->
         </tr>
 
         <tr class="f2">
           <td class="lbl"><div class="flow-name">Like Post</div></td>
-          <td class="col-external">
-            <span class="chip st">CoreData</span><br>
-            <span class="chip ep">POST /users/:id/likes</span>
-            <div class="sub">batch array body</div>
-          </td>
-          <td class="col-infra">
-            <span class="chip infra">APIClient</span><span class="ref-badge">↑</span>
-            <div class="sub">+ NWPathMonitor — retry on connectivity restore</div>
-          </td>
-          <td>
-            <span class="chip">LikeRepo</span>
-            <div class="sub">FeedLocalDS — Like{successfullySent=false} · LikeRemoteDS on flush</div>
-          </td>
-          <td>
-            <span class="chip svc">LikeService</span>
-            <div class="sub">app-scoped · retry queue survives app kill</div>
-          </td>
-          <!-- Presentation rowspanned -->
         </tr>
 
         <tr class="f4">
           <td class="lbl"><div class="flow-name">Load Images</div></td>
-          <td class="col-external">
-            <span class="chip st">SDWebImage disk cache</span>
-            <div class="sub">decoded UIImage — zero-cost repeat display</div>
-            <span class="chip ep">S3 CDN image URLs</span>
-            <div class="sub">from PostDTO.photoURLs · background download</div>
-          </td>
-          <td class="col-infra"><span class="chip infra">SDWebImage</span></td>
-          <td>
-            <span class="chip ds">ImageSDKDataSource</span>
-            <div class="sub">ThirdPartyDataSource — wraps SDWebImage behind protocol</div>
-          </td>
-          <td class="empty">—</td>
-          <td>
-            <span class="chip">UICollectionViewCell</span>
-            <div class="sub">sd_cancelCurrentImageLoad in prepareForReuse</div>
-          </td>
         </tr>
 
       </tbody>
@@ -784,92 +843,114 @@
 
         <tr class="f1">
           <td class="lbl"><div class="flow-name">Search Hotels</div></td>
-          <td class="col-external">
-            <span class="chip st">CoreData</span>
-            <div class="sub">search cache | OfflineReservationDTO read-only history</div>
-            <span class="chip ep">GET /hotels?offset=&amp;limit=25</span>
-            <div class="sub">offset pagination — BE owns sort · no cross-device sync</div>
-          </td>
-          <td class="col-infra" rowspan="2">
-            <span class="chip shared infra">APIClient</span>
-            <div class="flow-dots">
-              <span class="flow-dot" style="background:var(--accent)"></span>
-              <span class="flow-dot" style="background:var(--orange)"></span>
+          <td class="col-external" rowspan="4">
+            <div class="comp">
+              <span class="chip st">Storage</span>
+              <div class="flow-dots">
+                <span class="flow-dot" style="background:var(--accent)"></span>
+                <span class="flow-dot" style="background:var(--orange)"></span>
+              </div>
+              <div class="sub">CoreData — search cache · OfflineReservationDTO read-only history · offline record before Payment</div>
+            </div>
+            <div class="comp">
+              <span class="chip ep">API</span>
+              <div class="flow-dots">
+                <span class="flow-dot" style="background:var(--accent)"></span>
+                <span class="flow-dot" style="background:var(--orange)"></span>
+                <span class="flow-dot" style="background:var(--purple)"></span>
+              </div>
+              <div class="sub">GET /hotels?offset=&amp;limit=25 · offset pagination · BE owns sort</div>
+              <div class="sub">POST /reservations · 409 Conflict → room unavailable</div>
+              <div class="sub">expiration_time in POST /reservations response · server-authoritative</div>
+              <div class="sub">Stripe SDK → token → POST /reservations/payment · app never handles raw card data</div>
             </div>
           </td>
-          <td>
-            <span class="chip">HotelRepo</span><br>
-            <span class="chip ds">HotelLocalDS</span>
-            <div class="sub">HotelRemoteDS if stale</div>
+          <td class="col-infra" rowspan="4">
+            <div class="comp">
+              <span class="chip infra">APIClient</span>
+              <div class="flow-dots">
+                <span class="flow-dot" style="background:var(--accent)"></span>
+                <span class="flow-dot" style="background:var(--orange)"></span>
+              </div>
+            </div>
+            <div class="comp">
+              <span class="chip infra">Timer (Foundation)</span>
+              <div class="flow-dots"><span class="flow-dot" style="background:var(--purple)"></span></div>
+              <div class="sub">cosmetic countdown only — server clock is authoritative</div>
+            </div>
+            <div class="comp">
+              <span class="chip infra">StripePaymentGateway</span>
+              <div class="flow-dots"><span class="flow-dot" style="background:var(--purple)"></span></div>
+              <div class="sub">implements PaymentGatewayProtocol · only file importing Stripe SDK</div>
+            </div>
           </td>
-          <td><span class="chip">SearchHotelsUC</span></td>
-          <td><span class="chip">SearchVM</span></td>
+          <td rowspan="4">
+            <div class="comp">
+              <span class="chip">HotelRepo</span>
+              <div class="flow-dots"><span class="flow-dot" style="background:var(--accent)"></span></div>
+              <div class="sub">HotelLocalDS · HotelRemoteDS if stale</div>
+            </div>
+            <div class="comp">
+              <span class="chip">ReservationRepo</span>
+              <div class="flow-dots"><span class="flow-dot" style="background:var(--orange)"></span></div>
+              <div class="sub">ReservationLocalDS — write offline record before Payment · ReservationRemoteDS</div>
+            </div>
+            <div class="comp">
+              <span class="chip">PaymentRepo</span>
+              <div class="flow-dots"><span class="flow-dot" style="background:var(--purple)"></span></div>
+              <div class="sub">PaymentRemoteDS</div>
+            </div>
+          </td>
+          <td rowspan="4">
+            <div class="comp">
+              <span class="chip">SearchHotelsUC</span>
+              <div class="flow-dots"><span class="flow-dot" style="background:var(--accent)"></span></div>
+            </div>
+            <div class="comp">
+              <span class="chip">CreateReservationUC</span>
+              <div class="flow-dots"><span class="flow-dot" style="background:var(--orange)"></span></div>
+              <div class="sub">local_id = UUID() at Param call site</div>
+            </div>
+            <div class="comp">
+              <span class="chip svc">ReservationService</span>
+              <div class="flow-dots"><span class="flow-dot" style="background:var(--purple)"></span></div>
+              <div class="sub">startHold(expiration_time) — client never owns the clock</div>
+            </div>
+            <div class="comp">
+              <span class="chip svc">PaymentService</span>
+              <div class="flow-dots"><span class="flow-dot" style="background:var(--purple)"></span></div>
+              <div class="sub">calls PaymentGatewayProtocol — Domain never imports Stripe SDK</div>
+            </div>
+          </td>
+          <td rowspan="4">
+            <div class="comp">
+              <span class="chip">SearchVM</span>
+              <div class="flow-dots"><span class="flow-dot" style="background:var(--accent)"></span></div>
+            </div>
+            <div class="comp">
+              <span class="chip">ReservationVM</span>
+              <div class="flow-dots">
+                <span class="flow-dot" style="background:var(--orange)"></span>
+                <span class="flow-dot" style="background:var(--purple)"></span>
+              </div>
+            </div>
+            <div class="comp">
+              <span class="chip">PaymentVM</span>
+              <div class="flow-dots"><span class="flow-dot" style="background:var(--purple)"></span></div>
+            </div>
+          </td>
         </tr>
 
         <tr class="f2">
           <td class="lbl"><div class="flow-name">Reserve Room</div></td>
-          <td class="col-external">
-            <span class="chip st">CoreData</span>
-            <div class="sub">offline record written immediately before navigating to Payment</div>
-            <span class="chip ep">POST /reservations</span>
-            <div class="sub">409 Conflict → room unavailable · never conflate with 5xx</div>
-          </td>
-          <!-- Infra rowspanned -->
-          <td>
-            <span class="chip">ReservationRepo</span><br>
-            <span class="chip ds">ReservationRemoteDS</span>
-            <div class="sub">ReservationLocalDS — write offline record before navigating to Payment</div>
-          </td>
-          <td>
-            <span class="chip">CreateReservationUC</span>
-            <div class="sub">local_id = UUID() at Param call site</div>
-          </td>
-          <td rowspan="2">
-            <span class="chip shared">ReservationVM</span>
-            <div class="flow-dots">
-              <span class="flow-dot" style="background:var(--orange)"></span>
-              <span class="flow-dot" style="background:var(--purple)"></span>
-            </div>
-          </td>
         </tr>
 
         <tr class="f5">
           <td class="lbl"><div class="flow-name">Hold Timer</div></td>
-          <td class="col-external">
-            <span class="chip ep">expiration_time from POST /reservations</span>
-            <div class="sub">server-authoritative · no WebSocket needed</div>
-          </td>
-          <td class="col-infra">
-            <span class="chip infra">Timer (Foundation)</span>
-            <div class="sub">cosmetic countdown only — server clock is authoritative</div>
-          </td>
-          <td class="empty">—</td>
-          <td>
-            <span class="chip svc">ReservationService</span>
-            <div class="sub">startHold(expiration_time) — client never owns the clock</div>
-          </td>
-          <!-- Presentation rowspanned -->
         </tr>
 
         <tr class="f5">
           <td class="lbl"><div class="flow-name">Payment</div></td>
-          <td class="col-external">
-            <span class="chip ep">Stripe SDK → token → POST /reservations/payment</span>
-            <div class="sub">app never handles raw card data</div>
-          </td>
-          <td class="col-infra">
-            <span class="chip infra">StripePaymentGateway</span>
-            <div class="sub">implements PaymentGatewayProtocol · only file importing Stripe SDK</div>
-          </td>
-          <td>
-            <span class="chip">PaymentRepo</span><br>
-            <span class="chip ds">PaymentRemoteDS</span>
-          </td>
-          <td>
-            <span class="chip svc">PaymentService</span>
-            <div class="sub">calls PaymentGatewayProtocol — Domain never imports Stripe SDK</div>
-          </td>
-          <td><span class="chip">PaymentVM</span></td>
         </tr>
 
       </tbody>
@@ -900,98 +981,102 @@
 
         <tr class="f1">
           <td class="lbl"><div class="flow-name">Initial Load</div></td>
-          <td class="col-external">
-            <span class="chip st">CoreData</span>
-            <div class="sub">merge deltas · filter expireAt &lt; now on every read</div>
-            <span class="chip ep">GET /stories</span>
-            <div class="sub">cursor=nil · full 24h window · ~50 KB · no pagination needed</div>
-          </td>
-          <td class="col-infra" rowspan="2">
-            <span class="chip shared infra">APIClient</span>
-            <div class="flow-dots">
-              <span class="flow-dot" style="background:var(--accent)"></span>
-              <span class="flow-dot" style="background:var(--accent)"></span>
+          <td class="col-external" rowspan="4">
+            <div class="comp">
+              <span class="chip st">Storage</span>
+              <div class="flow-dots">
+                <span class="flow-dot" style="background:var(--accent)"></span>
+                <span class="flow-dot" style="background:var(--red)"></span>
+              </div>
+              <div class="sub">CoreData — merge deltas · filter expireAt &lt; now on every read</div>
+              <div class="sub">SDWebImage disk cache — decoded UIImage ready before user swipes</div>
+            </div>
+            <div class="comp">
+              <span class="chip ep">API</span>
+              <div class="flow-dots">
+                <span class="flow-dot" style="background:var(--accent)"></span>
+                <span class="flow-dot" style="background:var(--red)"></span>
+              </div>
+              <div class="sub">GET /stories · cursor=nil · full 24h window · ~50 KB</div>
+              <div class="sub">GET /stories?after=latestID · new stories bubble to front</div>
+              <div class="sub">S3 CDN · prefetch(url: nextStory.photoURL) — zero latency on swipe</div>
             </div>
           </td>
-          <td>
-            <span class="chip shared">StoryRepo</span>
-            <div class="flow-dots">
-              <span class="flow-dot" style="background:var(--accent)"></span>
-              <span class="flow-dot" style="background:var(--accent)"></span>
+          <td class="col-infra" rowspan="4">
+            <div class="comp">
+              <span class="chip infra">APIClient</span>
+              <div class="flow-dots">
+                <span class="flow-dot" style="background:var(--accent)"></span>
+              </div>
             </div>
-            <div class="sub">10-min throttle guard · filters expireAt &lt; now</div>
-            <br>
-            <span class="chip ds">StoryLocalDS</span>
-            <div class="sub">StoryRemoteDS if stale</div>
-          </td>
-          <td rowspan="2">
-            <span class="chip shared">FetchStoriesUC</span>
-            <div class="flow-dots">
-              <span class="flow-dot" style="background:var(--accent)"></span>
-              <span class="flow-dot" style="background:var(--accent)"></span>
+            <div class="comp">
+              <span class="chip infra">Timer (Foundation)</span>
+              <div class="flow-dots"><span class="flow-dot" style="background:var(--purple)"></span></div>
+              <div class="sub">starts after image download — not on transition</div>
+            </div>
+            <div class="comp">
+              <span class="chip infra">SDWebImage</span>
+              <div class="flow-dots"><span class="flow-dot" style="background:var(--red)"></span></div>
             </div>
           </td>
-          <td rowspan="2">
-            <span class="chip shared">StoryVM</span>
-            <div class="flow-dots">
-              <span class="flow-dot" style="background:var(--accent)"></span>
-              <span class="flow-dot" style="background:var(--accent)"></span>
+          <td rowspan="4">
+            <div class="comp">
+              <span class="chip">StoryRepo</span>
+              <div class="flow-dots">
+                <span class="flow-dot" style="background:var(--accent)"></span>
+                <span class="flow-dot" style="background:var(--accent)"></span>
+              </div>
+              <div class="sub">10-min throttle guard · filters expireAt &lt; now</div>
+              <div class="sub">StoryLocalDS · StoryRemoteDS — merge deltas · filter expired</div>
+            </div>
+            <div class="comp">
+              <span class="chip ds">ImageSDKDataSource</span>
+              <div class="flow-dots"><span class="flow-dot" style="background:var(--red)"></span></div>
+              <div class="sub">ThirdPartyDataSource — wraps SDWebImage behind protocol</div>
+            </div>
+          </td>
+          <td rowspan="4">
+            <div class="comp">
+              <span class="chip">FetchStoriesUC</span>
+              <div class="flow-dots">
+                <span class="flow-dot" style="background:var(--accent)"></span>
+                <span class="flow-dot" style="background:var(--accent)"></span>
+              </div>
+            </div>
+            <div class="comp">
+              <span class="chip svc">StoryOrderService</span>
+              <div class="flow-dots"><span class="flow-dot" style="background:var(--purple)"></span></div>
+              <div class="sub">stateful · markAsSeen · unseen-first sort · Set&lt;Story.ID&gt;</div>
+            </div>
+          </td>
+          <td rowspan="4">
+            <div class="comp">
+              <span class="chip">StoryVM</span>
+              <div class="flow-dots">
+                <span class="flow-dot" style="background:var(--accent)"></span>
+                <span class="flow-dot" style="background:var(--accent)"></span>
+                <span class="flow-dot" style="background:var(--red)"></span>
+              </div>
+              <div class="sub">triggers prefetch on every display cycle</div>
+            </div>
+            <div class="comp">
+              <span class="chip">StoryVC</span>
+              <div class="flow-dots"><span class="flow-dot" style="background:var(--purple)"></span></div>
+              <div class="sub">3 recycled UIImageViews · O(1) layout · seamless loop</div>
             </div>
           </td>
         </tr>
 
         <tr class="f1">
           <td class="lbl"><div class="flow-name">Delta Refresh</div></td>
-          <td class="col-external">
-            <span class="chip st">CoreData</span><br>
-            <span class="chip ep">GET /stories?after=latestID</span>
-            <div class="sub">new stories bubble to front via StoryOrderService</div>
-          </td>
-          <!-- Infra rowspanned -->
-          <td>
-            <span class="chip ds">StoryRemoteDS</span>
-            <div class="sub">merge deltas · filter expired · StoryLocalDS write</div>
-          </td>
-          <!-- Domain rowspanned -->
-          <!-- Presentation rowspanned -->
         </tr>
 
         <tr class="f5">
           <td class="lbl"><div class="flow-name">Swipe &amp; Advance</div></td>
-          <td class="col-external empty">—</td>
-          <td class="col-infra">
-            <span class="chip infra">Timer (Foundation)</span>
-            <div class="sub">starts after image download — not on transition</div>
-          </td>
-          <td class="empty">—</td>
-          <td>
-            <span class="chip svc">StoryOrderService</span>
-            <div class="sub">stateful · markAsSeen · unseen-first sort · Set&lt;Story.ID&gt;</div>
-          </td>
-          <td>
-            <span class="chip">StoryVC</span>
-            <div class="sub">3 recycled UIImageViews · O(1) layout · seamless loop</div>
-          </td>
         </tr>
 
         <tr class="f4">
           <td class="lbl"><div class="flow-name">Prefetch Next Image</div></td>
-          <td class="col-external">
-            <span class="chip st">SDWebImage disk cache</span>
-            <div class="sub">decoded UIImage ready before user swipes</div>
-            <span class="chip ep">S3 CDN</span>
-            <div class="sub">prefetch(url: nextStory.photoURL) — zero latency on swipe</div>
-          </td>
-          <td class="col-infra"><span class="chip infra">SDWebImage</span></td>
-          <td>
-            <span class="chip ds">ImageSDKDataSource</span>
-            <div class="sub">ThirdPartyDataSource — wraps SDWebImage behind protocol</div>
-          </td>
-          <td class="empty">—</td>
-          <td>
-            <span class="chip">StoryVM</span><span class="ref-badge">↑</span>
-            <div class="sub">triggers on every display cycle</div>
-          </td>
         </tr>
 
       </tbody>

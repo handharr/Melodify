@@ -43,35 +43,46 @@ If `## Data Flow` is absent or sparse, fall back to `<tr class="f*">` rows in th
 | `f4` | Red | Offline / Background — sync queues, offline playback, retry on foreground |
 | `f5` | Purple | Special / Infrastructure — payment gateway, timers, auth, system-level |
 
-#### 2c. Per-flow layer data (table cells)
+#### 2c. Layer column structure
 
-**External column** — merges Storage + Network (both are external concerns, not app layers):
-- Show storage chip first (if any), then network chip — stacked vertically in the same `<td>`
-- Storage: `CoreData`, `Realm`, `GRDB`, `disk file://`, `SDWebImage disk cache`, `Keychain`, `UserDefaults`
-- Network: `GET /path`, `POST /path`, `WS /path`, `SSE /path`, etc.
-- Sub-labels go immediately after the chip they annotate
-- Use `—` only if neither storage nor network is involved
+**Each layer column is a single tall cell** (`rowspan="N"` where N = number of flows). Components are listed top-to-bottom inside that one cell — never split across per-flow rows. Only the `lbl` (first) column has one row per flow.
+
+Each component block is wrapped in `<div class="comp">`:
+```html
+<div class="comp">
+  <span class="chip ...">ComponentName</span>
+  <div class="flow-dots"><span class="flow-dot" style="background:var(--accent)"></span></div>
+  <div class="sub">optional note</div>
+</div>
+```
+
+**External column** — one `Storage` chip, then one `API` chip:
+- **One `Storage` chip** (`.chip.st`, dashed) covers all local persistence for this scenario — each backing store goes as a separate `.sub` line (e.g. `CoreData — search cache`, `disk file:// — offline tracks`)
+- **One `API` chip** (`.chip.ep`) covers all network endpoints — each path goes as a separate `.sub` line (e.g. `GET /me/library?cursor=&sort=`, `POST /orders`)
+- Flow-dots on each `.comp` show which flows use that chip (union of all flows that touch any of its sub-entries)
+- Use `—` only if no storage and no network involved
 
 **Infrastructure column** — Gateway / SDK wrapper:
-- Values: `APIClient`, `WebSocketClient`, `OrderSSEGateway`, `AVPlayer`, `StripePaymentGateway`, `NWPathMonitor`, `Timer (Foundation)` — always `.chip.infra`
-- Sub-label: the protocol it implements or the key constraint
+- One `.comp` per component: `APIClient`, `WebSocketClient`, `SSEClient`, `AVPlayer`, `StripePaymentGateway`, `NWPathMonitor`, `Timer (Foundation)` — always `.chip.infra`
+- Flow-dots show which flows use it
+- Sub-label: the key constraint or protocol it implements
 - Use `—` if no infrastructure component is involved
 
 **Data column** — Repository + DataSource(s):
 - Repository: `.chip` (solid border) — always domain-prefixed (`RestaurantRepo`, `MessageRepo`)
-- DataSource(s): `.chip.ds` (dashed border) — always domain-prefixed (`RestaurantRemoteDS`, `MessageLocalDS`)
-- Use `—` if this flow bypasses the Repo/DS layer
+- DataSource(s) are sub-labels under their Repository `.comp`, not separate chips
+- Use `—` if this scenario bypasses the Repo/DS layer
 
 **Domain column** — UseCase or Domain Service:
 - UseCase: `.chip` (solid) — stateless, one-shot
 - Service: `.chip.svc` (dashed) — stateful, long-lived
-- Sub-label: key behaviour note (e.g. `"app-scoped · AnyPublisher<Order, AppError>"`)
-- Use `—` if a flow is presentation-only
+- Flow-dots show which flows invoke it
+- Sub-label: key behaviour note (e.g. `app-scoped · AnyPublisher<Order, AppError>`)
 
 **Presentation column** — ViewModel or ViewController:
-- Named ViewModel as `.chip`
+- One `.comp` per named ViewModel/ViewController
+- Flow-dots show which flows drive it
 - Sub-label: key pattern if recall-worthy
-- Use `—` only for flows explicitly infrastructure-only (no presentation component involved)
 
 ### Step 3 — Chip type and rowspan rules
 
@@ -92,18 +103,9 @@ If `## Data Flow` is absent or sparse, fall back to `<tr class="f*">` rows in th
 - Non-consecutive flows where the component is **secondary** (cell already has another primary chip) → do not repeat the chip; fold the reuse into a `.sub` line under the primary chip (e.g. `FeedLocalDS — Like{successfullySent=false}`)
 - Per-flow sub-labels for a shared component are stacked as separate `.sub` lines under the single chip
 
-**Rowspan — use when:**
-- The chip is the sole or primary component in the cell
-- It appears in 2+ consecutive rows
+**Rowspan:** Every layer column (`col-external`, `col-infra`, Data, Domain, Presentation) uses `rowspan="N"` on the `<td>` where N = total flow rows in the card. The `lbl` column never rowspans — one row per flow.
 
-Add `rowspan="N"`, render chip as `.chip.shared`, add `<div class="flow-dots">` with one `<span class="flow-dot">` per participating flow.
-
-**Do not rowspan:**
-- DataSource cells (per-flow sub-notes carry distinct recall details)
-- External (network) cells (endpoints are always unique per flow)
-- Mixed-component cells
-
-**Non-consecutive reuse:** show the chip again in later rows followed by `<span class="ref-badge">↑</span>`.
+**Non-consecutive reuse within a `.comp`:** not applicable under the tall-cell model — each component appears exactly once.
 
 ### Step 4 — Diff against current recall card
 
@@ -122,7 +124,10 @@ Compare extracted data (Step 2) against what's in the current card. Report only 
 - The scenario tag is missing a concept from the `.md` delta table
 - A chip type is wrong (solid vs dashed, wrong color class)
 - A layer cell has `—` in the recall but has a real component in the `.md` (or vice versa)
-- The recall card has separate Storage and Network columns instead of a single External column
+- Layer columns are not tall cells (per-flow `<td>`s instead of one `rowspan="N"` cell)
+- Multiple storage chips instead of a single `Storage` chip with `.sub` lines
+- Network endpoints are listed as individual chips instead of a single `API` chip with `.sub` lines
+- A `.comp` wrapper is missing around a chip + flow-dots + sub block
 
 ### Step 5 — Return
 
