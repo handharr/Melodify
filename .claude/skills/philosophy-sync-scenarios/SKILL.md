@@ -77,21 +77,21 @@ Write the updated `.md` file.
 The generic architecture HTML at `docs/deck/ios-app-system-design-philosophy.html` must always stay in sync with `docs/ios-app-system-design-philosophy.md`.
 
 Regenerate `docs/deck/ios-app-system-design-philosophy.html` after every run of this skill, even if the changes seem minor. Use the same CSS and component class rules as `sync-scenario-html`:
-- Copy CSS verbatim from `docs/deck/music-streaming-system-design.html`
+- Copy CSS verbatim from `docs/deck/scenarios/music-streaming-system-design.html`
 - Map every `##` section to `<section id="...">` with a `.toc` entry
 - `.callout` (blue) for "why" decisions, `.rule` (green) for principles, `.warn` (orange) for gotchas
 - Nav breadcrumb links back to `index.html`
-- Bottom nav: left `← Home`, right links to `music-streaming-system-design.html`
+- Bottom nav: left `← Home`, right links to `scenarios/music-streaming-system-design.html`
 
 ## Step 7 — Regenerate HTML for changed scenarios
 
 For each scenario whose `.md` was updated in step 4, regenerate its HTML deck following the same rules as `sync-scenario-html`:
 
-- Copy CSS verbatim from `docs/deck/music-streaming-system-design.html`
+- Copy CSS verbatim from `docs/deck/scenarios/music-streaming-system-design.html`
 - Map every `##` section to `<section id="...">` with a `.toc` entry
 - Use `.callout` (blue) for "why" decisions, `.rule` (green) for principles, `.warn` (orange) for gotchas
 - Delta section always comes first in TOC and body
-- Save to `docs/deck/<scenario-name>.html`
+- Save to `docs/deck/scenarios/<scenario-name>.html`
 
 ## Step 8 — Report to user
 

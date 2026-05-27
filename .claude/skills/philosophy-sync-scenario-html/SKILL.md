@@ -18,7 +18,7 @@ A scenario `.md` file was updated and its HTML deck at `docs/deck/` is now out o
 | `/philosophy-sync-scenario-html uber-eats` | **Single-scenario mode** — only that deck is synced |
 | `/philosophy-sync-scenario-html uber-eats messenger` | **Multi-scenario mode** — only those decks are synced |
 | `/philosophy-sync-scenario-html docs/scenarios/ios-uber-eats-system-design.md` | Same as single — resolves from `.md` path |
-| `/philosophy-sync-scenario-html docs/deck/uber-eats-system-design.html` | Same as single — resolves from `.html` path |
+| `/philosophy-sync-scenario-html docs/deck/scenarios/uber-eats-system-design.html` | Same as single — resolves from `.html` path |
 
 **Accepted name aliases** (case-insensitive, hyphens optional):
 `uber-eats`, `messenger`, `music-streaming`, `instagram-news-feed` (or `instagram`), `hotel-booking` (or `hotel`), `story-viewer` (or `story`).
@@ -27,12 +27,12 @@ A scenario `.md` file was updated and its HTML deck at `docs/deck/` is now out o
 
 | Name | Source .md | HTML deck |
 |---|---|---|
-| uber-eats | `docs/scenarios/ios-uber-eats-system-design.md` | `docs/deck/uber-eats-system-design.html` |
-| messenger | `docs/scenarios/ios-messenger-system-design.md` | `docs/deck/messenger-system-design.html` |
-| music-streaming | `docs/scenarios/ios-music-streaming-system-design.md` | `docs/deck/music-streaming-system-design.html` |
-| instagram-news-feed | `docs/scenarios/ios-instagram-news-feed-system-design.md` | `docs/deck/instagram-news-feed-system-design.html` |
-| hotel-booking | `docs/scenarios/ios-hotel-booking-system-design.md` | `docs/deck/hotel-booking-system-design.html` |
-| story-viewer | `docs/scenarios/ios-story-viewer-system-design.md` | `docs/deck/story-viewer-system-design.html` |
+| uber-eats | `docs/scenarios/ios-uber-eats-system-design.md` | `docs/deck/scenarios/uber-eats-system-design.html` |
+| messenger | `docs/scenarios/ios-messenger-system-design.md` | `docs/deck/scenarios/messenger-system-design.html` |
+| music-streaming | `docs/scenarios/ios-music-streaming-system-design.md` | `docs/deck/scenarios/music-streaming-system-design.html` |
+| instagram-news-feed | `docs/scenarios/ios-instagram-news-feed-system-design.md` | `docs/deck/scenarios/instagram-news-feed-system-design.html` |
+| hotel-booking | `docs/scenarios/ios-hotel-booking-system-design.md` | `docs/deck/scenarios/hotel-booking-system-design.html` |
+| story-viewer | `docs/scenarios/ios-story-viewer-system-design.md` | `docs/deck/scenarios/story-viewer-system-design.html` |
 
 **Filename derivation rule** (for paths or names not in the table above):
 strip the `ios-` prefix from the `.md` filename and change the extension to `.html`:
@@ -42,12 +42,12 @@ strip the `ios-` prefix from the `.md` filename and change the extension to `.ht
 
 ## Step 1 — Read source files
 
-**All-scenarios mode:** read every `.md` in `docs/scenarios/` and every corresponding HTML deck. Also read `docs/deck/music-streaming-system-design.html` as the CSS/style reference.
+**All-scenarios mode:** read every `.md` in `docs/scenarios/` and every corresponding HTML deck. Also read `docs/deck/scenarios/music-streaming-system-design.html` as the CSS/style reference.
 
 **Single/multi-scenario mode:** read only:
 1. The `.md` file(s) for the target scenario(s)
-2. The existing HTML deck(s) at `docs/deck/<scenario-name>.html` — to diff against; note if a deck doesn't exist yet (full creation)
-3. `docs/deck/music-streaming-system-design.html` — CSS/style reference (always required)
+2. The existing HTML deck(s) at `docs/deck/scenarios/<scenario-name>.html` — to diff against; note if a deck doesn't exist yet (full creation)
+3. `docs/deck/scenarios/music-streaming-system-design.html` — CSS/style reference (always required)
 
 Skip reading all other scenario files not in the target set.
 
@@ -84,7 +84,7 @@ For each approved target, produce the full HTML file. Rules:
 
 ### CSS
 
-Copy the `<style>` block verbatim from `docs/deck/music-streaming-system-design.html`. Never modify or abbreviate it.
+Copy the `<style>` block verbatim from `docs/deck/scenarios/music-streaming-system-design.html`. Never modify or abbreviate it.
 
 ### Component classes
 
@@ -133,9 +133,9 @@ If these appear in the source `.md`, skip them during HTML generation and flag t
 
 ### File path
 
-Save the HTML at `docs/deck/<scenario-name>.html`.
+Save the HTML at `docs/deck/scenarios/<scenario-name>.html`.
 Derive the filename from the `.md` filename — strip the `ios-` prefix:
-- `ios-music-streaming-system-design.md` → `music-streaming-system-design.html`
+- `ios-music-streaming-system-design.md` → `scenarios/music-streaming-system-design.html`
 - `ios-ride-sharing-system-design.md` → `ride-sharing-system-design.html`
 
 ---

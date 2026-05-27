@@ -40,8 +40,8 @@ Use this mode when the input file is already a clean scenario `.md` inside `docs
 Read:
 1. The existing scenario `.md` at the provided path
 2. `docs/ios-app-system-design-philosophy.md` — source of truth for current naming and patterns
-3. The existing HTML deck at `docs/deck/<scenario-name>.html` — to understand what the current HTML looks like
-4. `docs/deck/music-streaming-system-design.html` — CSS/style reference
+3. The existing HTML deck at `docs/deck/scenarios/<scenario-name>.html` — to understand what the current HTML looks like
+4. `docs/deck/scenarios/music-streaming-system-design.html` — CSS/style reference
 
 ### R-Step 2 — Identify what needs updating
 
@@ -111,7 +111,7 @@ Verify the updated doc:
 
 ### R-Step 5 — Regenerate the HTML deck
 
-Using `docs/deck/music-streaming-system-design.html` as the style reference, regenerate the full HTML deck at `docs/deck/<scenario-name>.html` from the updated `.md`.
+Using `docs/deck/scenarios/music-streaming-system-design.html` as the style reference, regenerate the full HTML deck at `docs/deck/scenarios/<scenario-name>.html` from the updated `.md`.
 
 Follow the same HTML generation rules as the Create mode (see below) — CSS verbatim, `.callout`/`.rule`/`.warn` mapping, four-layer architecture rendering, syntax highlighting.
 
@@ -148,7 +148,7 @@ Use this mode when the input file is raw notes from a YouTube video, mock interv
 Read:
 1. The raw notes file provided by the user
 2. `docs/ios-app-system-design-philosophy.md` — generic architecture (source of truth for naming and patterns)
-3. `docs/deck/music-streaming-system-design.html` — style reference for the HTML output (CSS, component classes, layout patterns)
+3. `docs/deck/scenarios/music-streaming-system-design.html` — style reference for the HTML output (CSS, component classes, layout patterns)
 
 If `docs/ios-app-system-design-philosophy.md` does not exist, check `../docs/ios-app-system-design-philosophy.md` relative to the notes file, then ask the user for the correct path.
 
@@ -279,7 +279,7 @@ Before writing any file, verify:
 
 ### C-Step 7 — Produce the HTML deck
 
-Using `docs/deck/music-streaming-system-design.html` as the style reference, produce a matching HTML file at `docs/deck/<scenario-name>.html`.
+Using `docs/deck/scenarios/music-streaming-system-design.html` as the style reference, produce a matching HTML file at `docs/deck/scenarios/<scenario-name>.html`.
 
 **CSS and styling:** copy the full `<style>` block verbatim — do not modify or abbreviate it.
 

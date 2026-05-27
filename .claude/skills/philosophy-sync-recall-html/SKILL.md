@@ -39,12 +39,12 @@ Skip reading all other scenario `.md` and deck files entirely.
 
 | Scenario card in recall | Source .md | HTML deck |
 |---|---|---|
-| Uber Eats | `ios-uber-eats-system-design.md` | `uber-eats-system-design.html` |
-| Messenger | `ios-messenger-system-design.md` | `messenger-system-design.html` |
-| Music Streaming | `ios-music-streaming-system-design.md` | `music-streaming-system-design.html` |
-| Instagram News Feed | `ios-instagram-news-feed-system-design.md` | `instagram-news-feed-system-design.html` |
-| Hotel Booking | `ios-hotel-booking-system-design.md` | `hotel-booking-system-design.html` |
-| Story Viewer | `ios-story-viewer-system-design.md` | `story-viewer-system-design.html` |
+| Uber Eats | `ios-uber-eats-system-design.md` | `docs/deck/scenarios/uber-eats-system-design.html` |
+| Messenger | `ios-messenger-system-design.md` | `docs/deck/scenarios/messenger-system-design.html` |
+| Music Streaming | `ios-music-streaming-system-design.md` | `docs/deck/scenarios/music-streaming-system-design.html` |
+| Instagram News Feed | `ios-instagram-news-feed-system-design.md` | `docs/deck/scenarios/instagram-news-feed-system-design.html` |
+| Hotel Booking | `ios-hotel-booking-system-design.md` | `docs/deck/scenarios/hotel-booking-system-design.html` |
+| Story Viewer | `ios-story-viewer-system-design.md` | `docs/deck/scenarios/story-viewer-system-design.html` |
 
 ---
 
@@ -204,7 +204,7 @@ For each approved scenario card, produce the full `<div class="scenario-card">..
       <div class="scenario-tag" style="color:var(--<color>)"><tag text></div>
       <h2><Scenario Name></h2>
     </div>
-    <a href="<scenario-name>-system-design.html" class="deck-link">Full deck →</a>
+    <a href="scenarios/<scenario-name>-system-design.html" class="deck-link">Full deck →</a>
   </div>
   <div class="arch-wrap">
     <table class="arch-table">
