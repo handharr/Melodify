@@ -297,29 +297,54 @@ RemoteDataSource / LocalDataSource
 
 ### Search + Hotel List
 
+Pattern A — two awaits in the ViewModel. `async/await` returns once; a single `execute()` cannot update state twice.
+
 ```
 SearchViewModel.search(param:)
-  → SearchHotelsUseCase.execute(policy: .fresh, param:)
-      → HotelRepository
-          1. HotelLocalDataSource.fetch() → cached HotelListingDTOs → Mapper → [HotelListing] (fast return)
-          2. HotelRemoteDataSource.get("/hotels", query:) → HotelListingsDTO → Mapper → [HotelListing]
-          3. HotelLocalDataSource.save(dtos)
-      → returns [HotelListing]
-  → ViewModel maps HotelListing → UIModel → @Published update → view re-renders
+    → isLoading = true
+
+    // Phase 1 — cache (instant)
+    if let cached = try? await SearchHotelsUseCase.execute(policy: .strict, param:)
+        → HotelRepository checks HotelLocalDataSource only — throws on miss
+        → ViewModel maps [HotelListing] → UIModel
+        → @Published update → view renders immediately from cache
+
+    // Phase 2 — network (background)
+    let fresh = try await SearchHotelsUseCase.execute(policy: .fresh, param:)
+        → HotelRepository fetches HotelRemoteDataSource.get("/hotels", query:)
+        → HotelListingsDTO → Mapper → [HotelListing]
+        → HotelLocalDataSource.save(dtos)
+        → ViewModel maps [HotelListing] → UIModel
+        → @Published update → view refreshes with latest
+
+    → defer: isLoading = false
 ```
 
 ### Hotel Detail
 
+Pattern A — two awaits in the ViewModel.
+
 ```
 HotelDetailViewModel.load(hotelId:)
-  → FetchHotelDetailUseCase.execute(policy: .cached, param:)
-      → HotelRepository
-          1. HotelLocalDataSource.fetch(hotelId) → HotelDTO? → Mapper → Hotel? (fast return)
-          2. HotelRemoteDataSource.get("/hotels/:id") → HotelDTO → Mapper → Hotel
-          3. HotelLocalDataSource.save(dto)
-      → returns Hotel
-  → ImageService.loadImage(url:) for gallery thumbnails and full-size images (two-tier cache)
-  → ViewModel maps Hotel + resolved images → UIModel → @Published update
+    → isLoading = true
+
+    // Phase 1 — cache (instant)
+    if let cached = try? await FetchHotelDetailUseCase.execute(policy: .strict, param:)
+        → HotelRepository checks HotelLocalDataSource only — throws on miss
+        → ImageService.loadImage(url:) for cached gallery thumbnails
+        → ViewModel maps Hotel + resolved images → UIModel
+        → @Published update → view renders immediately from cache
+
+    // Phase 2 — network (background)
+    let fresh = try await FetchHotelDetailUseCase.execute(policy: .fresh, param:)
+        → HotelRepository fetches HotelRemoteDataSource.get("/hotels/:id")
+        → HotelDTO → Mapper → Hotel
+        → HotelLocalDataSource.save(dto)
+        → ImageService.loadImage(url:) for updated gallery
+        → ViewModel maps Hotel + resolved images → UIModel
+        → @Published update → view refreshes
+
+    → defer: isLoading = false
 ```
 
 ### Create Reservation

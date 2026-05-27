@@ -527,25 +527,48 @@ limit=&lt;int&gt;          <span class="cm">// 25 per page</span>
   <h2>Data Flow</h2>
 
   <h3>Search + Hotel List</h3>
+  <p>Pattern A — two awaits in the ViewModel. <code>async/await</code> returns once; a single <code>execute()</code> cannot update state twice.</p>
 <pre><code><span class="nm">SearchViewModel</span>.search(param:)
-  → <span class="nm">SearchHotelsUseCase</span>.execute(policy: .fresh, param:)
-      → <span class="nm">HotelRepository</span>
-          1. <span class="nm">HotelLocalDataSource</span>.fetch()     <span class="cm">// cached DTOs → Mapper → [HotelListing] (fast return)</span>
-          2. <span class="nm">HotelRemoteDataSource</span>.get(<span class="st">"/hotels"</span>, query:)  <span class="cm">// HotelListingsDTO → Mapper → [HotelListing]</span>
-          3. <span class="nm">HotelLocalDataSource</span>.save(dtos)
-      → returns [<span class="ty">HotelListing</span>]
-  → ViewModel maps <span class="ty">HotelListing</span> → <span class="ty">UIModel</span> → @Published update → view re-renders</code></pre>
+    → isLoading = <span class="kw">true</span>
+
+    <span class="cm">// Phase 1 — cache (instant)</span>
+    <span class="kw">if let</span> cached = <span class="kw">try</span>? <span class="kw">await</span> <span class="nm">SearchHotelsUseCase</span>.execute(policy: .strict, param:)
+        → <span class="nm">HotelRepository</span> checks <span class="nm">HotelLocalDataSource</span> only — throws on miss
+        → ViewModel maps [<span class="ty">HotelListing</span>] → <span class="ty">UIModel</span>
+        → @Published update → view renders immediately from cache
+
+    <span class="cm">// Phase 2 — network (background)</span>
+    <span class="kw">let</span> fresh = <span class="kw">try await</span> <span class="nm">SearchHotelsUseCase</span>.execute(policy: .fresh, param:)
+        → <span class="nm">HotelRepository</span> fetches <span class="nm">HotelRemoteDataSource</span>.get(<span class="st">"/hotels"</span>, query:)
+        → <span class="ty">HotelListingsDTO</span> → Mapper → [<span class="ty">HotelListing</span>]
+        → <span class="nm">HotelLocalDataSource</span>.save(dtos)
+        → ViewModel maps [<span class="ty">HotelListing</span>] → <span class="ty">UIModel</span>
+        → @Published update → view refreshes with latest
+
+    → <span class="kw">defer</span>: isLoading = <span class="kw">false</span></code></pre>
 
   <h3>Hotel Detail</h3>
+  <p>Pattern A — two awaits in the ViewModel.</p>
 <pre><code><span class="nm">HotelDetailViewModel</span>.load(hotelId:)
-  → <span class="nm">FetchHotelDetailUseCase</span>.execute(policy: .cached, param:)
-      → <span class="nm">HotelRepository</span>
-          1. <span class="nm">HotelLocalDataSource</span>.fetch(hotelId)  <span class="cm">// HotelDTO? → Mapper → Hotel? (fast return)</span>
-          2. <span class="nm">HotelRemoteDataSource</span>.get(<span class="st">"/hotels/:id"</span>)  <span class="cm">// HotelDTO → Mapper → Hotel</span>
-          3. <span class="nm">HotelLocalDataSource</span>.save(dto)
-      → returns <span class="ty">Hotel</span>
-  → <span class="nm">ImageService</span>.loadImage(url:) for gallery images  <span class="cm">// two-tier cache</span>
-  → ViewModel maps <span class="ty">Hotel</span> → <span class="ty">UIModel</span> → @Published update</code></pre>
+    → isLoading = <span class="kw">true</span>
+
+    <span class="cm">// Phase 1 — cache (instant)</span>
+    <span class="kw">if let</span> cached = <span class="kw">try</span>? <span class="kw">await</span> <span class="nm">FetchHotelDetailUseCase</span>.execute(policy: .strict, param:)
+        → <span class="nm">HotelRepository</span> checks <span class="nm">HotelLocalDataSource</span> only — throws on miss
+        → <span class="nm">ImageService</span>.loadImage(url:) for cached gallery thumbnails
+        → ViewModel maps <span class="ty">Hotel</span> + resolved images → <span class="ty">UIModel</span>
+        → @Published update → view renders immediately from cache
+
+    <span class="cm">// Phase 2 — network (background)</span>
+    <span class="kw">let</span> fresh = <span class="kw">try await</span> <span class="nm">FetchHotelDetailUseCase</span>.execute(policy: .fresh, param:)
+        → <span class="nm">HotelRepository</span> fetches <span class="nm">HotelRemoteDataSource</span>.get(<span class="st">"/hotels/:id"</span>)
+        → <span class="ty">HotelDTO</span> → Mapper → <span class="ty">Hotel</span>
+        → <span class="nm">HotelLocalDataSource</span>.save(dto)
+        → <span class="nm">ImageService</span>.loadImage(url:) for updated gallery
+        → ViewModel maps <span class="ty">Hotel</span> + resolved images → <span class="ty">UIModel</span>
+        → @Published update → view refreshes
+
+    → <span class="kw">defer</span>: isLoading = <span class="kw">false</span></code></pre>
 
   <h3>Create Reservation</h3>
 <pre><code><span class="nm">ReservationViewModel</span>.reserve(param:)

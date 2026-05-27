@@ -269,17 +269,28 @@ DI: Coordinator composes all dependencies via manual init injection (no framewor
 
 ### Restaurant List Screen
 
+Pattern A — two awaits in the ViewModel. `async/await` returns once; a single `execute()` cannot update state twice.
+
 ```
 1. AppCoordinator reads User.lastUsedAddress from UserRepository (.cached)
-2. RestaurantListViewModel.load(policy: .cached)
-     → FetchRestaurantsUseCase.execute(param: FetchRestaurantsParam(addressID:))
-         → RestaurantRepository
-             1. RestaurantLocalDataSource.fetch() → cached DTOs → Mapper → [Restaurant] → UI renders instantly
-             2. RestaurantRemoteDataSource.fetch() → GET /restaurants/<addressID> → DTO → Mapper → [Restaurant]
-             3. RestaurantLocalDataSource.save(dtos) → Core Data updated
+2. RestaurantListViewModel.load()
+     → isLoading = true
+
+     // Phase 1 — cache (instant)
+     if let cached = try? await FetchRestaurantsUseCase.execute(policy: .strict, param: FetchRestaurantsParam(addressID:))
+         → RestaurantRepository checks RestaurantLocalDataSource only — throws on miss
+         → ViewModel maps [Restaurant] → [RestaurantUIModel]
+         → @Published restaurantList updated → UI renders immediately
+
+     // Phase 2 — network (background)
+     let fresh = try await FetchRestaurantsUseCase.execute(policy: .fresh, param: FetchRestaurantsParam(addressID:))
+         → RestaurantRepository fetches RestaurantRemoteDataSource → GET /restaurants/<addressID>
+         → DTO → Mapper → [Restaurant]
+         → RestaurantLocalDataSource.save(dtos)         // Core Data updated
          → ViewModel maps [Restaurant] → [RestaurantUIModel]
          → @Published restaurantList updated → ViewController re-renders
-         → defer: isLoading = false
+
+     → defer: isLoading = false
 ```
 
 ### Place Order

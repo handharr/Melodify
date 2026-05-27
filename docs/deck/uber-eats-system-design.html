@@ -518,17 +518,27 @@
   <h2>Data Flow</h2>
 
   <h3 id="flow-restaurant">Restaurant List Screen</h3>
-<pre><code>AppCoordinator reads <span class="ty">User.lastUsedAddress</span> from <span class="nm">UserRepository</span> (policy: .cached)
+  <p>Pattern A — two awaits in the ViewModel. <code>async/await</code> returns once; a single <code>execute()</code> cannot update state twice.</p>
+<pre><code>AppCoordinator reads <span class="ty">User.lastUsedAddress</span> from <span class="nm">UserRepository</span> (.cached)
 
-<span class="nm">RestaurantListViewModel</span>.load(policy: .cached)
-  → <span class="nm">FetchRestaurantsUseCase</span>.execute(param: <span class="ty">FetchRestaurantsParam</span>(addressID:))
-      → <span class="nm">RestaurantRepository</span>
-          1. <span class="nm">RestaurantLocalDataSource</span>.fetch()     <span class="cm">// cached DTOs → Mapper → [Restaurant] → UI renders instantly</span>
-          2. <span class="nm">RestaurantRemoteDataSource</span>.fetch()    <span class="cm">// GET /restaurants/&lt;addressID&gt; → DTO → Mapper → [Restaurant]</span>
-          3. <span class="nm">RestaurantLocalDataSource</span>.save(dtos)  <span class="cm">// Core Data updated</span>
-      → ViewModel maps [<span class="ty">Restaurant</span>] → [<span class="ty">RestaurantUIModel</span>]
-      → <span class="nm">@Published</span> restaurantList updated → ViewController re-renders
-      → <span class="kw">defer</span>: isLoading = <span class="kw">false</span></code></pre>
+<span class="nm">RestaurantListViewModel</span>.load()
+    → isLoading = <span class="kw">true</span>
+
+    <span class="cm">// Phase 1 — cache (instant)</span>
+    <span class="kw">if let</span> cached = <span class="kw">try</span>? <span class="kw">await</span> <span class="nm">FetchRestaurantsUseCase</span>.execute(policy: .strict, param: <span class="ty">FetchRestaurantsParam</span>(addressID:))
+        → <span class="nm">RestaurantRepository</span> checks <span class="nm">RestaurantLocalDataSource</span> only — throws on miss
+        → ViewModel maps [<span class="ty">Restaurant</span>] → [<span class="ty">RestaurantUIModel</span>]
+        → @Published restaurantList updated → UI renders immediately
+
+    <span class="cm">// Phase 2 — network (background)</span>
+    <span class="kw">let</span> fresh = <span class="kw">try await</span> <span class="nm">FetchRestaurantsUseCase</span>.execute(policy: .fresh, param: <span class="ty">FetchRestaurantsParam</span>(addressID:))
+        → <span class="nm">RestaurantRepository</span> fetches <span class="nm">RestaurantRemoteDataSource</span> → GET /restaurants/&lt;addressID&gt;
+        → DTO → Mapper → [<span class="ty">Restaurant</span>]
+        → <span class="nm">RestaurantLocalDataSource</span>.save(dtos)  <span class="cm">// Core Data updated</span>
+        → ViewModel maps [<span class="ty">Restaurant</span>] → [<span class="ty">RestaurantUIModel</span>]
+        → @Published restaurantList updated → ViewController re-renders
+
+    → <span class="kw">defer</span>: isLoading = <span class="kw">false</span></code></pre>
 
   <h3 id="flow-order">Place Order</h3>
 <pre><code><span class="nm">BasketViewModel</span>.placeOrder()

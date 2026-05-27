@@ -120,7 +120,29 @@ Structure:
 (from notes, translated to user's conventions)
 
 ## Architecture
-(layer breakdown using user's naming)
+(all four layers always present; unused layers show `None`)
+
+**Required structure — no exceptions:**
+
+```
+Presentation
+  <named ViewControllers and ViewModels>
+
+Domain
+  UseCases: <named, one per user action or screen load>
+  Services: <named Domain Services, or None>
+  Models: <named Domain Models and Param structs>
+
+Data
+  Repositories: <named, one per aggregate>
+  DataSources: <named domain-prefixed RemoteDataSource and LocalDataSource per Repository>
+  DTOs / Mappers: <named>
+
+Infrastructure
+  Gateways: <named vendor-prefixed Gateways, or None>
+```
+
+Every layer must appear even when unused — write `None` for empty sublists. Never omit a layer.
 
 ## Data Flow
 (end-to-end, using user's component names)

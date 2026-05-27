@@ -218,7 +218,7 @@ Player monitors bandwidth and switches quality levels mid-stream by requesting c
 
 ---
 
-## High-Level Architecture
+## Architecture
 
 Pattern: **MVVM + Clean Architecture** — Presentation → Domain ← Data. Same rule as Melodify.
 
@@ -306,13 +306,27 @@ Data
 Same `.fresh / .cached / .strict` you use in Melodify — `LibraryRepository` checks policy before deciding to hit remote or return from local. No new concept needed.
 
 ### Data Flow — Library Screen
+
+Pattern A — two awaits in the ViewModel. `async/await` returns once; a single `execute()` cannot update state twice.
+
 ```
-LibraryViewModel.load(policy: .cached)
-  → FetchLibraryUseCase.execute(policy: .cached, param:)
-    → LibraryRepository
-        1. LibraryLocalDataSource.fetch() → return cached rows immediately (UI renders)
-        2. LibraryRemoteDataSource.fetch() → write DTOs to LibraryLocalDataSource via LibraryItemMapper
-        3. LibraryLocalDataSource emits updated stream → ViewModel updates UI
+LibraryViewModel.load()
+    → isLoading = true
+
+    // Phase 1 — cache (instant)
+    if let cached = try? await FetchLibraryUseCase.execute(policy: .strict, param:)
+        → LibraryRepository checks LibraryLocalDataSource only — throws on miss
+        → ViewModel maps [LibraryItem] → UIModel
+        → @Published state updated → UI renders immediately from cache
+
+    // Phase 2 — network (background)
+    let fresh = try await FetchLibraryUseCase.execute(policy: .fresh, param:)
+        → LibraryRepository fetches LibraryRemoteDataSource → DTOs → LibraryItemMapper → [LibraryItem]
+        → LibraryLocalDataSource.save(dtos)
+        → ViewModel maps [LibraryItem] → UIModel
+        → @Published state updated → UI refreshes with latest
+
+    → defer: isLoading = false
 ```
 
 ### Data Flow — Playback

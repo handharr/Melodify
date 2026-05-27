@@ -268,7 +268,7 @@
   <a class="toc-sub" href="#application">Application</a>
   <a href="#di">Dependency Injection</a>
   <a href="#flows">Generic Data Flows</a>
-  <a class="toc-sub" href="#read-flow">Read flow</a>
+  <a class="toc-sub" href="#read-flow">Read flow (offline-first)</a>
   <a class="toc-sub" href="#mutation-flow">Mutation flow</a>
   <a href="#networking">Networking</a>
   <a href="#persistence">Persistence</a>
@@ -436,19 +436,45 @@
 <section id="flows">
   <h2>Generic Data Flows</h2>
 
-  <h3 id="read-flow">Read flow — loading a screen</h3>
+  <h3 id="read-flow">Read flow — loading a screen (offline-first)</h3>
+  <p><code>async/await</code> is single-return — <code>UseCase.execute()</code> returns once. Offline-first (cache renders immediately, then network updates) requires <strong>two separate awaits</strong> in the ViewModel.</p>
+
+  <h4>Pattern A — Two awaits (canonical)</h4>
 <pre><code><span class="nm">ViewController</span>.viewDidLoad()
   → <span class="nm">ViewModel</span>.load()
       → isLoading = <span class="kw">true</span>
-      → <span class="ty">UseCase</span>.execute(policy: .cached, param:)
-          → <span class="ty">Repository</span>.fetch(policy: .cached, param:)
-              → <span class="nm">LocalDataSource</span>.fetch()  <span class="cm">// cached DTO → fast return</span>
-              → <span class="nm">RemoteDataSource</span>.fetch() <span class="cm">// background network call</span>
-              → <span class="nm">LocalDataSource</span>.save(dto) <span class="cm">// write fresh data to cache</span>
-          → returns [<span class="ty">Model</span>]
-      → maps <span class="ty">Model</span> → <span class="ty">UIModel</span>
-      → @Published state updated → View re-renders
+
+      <span class="cm">// Phase 1 — cache (instant)</span>
+      <span class="kw">if let</span> cached = <span class="kw">try</span>? <span class="kw">await</span> <span class="ty">UseCase</span>.execute(policy: .strict, param:)
+          → <span class="ty">Repository</span> checks <span class="nm">LocalDataSource</span> only — throws on miss
+          → maps cached <span class="ty">Model</span> → <span class="ty">UIModel</span>
+          → @Published state updated → View renders immediately
+
+      <span class="cm">// Phase 2 — network (background)</span>
+      <span class="kw">let</span> fresh = <span class="kw">try await</span> <span class="ty">UseCase</span>.execute(policy: .fresh, param:)
+          → <span class="ty">Repository</span> fetches <span class="nm">RemoteDataSource</span> → <span class="ty">DTO</span> → <span class="ty">Mapper</span> → <span class="ty">Model</span>
+          → <span class="nm">LocalDataSource</span>.save(dto)
+          → maps <span class="ty">Model</span> → <span class="ty">UIModel</span>
+          → @Published state updated → View refreshes
+
       → <span class="kw">defer</span>: isLoading = <span class="kw">false</span></code></pre>
+
+  <div class="rule"><strong>Why two calls, not one?</strong> <code>async/await</code> returns once — a single <code>execute(policy: .cached)</code> can only yield one value. For the UI to render from cache <em>and then</em> update from the network, the ViewModel needs two distinct awaits, one per phase.</div>
+  <div class="callout"><strong>.strict for phase 1, .fresh for phase 2.</strong> <code>.strict</code> = cache only, throws on miss (zero network cost). The <code>try?</code> suppresses the throw so a cold cache silently skips phase 1 — the user sees a brief loading state, then the network result arrives. <code>.fresh</code> = always hits network regardless of cache state.</div>
+
+  <h4>Pattern B — AsyncStream (alternative)</h4>
+  <p>The UseCase returns an <code>AsyncStream&lt;[Model]&gt;</code> that yields twice — cache first, network second. The ViewModel iterates with <code>for await</code>. Use this when the two-phase logic is shared across many screens and repeating two calls per ViewModel becomes noisy.</p>
+
+  <div class="table-wrap">
+    <table>
+      <tr><th></th><th>Pattern A (two awaits)</th><th>Pattern B (AsyncStream)</th></tr>
+      <tr><td>ViewModel code</td><td>Two explicit awaits</td><td>Single <code>for await</code> loop</td></tr>
+      <tr><td>Testability</td><td>Easy — stub UseCase per call</td><td>Requires async stream mocking</td></tr>
+      <tr><td>UseCase reuse</td><td><code>.strict</code> / <code>.fresh</code> are independent</td><td>Two-phase baked into one UseCase</td></tr>
+      <tr><td>Complexity</td><td>Low</td><td>Higher</td></tr>
+    </table>
+  </div>
+  <div class="rule"><strong>Default to Pattern A.</strong> Pattern B is a valid optimization when two-phase loading is a cross-cutting concern repeated across many screens — not the default choice.</div>
 
   <h3 id="mutation-flow">Mutation flow — create / update</h3>
 <pre><code><span class="nm">ViewController</span> sends user input

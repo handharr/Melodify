@@ -219,23 +219,30 @@ AttachmentFileDataSource — stores attachment binaries, referenced by URL in Me
 
 ### Load Chat Thread (offline-first)
 
+Pattern A — two awaits in the ViewModel. `async/await` returns once; a single `execute()` cannot update state twice.
+
 ```
 ChatThreadViewController.viewDidLoad()
   → ChatThreadViewModel.load()
       state = .loading
-      → FetchMessagesUseCase.execute(policy: .cached, param: ChatParam(chatId:))
-          → MessageRepository
-              1. MessageLocalDataSource.fetch(chatId:)
-                 → [MessageDTO] → MessageMapper.toDomain() → [Message]
-                 → state = .success(messages)            // renders immediately from cache
-              2. MessageRemoteDataSource.fetch(after: lastSequenceId)
-                 → [MessageDTO] → MessageMapper.toDomain() → [Message]
-                 → MessageLocalDataSource.upsert(dtos)   // upsert by message.id
-                 → state updated with merged messages
+
+      // Phase 1 — cache (instant)
+      if let cached = try? await FetchMessagesUseCase.execute(policy: .strict, param: ChatParam(chatId:))
+          → MessageRepository checks MessageLocalDataSource only — throws on miss
+          → ViewModel maps [Message] → UIModel
+          → state = .success(cached)                    // renders immediately from cache
+
+      // Phase 2 — network (background)
+      let fresh = try await FetchMessagesUseCase.execute(policy: .fresh, param: ChatParam(chatId:))
+          → MessageRepository fetches MessageRemoteDataSource → [MessageDTO] → MessageMapper → [Message]
+          → MessageLocalDataSource.upsert(dtos)          // upsert by message.id
+          → ViewModel maps merged [Message] → UIModel
+          → state = .success(fresh)                      // view refreshes with latest
+
       defer: isLoading = false
+
       → MessageStreamService.subscribe(chatId: chatId) → AnyPublisher<Message, Never>
-          → each incoming Message: MessageLocalDataSource.upsert(dto)
-          → state appended / merged
+          → each incoming Message: MessageLocalDataSource.upsert(dto) → state updated
 ```
 
 ### Send Message (with offline queue)
@@ -265,21 +272,27 @@ sceneDidBecomeActive / applicationDidBecomeActive
 
 ### Load Chat List (offline-first)
 
+Pattern A — two awaits in the ViewModel.
+
 ```
 ChatListViewController.viewDidLoad()
   → ChatListViewModel.load()
       state = .loading
-      → FetchChatsUseCase.execute(policy: .cached, param: ChatListParam())
-          → ChatRepository
-              1. ChatLocalDataSource.fetch()
-                 → [ChatDTO] → ChatMapper.toDomain() → [Chat]
-                 → state = .success(chats)            // renders immediately from cache
 
-              2. ChatRemoteDataSource.fetch()          // GET /chat/all
-                 → PagedChatsResponse { chats: [ChatDTO], nextCursor: String? }
-                 → ChatLocalDataSource.upsert(dtos)   // upsert by chatId
-                 → nextCursor stored in ChatListViewModel
-                 → state updated with merged chats, sorted by lastActivity
+      // Phase 1 — cache (instant)
+      if let cached = try? await FetchChatsUseCase.execute(policy: .strict, param: ChatListParam())
+          → ChatRepository checks ChatLocalDataSource only — throws on miss
+          → ViewModel maps [Chat] → UIModel
+          → state = .success(cached)                  // renders immediately from cache
+
+      // Phase 2 — network (background)
+      let response = try await FetchChatsUseCase.execute(policy: .fresh, param: ChatListParam())
+          → ChatRemoteDataSource.fetch()              // GET /chat/all
+          → PagedChatsResponse { chats: [ChatDTO], nextCursor: String? }
+          → ChatLocalDataSource.upsert(dtos)          // upsert by chatId
+          → nextCursor stored in ChatListViewModel
+          → state = .success(merged chats, sorted by lastActivity)
+
       defer: isLoading = false
 ```
 

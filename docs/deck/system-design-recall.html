@@ -1,0 +1,1180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>System Design Recall — Melodify</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --border: #30363d;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --accent: #58a6ff;
+    --green: #3fb950;
+    --orange: #d29922;
+    --purple: #bc8cff;
+    --red: #f85149;
+  }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    padding-bottom: 100px;
+  }
+  nav {
+    position: sticky; top: 0;
+    background: rgba(13,17,23,0.92);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 16px;
+    display: flex; align-items: center; gap: 8px;
+    z-index: 100;
+  }
+  nav a { color: var(--muted); text-decoration: none; font-size: 13px; }
+  nav a:hover { color: var(--text); }
+  nav .sep { color: var(--border); }
+  nav .current { color: var(--accent); font-weight: 600; }
+
+  header {
+    padding: 32px 20px 24px;
+    border-bottom: 1px solid var(--border);
+  }
+  header .tag {
+    font-size: 11px; font-weight: 600;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--accent); margin-bottom: 8px;
+  }
+  header h1 { font-size: 26px; font-weight: 700; }
+  header p { color: var(--muted); margin-top: 8px; font-size: 14px; }
+
+  .legend {
+    display: flex; flex-wrap: wrap; gap: 16px;
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border);
+  }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); }
+  .legend-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+  .chip-legend {
+    display: flex; flex-wrap: wrap; gap: 12px;
+    padding: 10px 20px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .chip-legend-item { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); }
+  .chip-sample {
+    font-size: 10px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    padding: 1px 6px; border-radius: 4px;
+    border: 1px solid var(--muted); color: var(--muted);
+  }
+  .chip-sample.dashed { border-style: dashed; }
+
+  .scenarios { padding: 20px; display: flex; flex-direction: column; gap: 24px; }
+
+  .scenario-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .scenario-head {
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  }
+  .scenario-tag {
+    font-size: 10px; font-weight: 700;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    margin-bottom: 3px;
+  }
+  .scenario-head h2 { font-size: 18px; font-weight: 700; color: var(--text); }
+  .deck-link {
+    font-size: 12px; color: var(--accent);
+    text-decoration: none; padding: 4px 10px;
+    border: 1px solid var(--border); border-radius: 6px;
+    white-space: nowrap; flex-shrink: 0;
+  }
+  .deck-link:hover { border-color: var(--accent); }
+
+  /* ── Table ── */
+  .arch-wrap { overflow-x: auto; }
+  .arch-table {
+    width: 100%; min-width: 1060px;
+    border-collapse: collapse;
+  }
+
+  .arch-table thead th {
+    padding: 7px 12px;
+    font-size: 10px; font-weight: 700;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--muted);
+    background: var(--bg);
+    border-bottom: 2px solid var(--border);
+    border-right: 1px solid var(--border);
+    text-align: left;
+    white-space: nowrap;
+  }
+  .arch-table thead th:first-child { width: 112px; }
+  .arch-table thead th:last-child { border-right: none; }
+
+  /* Column tints — visual grouping for External zone */
+  .col-infra   { background: rgba(188,140,255,0.04); }
+  .col-network { background: rgba(88,166,255,0.04); }
+  .col-storage { background: rgba(63,185,80,0.04); }
+
+  /* Subtle column group labels in th */
+  th.col-infra   { color: var(--purple); }
+  th.col-network { color: var(--accent); }
+  th.col-storage { color: var(--green); }
+
+  .arch-table tbody tr { border-bottom: 1px solid var(--border); }
+  .arch-table tbody tr:last-child { border-bottom: none; }
+  .arch-table tbody td {
+    padding: 10px 12px;
+    border-right: 1px solid var(--border);
+    vertical-align: top;
+  }
+  .arch-table tbody td:last-child { border-right: none; }
+
+  /* flow label */
+  td.lbl { padding: 10px 10px 10px 0 !important; }
+  .flow-name {
+    padding-left: 10px;
+    border-left: 3px solid currentColor;
+    font-size: 11px; font-weight: 600;
+    color: currentColor; line-height: 1.4;
+  }
+
+  /* ── Entity groups ── */
+  .eg + .eg {
+    margin-top: 7px; padding-top: 7px;
+    border-top: 1px dashed var(--border);
+  }
+  .type-lbl {
+    font-size: 9px; font-weight: 700;
+    letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--border); margin-bottom: 3px;
+  }
+
+  /* ── Chips ── */
+  /* Solid = UseCase, Repository — stateless / structural */
+  .chip {
+    display: inline-block;
+    font-size: 11px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    padding: 2px 7px; border-radius: 4px;
+    border: 1px solid currentColor;
+    background: color-mix(in srgb, currentColor 10%, transparent);
+    color: inherit; white-space: nowrap; line-height: 1.5;
+  }
+  /* Dashed = Domain Service, DataSource — stateful / delegate */
+  .chip.svc { border-style: dashed; }
+  .chip.ds  { border-style: dashed; font-size: 10px; }
+  /* Infrastructure chips — purple tint, neutral base */
+  .chip.infra {
+    font-size: 10px;
+    color: var(--purple);
+    border-color: rgba(188,140,255,0.5);
+    background: rgba(188,140,255,0.08);
+  }
+  /* Endpoint chips — neutral */
+  .chip.ep {
+    font-size: 10px;
+    color: var(--text);
+    border-color: var(--border);
+    background: var(--bg);
+  }
+  /* Storage chips — neutral dashed */
+  .chip.st {
+    font-size: 10px;
+    color: var(--muted);
+    border-color: var(--border);
+    background: var(--bg);
+    border-style: dashed;
+  }
+
+  .arr { font-size: 10px; color: currentColor; opacity: 0.4; margin: 0 2px; }
+  .sub { font-size: 10px; color: var(--muted) !important; margin-top: 3px; line-height: 1.3; }
+  td.empty { color: var(--border); font-size: 16px; text-align: center; vertical-align: middle; }
+
+  /* ── Row flow colors ── */
+  tr.f1 { color: var(--accent); }
+  tr.f2 { color: var(--orange); }
+  tr.f3 { color: var(--green); }
+  tr.f4 { color: var(--red); }
+  tr.f5 { color: var(--purple); }
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="index.html">Melodify</a>
+  <span class="sep">›</span>
+  <span class="current">System Design Recall</span>
+</nav>
+
+<header>
+  <div class="tag">Interview Prep</div>
+  <h1>System Design Recall</h1>
+  <p>All 6 scenarios — layers as columns (Storage → Presentation), use cases as colored rows, full end-to-end.</p>
+</header>
+
+<div class="legend">
+  <div class="legend-item"><div class="legend-dot" style="background:var(--accent)"></div>Read / Load</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--orange)"></div>Write / Mutation</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div>Real-time / Streaming</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--red)"></div>Offline / Background</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--purple)"></div>Special / Infrastructure</div>
+</div>
+<div class="chip-legend">
+  <div class="chip-legend-item"><span class="chip-sample">UseCase · Repository</span>solid — stateless / structural</div>
+  <div class="chip-legend-item"><span class="chip-sample dashed">Service · DataSource</span>dashed — stateful / delegate</div>
+  <div class="chip-legend-item"><span class="chip-sample" style="color:var(--purple);border-color:rgba(188,140,255,0.5);background:rgba(188,140,255,0.08)">Infra</span>purple — SDK wrapper / Gateway / Transport</div>
+  <div class="chip-legend-item"><span class="chip-sample" style="color:var(--muted);border-color:var(--border)">endpoint</span>neutral — Network column</div>
+  <div class="chip-legend-item"><span class="chip-sample dashed" style="color:var(--muted);border-color:var(--border)">DB / disk</span>neutral dashed — Storage column</div>
+</div>
+
+<div class="scenarios">
+
+<!-- ═══════════════════════════════════════════════════ UBER EATS -->
+<div class="scenario-card">
+  <div class="scenario-head">
+    <div>
+      <div class="scenario-tag" style="color:var(--orange)">Food Delivery · SSE · Server-hosted Basket</div>
+      <h2>Uber Eats</h2>
+    </div>
+    <a href="uber-eats-system-design.html" class="deck-link">Full deck →</a>
+  </div>
+  <div class="arch-wrap">
+    <table class="arch-table">
+      <thead><tr>
+        <th></th>
+        <th class="col-storage">Storage</th>
+        <th class="col-network">Network</th>
+        <th class="col-infra">Infrastructure</th>
+        <th>Data</th>
+        <th>Domain</th>
+        <th>Presentation</th>
+      </tr></thead>
+      <tbody>
+
+        <tr class="f1">
+          <td class="lbl"><div class="flow-name">Load Restaurants</div></td>
+          <td class="col-storage">
+            <span class="chip st">CoreData</span>
+            <div class="sub">cache · offline restore</div>
+          </td>
+          <td class="col-network">
+            <span class="chip ep">GET /restaurants/:addressID</span>
+          </td>
+          <td class="col-infra">
+            <span class="chip infra">APIClient</span>
+            <div class="sub">URLSession-based HTTP client</div>
+          </td>
+          <td>
+            <div class="eg">
+              <div class="type-lbl">Repository</div>
+              <span class="chip">RestaurantRepo</span>
+            </div>
+            <div class="eg">
+              <div class="type-lbl">DataSource</div>
+              <span class="chip ds">RestaurantRemoteDS</span>
+              <div class="sub">RestaurantLocalDS — FetchPolicy.cached</div>
+            </div>
+          </td>
+          <td>
+            <div class="eg">
+              <div class="type-lbl">UseCase</div>
+              <span class="chip">FetchRestaurantsUC</span>
+            </div>
+          </td>
+          <td><span class="chip">ViewModel</span></td>
+        </tr>
+
+        <tr class="f2">
+          <td class="lbl"><div class="flow-name">Manage Basket</div></td>
+          <td class="col-storage">
+            <span class="chip st">CoreData</span>
+            <div class="sub">server is source of truth — cross-device</div>
+          </td>
+          <td class="col-network">
+            <span class="chip ep">POST /basket</span>
+            <div class="sub">PATCH /basket on update</div>
+          </td>
+          <td class="col-infra">
+            <span class="chip infra">APIClient</span>
+          </td>
+          <td>
+            <div class="eg">
+              <div class="type-lbl">Repository</div>
+              <span class="chip">BasketRepo</span>
+            </div>
+            <div class="eg">
+              <div class="type-lbl">DataSource</div>
+              <span class="chip ds">BasketRemoteDS</span>
+              <div class="sub">BasketLocalDS — local mirror for instant restore</div>
+            </div>
+          </td>
+          <td>
+            <div class="eg">
+              <div class="type-lbl">UseCase</div>
+              <span class="chip">CreateBasketUC</span>
+              <div class="sub">UpdateBasketUC on PATCH</div>
+            </div>
+          </td>
+          <td><span class="chip">ViewModel</span></td>
+        </tr>
+
+        <tr class="f3">
+          <td class="lbl"><div class="flow-name">Place Order</div></td>
+          <td class="col-storage empty">—</td>
+          <td class="col-network">
+            <span class="chip ep">POST /orders</span>
+            <div class="sub">idempotencyKey = UUID() at CreateOrderParam call site</div>
+          </td>
+          <td class="col-infra">
+            <span class="chip infra">APIClient</span>
+          </td>
+          <td>
+            <div class="eg">
+              <div class="type-lbl">Repository</div>
+              <span class="chip">OrderRepo</span>
+            </div>
+            <div class="eg">
+              <div class="type-lbl">DataSource</div>
+              <span class="chip ds">OrderRemoteDS</span>
+            </div>
+          </td>
+          <td>
+            <div class="eg">
+              <div class="type-lbl">UseCase</div>
+              <span class="chip">CreateOrderUC</span>
+            </div>
+          </td>
+          <td><span class="chip">ViewModel</span></td>
+        </tr>
+
+        <tr class="f4">
+          <td class="lbl"><div class="flow-name">Track Courier</div></td>
+          <td class="col-storage empty">—</td>
+          <td class="col-network">
+            <span class="chip ep">SSE /live-order-status/:id</span>
+            <div class="sub">close on viewDidDisappear — drains battery if left open</div>
+          </td>
+          <td class="col-infra">
+            <span class="chip infra">OrderSSEGateway</span>
+            <div class="sub">implements OrderSSEGatewayProtocol · AsyncStream&lt;OrderSSEEventDTO&gt; · Domain defines protocol</div>
+          </td>
+          <td class="empty">—</td>
+          <td>
+            <div class="eg">
+              <div class="type-lbl">Service</div>
+              <span class="chip svc">OrderService</span>
+              <div class="sub">scoped to OrderCoordinator · AnyPublisher&lt;Order, AppError&gt;</div>
+            </div>
+          </td>
+          <td><span class="chip">ViewModel</span></td>
+        </tr>
+
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════ MESSENGER -->
+<div class="scenario-card">
+  <div class="scenario-head">
+    <div>
+      <div class="scenario-tag" style="color:var(--accent)">Real-time Chat · WebSocket · Offline Queue · Realm SSOT</div>
+      <h2>Messenger</h2>
+    </div>
+    <a href="messenger-system-design.html" class="deck-link">Full deck →</a>
+  </div>
+  <div class="arch-wrap">
+    <table class="arch-table">
+      <thead><tr>
+        <th></th>
+        <th class="col-storage">Storage</th>
+        <th class="col-network">Network</th>
+        <th class="col-infra">Infrastructure</th>
+        <th>Data</th>
+        <th>Domain</th>
+        <th>Presentation</th>
+      </tr></thead>
+      <tbody>
+
+        <tr class="f1">
+          <td class="lbl"><div class="flow-name">Load Thread</div></td>
+          <td class="col-storage">
+            <span class="chip st">Realm</span>
+            <div class="sub">SSOT — render instant from cache</div>
+          </td>
+          <td class="col-network">
+            <span class="chip ep">GET /chat/:id/all/after?timestamp=</span>
+            <div class="sub">delta only — not full reload</div>
+          </td>
+          <td class="col-infra">
+            <span class="chip infra">APIClient</span>
+          </td>
+          <td>
+            <div class="eg">
+              <div class="type-lbl">Repository</div>
+              <span class="chip">MessageRepo</span>
+            </div>
+            <div class="eg">
+              <div class="type-lbl">DataSource</div>
+              <span class="chip ds">MessageLocalDS</span>
+              <div class="sub">MessageRemoteDS — delta sync in background</div>
+            </div>
+          </td>
+          <td>
+            <div class="eg">
+              <div class="type-lbl">UseCase</div>
+              <span class="chip">FetchMessagesUC</span>
+            </div>
+          </td>
+          <td><span class="chip">ChatThreadVM</span></td>
+        </tr>
+
+        <tr class="f2">
+          <td class="lbl"><div class="flow-name">Send Message</div></td>
+          <td class="col-storage">
+            <span class="chip st">Realm</span>
+            <div class="sub">isSent=false → isSent=true on confirm</div>
+          </td>
+          <td class="col-network">
+            <span class="chip ep">WS /chat/:id</span>
+            <div class="sub">WebSocket-first · POST /chat/:id/message fallback</div>
+          </td>
+          <td class="col-infra">
+            <span class="chip infra">WebSocket client</span>
+            <div class="sub">APIClient as REST fallback if socket down</div>
+          </td>
+          <td>
+            <div class="eg">
+              <div class="type-lbl">Repository</div>
+              <span class="chip">MessageRepo</span>
+            </div>
+            <div class="eg">
+              <div class="type-lbl">DataSource</div>
+              <span class="chip ds">MessageLocalDS</span>
+              <div class="sub">upsert isSent=false first · MessageRemoteDS on success</div>
+            </div>
+          </td>
+          <td>
+            <div class="eg">
+              <div class="type-lbl">UseCase</div>
+              <span class="chip">SendMessageUC</span>
+            </div>
+          </td>
+          <td><span class="chip">ChatThreadVM</span></td>
+        </tr>
+
+        <tr class="f3">
+          <td class="lbl"><div class="flow-name">Receive via WebSocket</div></td>
+          <td class="col-storage">
+            <span class="chip st">Realm</span>
+            <div class="sub">live query fires → both ChatThread + ChatList VMs update</div>
+          </td>
+          <td class="col-network">
+            <span class="chip ep">← WS /chat/:id</span>
+            <div class="sub">incoming push — no request</div>
+          </td>
+          <td class="col-infra">
+            <span class="chip infra">WebSocket client</span>
+            <div class="sub">WSEvent&lt;MessageDTO&gt; typed envelope</div>
+          </td>
+          <td>
+            <div class="eg">
+              <div class="type-lbl">Repository</div>
+              <span class="chip">MessageRepo</span>
+            </div>
+            <div class="eg">
+              <div class="type-lbl">DataSource</div>
+              <span class="chip ds">MessageLocalDS</span>
+              <div class="sub">upsert by message.id — never append</div>
+            </div>
+          </td>
+          <td>
+            <div class="eg">
+              <div class="type-lbl">Service</div>
+              <span class="chip svc">MessageStreamService</span>
+              <div class="sub">app-scoped · AnyPublisher&lt;Message, Never&gt;</div>
+            </div>
+          </td>
+          <td>
+            <span class="chip">ViewModel</span>
+            <div class="sub">← observes Realm live query</div>
+          </td>
+        </tr>
+
+        <tr class="f4">
+          <td class="lbl"><div class="flow-name">Sync Offline Queue</div></td>
+          <td class="col-storage">
+            <span class="chip st">Realm</span>
+            <div class="sub">isSent=false queue · update to true on confirm</div>
+          </td>
+          <td class="col-network">
+            <span class="chip ep">POST /chat/:id/message</span>
+            <div class="sub">retry on foreground · leave on failure for next active</div>
+          </td>
+          <td class="col-infra">
+            <span class="chip infra">APIClient</span>
+          </td>
+          <td>
+            <div class="eg">
+              <div class="type-lbl">Repository</div>
+              <span class="chip">MessageRepo</span>
+            </div>
+            <div class="eg">
+              <div class="type-lbl">DataSource</div>
+              <span class="chip ds">MessageLocalDS</span>
+              <div class="sub">fetch isSent=false · MessageRemoteDS retry</div>
+            </div>
+          </td>
+          <td>
+            <div class="eg">
+              <div class="type-lbl">Service</div>
+              <span class="chip svc">MessageSyncService</span>
+              <div class="sub">app-scoped · fires on sceneDidBecomeActive</div>
+            </div>
+          </td>
+          <td class="empty">—</td>
+        </tr>
+
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════ MUSIC STREAMING -->
+<div class="scenario-card">
+  <div class="scenario-head">
+    <div>
+      <div class="scenario-tag" style="color:var(--purple)">Media · HLS · AVPlayer · Two-tier LRU</div>
+      <h2>Music Streaming</h2>
+    </div>
+    <a href="music-streaming-system-design.html" class="deck-link">Full deck →</a>
+  </div>
+  <div class="arch-wrap">
+    <table class="arch-table">
+      <thead><tr>
+        <th></th>
+        <th class="col-storage">Storage</th>
+        <th class="col-network">Network</th>
+        <th class="col-infra">Infrastructure</th>
+        <th>Data</th>
+        <th>Domain</th>
+        <th>Presentation</th>
+      </tr></thead>
+      <tbody>
+
+        <tr class="f1">
+          <td class="lbl"><div class="flow-name">Load Library</div></td>
+          <td class="col-storage">
+            <span class="chip st">GRDB</span>
+            <div class="sub">render instant · Combine publisher on update</div>
+          </td>
+          <td class="col-network">
+            <span class="chip ep">GET /me/library?cursor=&amp;sort=</span>
+            <div class="sub">cursor pagination · opaque base64 · never parse client-side</div>
+          </td>
+          <td class="col-infra">
+            <span class="chip infra">APIClient</span>
+          </td>
+          <td>
+            <div class="eg">
+              <div class="type-lbl">Repository</div>
+              <span class="chip">LibraryRepo</span>
+            </div>
+            <div class="eg">
+              <div class="type-lbl">DataSource</div>
+              <span class="chip ds">LibraryLocalDS</span>
+              <div class="sub">LibraryRemoteDS — background refresh</div>
+            </div>
+          </td>
+          <td>
+            <div class="eg">
+              <div class="type-lbl">UseCase</div>
+              <span class="chip">FetchLibraryUC</span>
+            </div>
+          </td>
+          <td><span class="chip">LibraryVM</span></td>
+        </tr>
+
+        <tr class="f2">
+          <td class="lbl"><div class="flow-name">Stream Track (online)</div></td>
+          <td class="col-storage empty">—</td>
+          <td class="col-network">
+            <span class="chip ep">GET /item/:id/stream-info</span>
+            <div class="sub">→ HLS CDN .m3u8 → chunks · AVPlayer adaptive bitrate</div>
+          </td>
+          <td class="col-infra">
+            <span class="chip infra">APIClient</span>
+            <div class="sub">+ AVPlayer (HLS playback engine)</div>
+          </td>
+          <td>
+            <div class="eg">
+              <div class="type-lbl">Repository</div>
+              <span class="chip">DownloadRepo</span>
+            </div>
+            <div class="eg">
+              <div class="type-lbl">DataSource</div>
+              <span class="chip ds">MediaRemoteDS</span>
+              <div class="sub">fetches signed manifest · short-lived expiresAt</div>
+            </div>
+          </td>
+          <td>
+            <div class="eg">
+              <div class="type-lbl">Service</div>
+              <span class="chip svc">PlayerService</span>
+              <div class="sub">app-scoped — music stops if VC-owned</div>
+            </div>
+            <div class="eg">
+              <div class="type-lbl">UseCase</div>
+              <span class="chip">FetchStreamInfoUC</span>
+            </div>
+          </td>
+          <td><span class="chip">PlayerVM</span></td>
+        </tr>
+
+        <tr class="f3">
+          <td class="lbl"><div class="flow-name">Play Offline</div></td>
+          <td class="col-storage">
+            <span class="chip st">disk file://</span>
+            <div class="sub">separate from LRU cache — user saves never evicted by streaming pressure</div>
+          </td>
+          <td class="col-network empty">—</td>
+          <td class="col-infra">
+            <span class="chip infra">AVPlayer</span>
+            <div class="sub">file:// URL — no network request</div>
+          </td>
+          <td>
+            <div class="eg">
+              <div class="type-lbl">Repository</div>
+              <span class="chip">DownloadRepo</span>
+            </div>
+            <div class="eg">
+              <div class="type-lbl">DataSource</div>
+              <span class="chip ds">DownloadLocalDS</span>
+              <div class="sub">itemId → filePath · MediaFileDataSource binary on disk</div>
+            </div>
+          </td>
+          <td>
+            <div class="eg">
+              <div class="type-lbl">Service</div>
+              <span class="chip svc">PlayerService</span>
+              <div class="sub">PlaybackAssetResolver checks download first</div>
+            </div>
+          </td>
+          <td><span class="chip">PlayerVM</span></td>
+        </tr>
+
+        <tr class="f4">
+          <td class="lbl"><div class="flow-name">Refresh Expired URL</div></td>
+          <td class="col-storage empty">—</td>
+          <td class="col-network">
+            <span class="chip ep">GET /item/:id/stream-info</span>
+            <div class="sub">background — buffered audio keeps playing during refresh</div>
+          </td>
+          <td class="col-infra">
+            <span class="chip infra">APIClient</span>
+          </td>
+          <td>
+            <div class="eg">
+              <div class="type-lbl">Repository</div>
+              <span class="chip">DownloadRepo</span>
+            </div>
+            <div class="eg">
+              <div class="type-lbl">DataSource</div>
+              <span class="chip ds">MediaRemoteDS</span>
+            </div>
+          </td>
+          <td>
+            <div class="eg">
+              <div class="type-lbl">Service</div>
+              <span class="chip svc">StreamRefreshService</span>
+              <div class="sub">pure logic — checks expiresAt threshold</div>
+            </div>
+            <div class="eg">
+              <div class="type-lbl">UseCase</div>
+              <span class="chip">FetchStreamInfoUC</span>
+            </div>
+          </td>
+          <td class="empty">—</td>
+        </tr>
+
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════ INSTAGRAM NEWS FEED -->
+<div class="scenario-card">
+  <div class="scenario-head">
+    <div>
+      <div class="scenario-tag" style="color:var(--green)">Social Feed · Optimistic UI · Cursor · SDWebImage</div>
+      <h2>Instagram News Feed</h2>
+    </div>
+    <a href="instagram-news-feed-system-design.html" class="deck-link">Full deck →</a>
+  </div>
+  <div class="arch-wrap">
+    <table class="arch-table">
+      <thead><tr>
+        <th></th>
+        <th class="col-storage">Storage</th>
+        <th class="col-network">Network</th>
+        <th class="col-infra">Infrastructure</th>
+        <th>Data</th>
+        <th>Domain</th>
+        <th>Presentation</th>
+      </tr></thead>
+      <tbody>
+
+        <tr class="f1">
+          <td class="lbl"><div class="flow-name">Load Feed</div></td>
+          <td class="col-storage">
+            <span class="chip st">CoreData</span>
+            <div class="sub">write-through · fetchedAt timestamp for TTL</div>
+          </td>
+          <td class="col-network">
+            <span class="chip ep">GET /users/:id/feed</span>
+          </td>
+          <td class="col-infra">
+            <span class="chip infra">APIClient</span>
+          </td>
+          <td>
+            <div class="eg">
+              <div class="type-lbl">Repository</div>
+              <span class="chip">NewsFeedRepo</span>
+            </div>
+            <div class="eg">
+              <div class="type-lbl">DataSource</div>
+              <span class="chip ds">FeedLocalDS</span>
+              <div class="sub">2-min TTL check · FeedRemoteDS if stale</div>
+            </div>
+          </td>
+          <td>
+            <div class="eg">
+              <div class="type-lbl">UseCase</div>
+              <span class="chip">FetchFeedUC</span>
+            </div>
+          </td>
+          <td>
+            <span class="chip">FeedVM</span>
+            <div class="sub">implements UICollectionViewDataSource</div>
+          </td>
+        </tr>
+
+        <tr class="f2">
+          <td class="lbl"><div class="flow-name">Scroll / Paginate</div></td>
+          <td class="col-storage">
+            <span class="chip st">CoreData</span>
+            <div class="sub">write-through on each page</div>
+          </td>
+          <td class="col-network">
+            <span class="chip ep">GET /feed?postID=cursor&amp;limit=20</span>
+            <div class="sub">cursor stable on insertions — offset would duplicate</div>
+          </td>
+          <td class="col-infra">
+            <span class="chip infra">APIClient</span>
+          </td>
+          <td>
+            <div class="eg">
+              <div class="type-lbl">Repository</div>
+              <span class="chip">NewsFeedRepo</span>
+            </div>
+            <div class="eg">
+              <div class="type-lbl">DataSource</div>
+              <span class="chip ds">FeedRemoteDS</span>
+              <div class="sub">cancel on cancelPrefetchingForItemsAt</div>
+            </div>
+          </td>
+          <td>
+            <div class="eg">
+              <div class="type-lbl">UseCase</div>
+              <span class="chip">FetchFeedUC</span>
+              <div class="sub">cursor = last postID — opaque, never parsed</div>
+            </div>
+          </td>
+          <td>
+            <span class="chip">FeedVM</span>
+            <div class="sub">UICollectionViewDataSourcePrefetching</div>
+          </td>
+        </tr>
+
+        <tr class="f3">
+          <td class="lbl"><div class="flow-name">Like Post</div></td>
+          <td class="col-storage">
+            <span class="chip st">CoreData</span>
+            <div class="sub">Like queue · successfullySent=true on confirm</div>
+          </td>
+          <td class="col-network">
+            <span class="chip ep">POST /users/:id/likes</span>
+            <div class="sub">batch array body</div>
+          </td>
+          <td class="col-infra">
+            <span class="chip infra">APIClient</span>
+            <div class="sub">+ NWPathMonitor — triggers retry on connectivity restore</div>
+          </td>
+          <td>
+            <div class="eg">
+              <div class="type-lbl">Repository</div>
+              <span class="chip">LikeRepo</span>
+            </div>
+            <div class="eg">
+              <div class="type-lbl">DataSource</div>
+              <span class="chip ds">FeedLocalDS</span>
+              <div class="sub">Like{successfullySent=false} · LikeRemoteDS on flush</div>
+            </div>
+          </td>
+          <td>
+            <div class="eg">
+              <div class="type-lbl">Service</div>
+              <span class="chip svc">LikeService</span>
+              <div class="sub">app-scoped · retry queue survives app kill</div>
+            </div>
+          </td>
+          <td>
+            <span class="chip">FeedVM</span>
+            <div class="sub">optimistic: toggle isLiked + count ±1 instantly</div>
+          </td>
+        </tr>
+
+        <tr class="f4">
+          <td class="lbl"><div class="flow-name">Load Images</div></td>
+          <td class="col-storage">
+            <span class="chip st">SDWebImage disk cache</span>
+            <div class="sub">decoded UIImage — zero-cost repeat display</div>
+          </td>
+          <td class="col-network">
+            <span class="chip ep">S3 CDN image URLs</span>
+            <div class="sub">from PostDTO.photoURLs · background download</div>
+          </td>
+          <td class="col-infra">
+            <span class="chip infra">SDWebImage</span>
+            <div class="sub">decoded UIImage cache · URLCache stores raw bytes — avoid</div>
+          </td>
+          <td>
+            <div class="eg">
+              <div class="type-lbl">DataSource (ThirdParty)</div>
+              <span class="chip ds">ImageSDKDataSource</span>
+              <div class="sub">ThirdPartyDataSource — wraps SDWebImage behind protocol</div>
+            </div>
+          </td>
+          <td class="empty">—</td>
+          <td>
+            <span class="chip">UICollectionViewCell</span>
+            <div class="sub">sd_cancelCurrentImageLoad in prepareForReuse</div>
+          </td>
+        </tr>
+
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════ HOTEL BOOKING -->
+<div class="scenario-card">
+  <div class="scenario-head">
+    <div>
+      <div class="scenario-tag" style="color:var(--orange)">Booking · Hold Timer · Stripe Facade · Offset Pagination</div>
+      <h2>Hotel Booking</h2>
+    </div>
+    <a href="hotel-booking-system-design.html" class="deck-link">Full deck →</a>
+  </div>
+  <div class="arch-wrap">
+    <table class="arch-table">
+      <thead><tr>
+        <th></th>
+        <th class="col-storage">Storage</th>
+        <th class="col-network">Network</th>
+        <th class="col-infra">Infrastructure</th>
+        <th>Data</th>
+        <th>Domain</th>
+        <th>Presentation</th>
+      </tr></thead>
+      <tbody>
+
+        <tr class="f1">
+          <td class="lbl"><div class="flow-name">Search Hotels</div></td>
+          <td class="col-storage">
+            <span class="chip st">CoreData</span>
+          </td>
+          <td class="col-network">
+            <span class="chip ep">GET /hotels?offset=&amp;limit=25</span>
+            <div class="sub">offset pagination — BE owns sort · no cross-device sync</div>
+          </td>
+          <td class="col-infra">
+            <span class="chip infra">APIClient</span>
+          </td>
+          <td>
+            <div class="eg">
+              <div class="type-lbl">Repository</div>
+              <span class="chip">HotelRepo</span>
+            </div>
+            <div class="eg">
+              <div class="type-lbl">DataSource</div>
+              <span class="chip ds">HotelLocalDS</span>
+              <div class="sub">HotelRemoteDS if stale</div>
+            </div>
+          </td>
+          <td>
+            <div class="eg">
+              <div class="type-lbl">UseCase</div>
+              <span class="chip">SearchHotelsUC</span>
+            </div>
+          </td>
+          <td><span class="chip">SearchVM</span></td>
+        </tr>
+
+        <tr class="f2">
+          <td class="lbl"><div class="flow-name">Reserve Room</div></td>
+          <td class="col-storage">
+            <span class="chip st">CoreData</span>
+            <div class="sub">OfflineReservationDTO — read-only offline history</div>
+          </td>
+          <td class="col-network">
+            <span class="chip ep">POST /reservations</span>
+            <div class="sub">409 Conflict → room unavailable UX · never conflate with 5xx</div>
+          </td>
+          <td class="col-infra">
+            <span class="chip infra">APIClient</span>
+          </td>
+          <td>
+            <div class="eg">
+              <div class="type-lbl">Repository</div>
+              <span class="chip">ReservationRepo</span>
+            </div>
+            <div class="eg">
+              <div class="type-lbl">DataSource</div>
+              <span class="chip ds">ReservationRemoteDS</span>
+              <div class="sub">ReservationLocalDS — write offline record before navigating to Payment</div>
+            </div>
+          </td>
+          <td>
+            <div class="eg">
+              <div class="type-lbl">UseCase</div>
+              <span class="chip">CreateReservationUC</span>
+              <div class="sub">local_id = UUID() at Param call site</div>
+            </div>
+          </td>
+          <td><span class="chip">ReservationVM</span></td>
+        </tr>
+
+        <tr class="f3">
+          <td class="lbl"><div class="flow-name">Hold Timer</div></td>
+          <td class="col-storage empty">—</td>
+          <td class="col-network">
+            <span class="chip ep">expiration_time from POST /reservations</span>
+            <div class="sub">server-authoritative · no WebSocket needed</div>
+          </td>
+          <td class="col-infra">
+            <span class="chip infra">Timer (Foundation)</span>
+            <div class="sub">cosmetic countdown only — server clock is authoritative</div>
+          </td>
+          <td class="empty">—</td>
+          <td>
+            <div class="eg">
+              <div class="type-lbl">Service</div>
+              <span class="chip svc">ReservationService</span>
+              <div class="sub">app-scoped · startHold(expiration_time) — client never owns the clock</div>
+            </div>
+          </td>
+          <td>
+            <span class="chip">ReservationVM</span>
+            <div class="sub">countdown display only</div>
+          </td>
+        </tr>
+
+        <tr class="f5">
+          <td class="lbl"><div class="flow-name">Payment</div></td>
+          <td class="col-storage empty">—</td>
+          <td class="col-network">
+            <span class="chip ep">Stripe SDK → token → POST /reservations/payment</span>
+            <div class="sub">app never handles raw card data</div>
+          </td>
+          <td class="col-infra">
+            <span class="chip infra">StripePaymentGateway</span>
+            <div class="sub">implements PaymentGatewayProtocol · only file importing Stripe SDK</div>
+          </td>
+          <td>
+            <div class="eg">
+              <div class="type-lbl">Repository</div>
+              <span class="chip">PaymentRepo</span>
+            </div>
+            <div class="eg">
+              <div class="type-lbl">DataSource</div>
+              <span class="chip ds">PaymentRemoteDS</span>
+            </div>
+          </td>
+          <td>
+            <div class="eg">
+              <div class="type-lbl">Service</div>
+              <span class="chip svc">PaymentService</span>
+              <div class="sub">calls PaymentGatewayProtocol — Domain never imports Stripe SDK</div>
+            </div>
+          </td>
+          <td><span class="chip">PaymentVM</span></td>
+        </tr>
+
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════ STORY VIEWER -->
+<div class="scenario-card">
+  <div class="scenario-head">
+    <div>
+      <div class="scenario-tag" style="color:var(--accent)">Ephemeral · Single Endpoint · View Recycling · 10-min Guard</div>
+      <h2>Story Viewer</h2>
+    </div>
+    <a href="story-viewer-system-design.html" class="deck-link">Full deck →</a>
+  </div>
+  <div class="arch-wrap">
+    <table class="arch-table">
+      <thead><tr>
+        <th></th>
+        <th class="col-storage">Storage</th>
+        <th class="col-network">Network</th>
+        <th class="col-infra">Infrastructure</th>
+        <th>Data</th>
+        <th>Domain</th>
+        <th>Presentation</th>
+      </tr></thead>
+      <tbody>
+
+        <tr class="f1">
+          <td class="lbl"><div class="flow-name">Initial Load</div></td>
+          <td class="col-storage">
+            <span class="chip st">CoreData</span>
+          </td>
+          <td class="col-network">
+            <span class="chip ep">GET /stories</span>
+            <div class="sub">cursor=nil · full 24h window · ~50 KB · no pagination needed</div>
+          </td>
+          <td class="col-infra">
+            <span class="chip infra">APIClient</span>
+          </td>
+          <td>
+            <div class="eg">
+              <div class="type-lbl">Repository</div>
+              <span class="chip">StoryRepo</span>
+              <div class="sub">10-min throttle guard · filters expireAt &lt; now on every read</div>
+            </div>
+            <div class="eg">
+              <div class="type-lbl">DataSource</div>
+              <span class="chip ds">StoryLocalDS</span>
+              <div class="sub">StoryRemoteDS if stale</div>
+            </div>
+          </td>
+          <td>
+            <div class="eg">
+              <div class="type-lbl">UseCase</div>
+              <span class="chip">FetchStoriesUC</span>
+            </div>
+          </td>
+          <td><span class="chip">StoryVM</span></td>
+        </tr>
+
+        <tr class="f2">
+          <td class="lbl"><div class="flow-name">Delta Refresh</div></td>
+          <td class="col-storage">
+            <span class="chip st">CoreData</span>
+            <div class="sub">merge into existing local store</div>
+          </td>
+          <td class="col-network">
+            <span class="chip ep">GET /stories?after=latestID</span>
+            <div class="sub">new stories bubble to front via StoryOrderService</div>
+          </td>
+          <td class="col-infra">
+            <span class="chip infra">APIClient</span>
+          </td>
+          <td>
+            <div class="eg">
+              <div class="type-lbl">Repository</div>
+              <span class="chip">StoryRepo</span>
+            </div>
+            <div class="eg">
+              <div class="type-lbl">DataSource</div>
+              <span class="chip ds">StoryRemoteDS</span>
+              <div class="sub">merge deltas · filter expired · StoryLocalDS write</div>
+            </div>
+          </td>
+          <td>
+            <div class="eg">
+              <div class="type-lbl">UseCase</div>
+              <span class="chip">FetchStoriesUC</span>
+              <div class="sub">cursor = latestKnownID</div>
+            </div>
+          </td>
+          <td>
+            <span class="chip">StoryVM</span>
+            <div class="sub">on sceneDidBecomeActive</div>
+          </td>
+        </tr>
+
+        <tr class="f3">
+          <td class="lbl"><div class="flow-name">Swipe &amp; Advance</div></td>
+          <td class="col-storage empty">—</td>
+          <td class="col-network empty">—</td>
+          <td class="col-infra">
+            <span class="chip infra">Timer (Foundation)</span>
+            <div class="sub">starts after image download — not on transition</div>
+          </td>
+          <td class="empty">—</td>
+          <td>
+            <div class="eg">
+              <div class="type-lbl">Service</div>
+              <span class="chip svc">StoryOrderService</span>
+              <div class="sub">stateful · markAsSeen · unseen-first sort · Set&lt;Story.ID&gt;</div>
+            </div>
+          </td>
+          <td>
+            <span class="chip">StoryVC</span>
+            <div class="sub">3 recycled UIImageViews · O(1) layout · seamless loop</div>
+          </td>
+        </tr>
+
+        <tr class="f4">
+          <td class="lbl"><div class="flow-name">Prefetch Next Image</div></td>
+          <td class="col-storage">
+            <span class="chip st">SDWebImage disk cache</span>
+            <div class="sub">decoded UIImage ready before user swipes</div>
+          </td>
+          <td class="col-network">
+            <span class="chip ep">S3 CDN</span>
+            <div class="sub">prefetch(url: nextStory.photoURL) — zero latency on swipe</div>
+          </td>
+          <td class="col-infra">
+            <span class="chip infra">SDWebImage</span>
+            <div class="sub">decoded UIImage · background download</div>
+          </td>
+          <td>
+            <div class="eg">
+              <div class="type-lbl">DataSource (ThirdParty)</div>
+              <span class="chip ds">ImageSDKDataSource</span>
+              <div class="sub">ThirdPartyDataSource — wraps SDWebImage behind protocol</div>
+            </div>
+          </td>
+          <td class="empty">—</td>
+          <td>
+            <span class="chip">StoryVM</span>
+            <div class="sub">triggers on every display cycle</div>
+          </td>
+        </tr>
+
+      </tbody>
+    </table>
+  </div>
+</div>
+
+</div><!-- end .scenarios -->
+</body>
+</html>

@@ -75,6 +75,9 @@ Does the skill's "do not include in scenarios" list cover every item in the bloc
 **Scenario template link** — applies to: `refactor-scenario-design`
 Does the template `> Scenario extension of [...]` link match the current philosophy doc path (`../ios-app-system-design-philosophy.md`)?
 
+**Architecture section four-layer structure** — applies to: `audit-scenarios`, `refactor-scenario-design`, `sync-scenarios`
+Does the skill enforce the required four-layer structure for `## Architecture` sections: `Presentation → Domain → Data → Infrastructure`, with all four layers always present and unused layers marked `None`?
+
 **Frontmatter description**
 Does the `description:` field in the frontmatter reference the correct philosophy filename?
 

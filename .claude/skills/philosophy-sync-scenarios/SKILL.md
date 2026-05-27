@@ -34,6 +34,17 @@ Not all changes affect all scenarios. Use judgment:
 - A new pagination note only affects scenarios that discuss pagination
 - A renamed component affects any scenario that uses that component name
 
+Also check — independently of what changed in the generic doc — whether each scenario's `## Architecture` section follows the required four-layer structure:
+
+```
+Presentation / Domain / Data / Infrastructure
+```
+
+All four layers must always be present. Unused layers are marked `None`. Flag any scenario where:
+- A layer is missing entirely
+- The section only contains a general pattern statement with no named components
+- DataSources appear without a domain prefix
+
 For each scenario, produce a proposal:
 
 ```

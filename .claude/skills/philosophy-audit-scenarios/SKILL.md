@@ -53,6 +53,39 @@ Check both the `.md` and its HTML for explanations that belong only in `ios-app-
 
 The test: would this exact explanation appear unchanged in every other scenario? If yes, it's generic and must be removed from the scenario deck.
 
+### 2f. Architecture section — end-to-end component coverage
+
+The `## Architecture` section must always list all four layers in order: **Presentation → Domain → Data → Infrastructure**. Every layer must appear, even if unused — unused layers are marked `None`. This makes the section scannable in an interview without the reader having to guess what was considered.
+
+Required structure:
+
+```
+Presentation
+  <named ViewControllers and ViewModels>
+
+Domain
+  UseCases: <named, one per user action or screen load>
+  Services: <named Domain Services, or None>
+  Models: <named Domain Models and Param structs>
+
+Data
+  Repositories: <named, one per aggregate>
+  DataSources: <named RemoteDataSource and LocalDataSource per Repository, domain-prefixed>
+  DTOs / Mappers: <named>
+
+Infrastructure
+  Gateways: <named, or None>
+```
+
+Flag as ❌ if:
+- Any of the four layers is missing entirely from the Architecture section
+- A layer that has no components is omitted instead of showing `None`
+- The section only contains a general pattern statement with no named components
+- DataSources are listed without domain prefix (bare `RemoteDataSource` / `LocalDataSource`)
+
+Flag as ⚠️ if:
+- All four layers are present but one or more sublists (e.g. Services, DTOs) are missing while components for that sublayer clearly exist in the scenario
+
 ### 2c. Layer dependency rule
 Check that the dependency rule holds: **Presentation → Domain ← Data. Infrastructure conforms to Domain protocols. Domain depends on nothing.**
 
@@ -92,6 +125,9 @@ Output a structured report. Format:
 #### Delta Section
 ✅ / ⚠️ / ❌ <finding>
 
+#### Architecture — End-to-End Coverage
+✅ / ⚠️ / ❌ <finding per missing or incomplete layer>
+
 #### Naming Conventions
 ✅ / ⚠️ / ❌ <finding per violation>
 
@@ -109,10 +145,10 @@ Output a structured report. Format:
 
 End the report with a summary table:
 
-| Scenario | Delta | Naming | Layers | HTML Sync | Redundant Content | Actions |
-|---|---|---|---|---|---|---|
-| music-streaming | ✅ | ✅ | ✅ | ✅ | ✅ | None |
-| (next scenario) | ... | ... | ... | ... | ... | ... |
+| Scenario | Delta | Arch Coverage | Naming | Layers | HTML Sync | Redundant Content | Actions |
+|---|---|---|---|---|---|---|---|
+| music-streaming | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | None |
+| (next scenario) | ... | ... | ... | ... | ... | ... | ... |
 
 ## Step 4 — Recommend next steps
 

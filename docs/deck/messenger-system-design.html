@@ -489,25 +489,28 @@ WS   /chat/{chat_id}                          → event stream after REST sync</
   <h2>Data Flow</h2>
 
   <h3 id="flow-thread-load">Load Chat Thread (offline-first)</h3>
+  <p>Pattern A — two awaits in the ViewModel. <code>async/await</code> returns once; a single <code>execute()</code> cannot update state twice.</p>
 <pre><code><span class="ty">ChatThreadViewController</span>.<span class="nm">viewDidLoad</span>()
   → <span class="ty">ChatThreadViewModel</span>.<span class="nm">load</span>()
       state = .loading
 
-      → <span class="nm">FetchMessagesUseCase</span>.<span class="nm">execute</span>(policy: .cached, param: <span class="ty">ChatParam</span>(chatId:))
-          → <span class="ty">MessageRepository</span>
-              1. <span class="ty">MessageLocalDataSource</span>.<span class="nm">fetch</span>(chatId:)
-                 → [<span class="ty">MessageDTO</span>] → <span class="ty">MessageMapper</span>.<span class="nm">toDomain</span>() → [<span class="ty">Message</span>]
-                 → state = .success(messages)     <span class="cm">// renders immediately from cache</span>
+      <span class="cm">// Phase 1 — cache (instant)</span>
+      <span class="kw">if let</span> cached = <span class="kw">try</span>? <span class="kw">await</span> <span class="nm">FetchMessagesUseCase</span>.<span class="nm">execute</span>(policy: .strict, param: <span class="ty">ChatParam</span>(chatId:))
+          → <span class="ty">MessageRepository</span> checks <span class="ty">MessageLocalDataSource</span> only — throws on miss
+          → ViewModel maps [<span class="ty">Message</span>] → UIModel
+          → state = .success(cached)                    <span class="cm">// renders immediately from cache</span>
 
-              2. <span class="ty">MessageRemoteDataSource</span>.<span class="nm">fetch</span>(after: lastSequenceId)
-                 → [<span class="ty">MessageDTO</span>] → <span class="ty">MessageMapper</span>.<span class="nm">toDomain</span>() → [<span class="ty">Message</span>]
-                 → <span class="ty">MessageLocalDataSource</span>.<span class="nm">upsert</span>(dtos)  <span class="cm">// upsert by message.id</span>
-                 → state updated with merged messages
+      <span class="cm">// Phase 2 — network (background)</span>
+      <span class="kw">let</span> fresh = <span class="kw">try await</span> <span class="nm">FetchMessagesUseCase</span>.<span class="nm">execute</span>(policy: .fresh, param: <span class="ty">ChatParam</span>(chatId:))
+          → <span class="ty">MessageRepository</span> fetches <span class="ty">MessageRemoteDataSource</span> → [<span class="ty">MessageDTO</span>] → <span class="ty">MessageMapper</span> → [<span class="ty">Message</span>]
+          → <span class="ty">MessageLocalDataSource</span>.<span class="nm">upsert</span>(dtos)          <span class="cm">// upsert by message.id</span>
+          → ViewModel maps merged [<span class="ty">Message</span>] → UIModel
+          → state = .success(fresh)                      <span class="cm">// view refreshes with latest</span>
 
-      defer: isLoading = false
+      defer: isLoading = <span class="kw">false</span>
 
       → <span class="ty">MessageStreamService</span>.<span class="nm">subscribe</span>(chatId: chatId) → <span class="ty">AnyPublisher</span>&lt;<span class="ty">Message</span>, <span class="ty">Never</span>&gt;
-          → each event: <span class="ty">MessageLocalDataSource</span>.<span class="nm">upsert</span>(dto) → state appended / merged</code></pre>
+          → each incoming <span class="ty">Message</span>: <span class="ty">MessageLocalDataSource</span>.<span class="nm">upsert</span>(dto) → state updated</code></pre>
 
   <h3 id="flow-send">Send Message (with offline queue)</h3>
 <pre><code>User taps send
@@ -529,21 +532,24 @@ WS   /chat/{chat_id}                          → event stream after REST sync</
           → on failure: leave for next foreground event</code></pre>
 
   <h3 id="flow-list-load">Load Chat List (offline-first)</h3>
+  <p>Pattern A — two awaits in the ViewModel.</p>
 <pre><code><span class="ty">ChatListViewController</span>.<span class="nm">viewDidLoad</span>()
   → <span class="ty">ChatListViewModel</span>.<span class="nm">load</span>()
       state = .loading
 
-      → <span class="nm">FetchChatsUseCase</span>.<span class="nm">execute</span>(policy: .cached, param: <span class="ty">ChatListParam</span>())
-          → <span class="ty">ChatRepository</span>
-              1. <span class="ty">ChatLocalDataSource</span>.<span class="nm">fetch</span>()
-                 → [<span class="ty">ChatDTO</span>] → <span class="ty">ChatMapper</span>.<span class="nm">toDomain</span>() → [<span class="ty">Chat</span>]
-                 → state = .success(chats)            <span class="cm">// renders immediately from cache</span>
+      <span class="cm">// Phase 1 — cache (instant)</span>
+      <span class="kw">if let</span> cached = <span class="kw">try</span>? <span class="kw">await</span> <span class="nm">FetchChatsUseCase</span>.<span class="nm">execute</span>(policy: .strict, param: <span class="ty">ChatListParam</span>())
+          → <span class="ty">ChatRepository</span> checks <span class="ty">ChatLocalDataSource</span> only — throws on miss
+          → ViewModel maps [<span class="ty">Chat</span>] → UIModel
+          → state = .success(cached)                  <span class="cm">// renders immediately from cache</span>
 
-              2. <span class="ty">ChatRemoteDataSource</span>.<span class="nm">fetch</span>()          <span class="cm">// GET /chat/all</span>
-                 → <span class="ty">PagedChatsResponse</span> { chats: [<span class="ty">ChatDTO</span>], nextCursor: <span class="ty">String</span>? }
-                 → <span class="ty">ChatLocalDataSource</span>.<span class="nm">upsert</span>(dtos)   <span class="cm">// upsert by chatId</span>
-                 → nextCursor stored in <span class="ty">ChatListViewModel</span>
-                 → state updated with merged chats, sorted by lastActivity
+      <span class="cm">// Phase 2 — network (background)</span>
+      <span class="kw">let</span> response = <span class="kw">try await</span> <span class="nm">FetchChatsUseCase</span>.<span class="nm">execute</span>(policy: .fresh, param: <span class="ty">ChatListParam</span>())
+          → <span class="ty">ChatRemoteDataSource</span>.<span class="nm">fetch</span>()              <span class="cm">// GET /chat/all</span>
+          → <span class="ty">PagedChatsResponse</span> { chats: [<span class="ty">ChatDTO</span>], nextCursor: <span class="ty">String</span>? }
+          → <span class="ty">ChatLocalDataSource</span>.<span class="nm">upsert</span>(dtos)          <span class="cm">// upsert by chatId</span>
+          → nextCursor stored in <span class="ty">ChatListViewModel</span>
+          → state = .success(merged chats, sorted by lastActivity)
 
       defer: isLoading = <span class="kw">false</span></code></pre>
 

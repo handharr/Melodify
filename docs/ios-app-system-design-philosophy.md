@@ -262,20 +262,47 @@ let viewModel = TrackListViewModel(searchTracks: useCase)
 
 ### Read flow (e.g. load a screen)
 
+`async/await` is single-return — `UseCase.execute()` returns once. Offline-first (cache renders immediately, then network updates) requires **two separate awaits** in the ViewModel.
+
+#### Pattern A — Two awaits (canonical)
+
 ```
 ViewController.viewDidLoad()
   → ViewModel.load()
       → isLoading = true
-      → UseCase.execute(policy: .cached, param:)
-          → Repository.fetch(policy: .cached, param:)
-              → LocalDataSource.fetch() → cached DTO? → Mapper → Model (fast return)
-              → RemoteDataSource.fetch() → DTO → Mapper → Model (background)
-              → LocalDataSource.save(dto)
-          → returns [Model]
-      → ViewModel maps Model → UIModel
-      → @Published state updated → View re-renders
+
+      // Phase 1 — cache (instant)
+      if let cached = try? await UseCase.execute(policy: .strict, param:)
+          → Repository checks LocalDataSource only — throws on miss
+          → ViewModel maps cached Model → UIModel
+          → @Published state updated → View renders immediately
+
+      // Phase 2 — network (background)
+      let fresh = try await UseCase.execute(policy: .fresh, param:)
+          → Repository fetches RemoteDataSource → DTO → Mapper → Model
+          → LocalDataSource.save(dto)
+          → ViewModel maps Model → UIModel
+          → @Published state updated → View refreshes
+
       → defer: isLoading = false
 ```
+
+**Why two calls, not one?** `async/await` returns once. A single `execute(policy: .cached)` can only yield one value — it can't update the UI twice. For cache-then-network, the ViewModel must make two distinct awaits, one per phase.
+
+**`.strict` for phase 1, `.fresh` for phase 2.** `.strict` = cache only, throws on miss (zero network cost). The `try?` suppresses the throw so a cold cache silently skips phase 1 and the user just sees a brief loading state before the network result arrives. `.fresh` = always hits network regardless of cache state.
+
+#### Pattern B — AsyncStream (alternative)
+
+The UseCase returns an `AsyncStream<[Model]>` that yields twice — cache first, network second. The ViewModel iterates with `for await`. Use this when the two-phase logic is shared across many screens and repeating two calls per ViewModel becomes noisy.
+
+| | Pattern A (two awaits) | Pattern B (AsyncStream) |
+|---|---|---|
+| ViewModel code | Two explicit awaits | Single `for await` loop |
+| Testability | Easy — stub UseCase per call | Requires async stream mocking |
+| UseCase reuse | `.strict` / `.fresh` are independent | Two-phase baked into one UseCase |
+| Complexity | Low | Higher |
+
+**Default to Pattern A.** Pattern B is a valid optimization when two-phase loading is a cross-cutting concern, not a one-off.
 
 ### Mutation flow (e.g. create / update)
 

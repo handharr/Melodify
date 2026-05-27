@@ -266,7 +266,7 @@
   <a href="#api">API Design</a>
   <a href="#model">Data Model</a>
   <a href="#hls">Streaming — HLS (Adaptive Bitrate)</a>
-  <a href="#architecture">High-Level Architecture</a>
+  <a href="#architecture">Architecture</a>
   <a href="#services">Domain Services</a>
   <a href="#streaming">Streaming &amp; Playback</a>
   <a href="#deepdive">Technical Deep Dives</a>
@@ -475,7 +475,7 @@ Each quality bucket → chunks:
 
 <!-- HIGH-LEVEL ARCHITECTURE -->
 <section id="architecture">
-  <h2>High-Level Architecture</h2>
+  <h2>Architecture</h2>
   <p>Pattern: <strong>MVVM + Clean Architecture</strong> — Presentation → Domain ← Data.</p>
 
   <div class="callout"><strong>Why UIKit over SwiftUI?</strong> UIKit gives fine-grained control over scroll performance, custom transitions, and <code>AVPlayerViewController</code> integration — all critical for a music app. SwiftUI's <code>List</code> and animation model can't yet match UIKit for complex interactive layouts. SwiftUI is right for simple new screens; UIKit is preferred when you need full control over performance and native media playback.</div>
@@ -489,15 +489,26 @@ Each quality bucket → chunks:
   </div>
 
   <h3>Data Flow — Library Screen</h3>
-<pre><code><span class="nm">LibraryViewModel</span>.load(policy: .cached)
-  → <span class="nm">FetchLibraryUseCase</span>.execute(policy:param:)
-    → <span class="nm">LibraryRepository</span>
-        1. <span class="nm">LibraryLocalDataSource</span>.fetch()     <span class="cm">// return cached rows → UI renders instantly</span>
-        2. <span class="nm">LibraryRemoteDataSource</span>.fetch()    <span class="cm">// hit API in parallel</span>
-        3. write DTOs → <span class="nm">LibraryLocalDataSource</span> via <span class="ty">LibraryItemMapper</span>
-        4. <span class="nm">LibraryLocalDataSource</span> emits stream → ViewModel updates UI</code></pre>
+  <p>Pattern A — two awaits in the ViewModel. <code>async/await</code> returns once; a single <code>execute()</code> cannot update state twice.</p>
+<pre><code><span class="nm">LibraryViewModel</span>.load()
+    → isLoading = <span class="kw">true</span>
 
-  <div class="rule"><strong>GRDB as Single Source of Truth:</strong> ViewModels never read directly from the network. All reads come from <code>LibraryLocalDataSource</code> (GRDB). Repos write API responses into the DB, the DB emits a stream back up. Instant UI on launch (stale data), silently refreshed when API responds.</div>
+    <span class="cm">// Phase 1 — cache (instant)</span>
+    <span class="kw">if let</span> cached = <span class="kw">try</span>? <span class="kw">await</span> <span class="nm">FetchLibraryUseCase</span>.execute(policy: .strict, param:)
+        → <span class="nm">LibraryRepository</span> checks <span class="nm">LibraryLocalDataSource</span> only — throws on miss
+        → ViewModel maps [<span class="ty">LibraryItem</span>] → UIModel
+        → @Published state updated → UI renders immediately from cache
+
+    <span class="cm">// Phase 2 — network (background)</span>
+    <span class="kw">let</span> fresh = <span class="kw">try await</span> <span class="nm">FetchLibraryUseCase</span>.execute(policy: .fresh, param:)
+        → <span class="nm">LibraryRepository</span> fetches <span class="nm">LibraryRemoteDataSource</span> → DTOs → <span class="ty">LibraryItemMapper</span> → [<span class="ty">LibraryItem</span>]
+        → <span class="nm">LibraryLocalDataSource</span>.save(dtos)
+        → ViewModel maps [<span class="ty">LibraryItem</span>] → UIModel
+        → @Published state updated → UI refreshes with latest
+
+    → <span class="kw">defer</span>: isLoading = <span class="kw">false</span></code></pre>
+
+  <div class="rule"><strong>GRDB as Single Source of Truth:</strong> ViewModels never read directly from the network. Phase 1 serves from <code>LibraryLocalDataSource</code> (GRDB) immediately. Phase 2 writes the API response back into GRDB then updates state — the DB is always the intermediary.</div>
 
   <h3>Data Flow — Playback</h3>
 <pre><code><span class="nm">PlayerViewModel</span>.play(item, at: index)
