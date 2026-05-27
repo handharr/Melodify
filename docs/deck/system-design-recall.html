@@ -290,28 +290,19 @@
     <table class="arch-table">
       <thead><tr>
         <th></th>
-        <th class="col-storage">Storage</th>
-        <th class="col-network">Network</th>
+        <th class="col-external">External</th>
         <th class="col-infra">Infrastructure</th>
-        <th class="col-repo">Repository</th>
-        <th class="col-ds">DataSource</th>
-        <th>UseCase</th>
-        <th>Service</th>
+        <th>Data</th>
+        <th>Domain</th>
         <th>Presentation</th>
       </tr></thead>
       <tbody>
 
         <tr class="f1">
           <td class="lbl"><div class="flow-name">Load Restaurants</div></td>
-          <td class="col-storage" rowspan="2">
-            <span class="chip shared st">CoreData</span>
-            <div class="flow-dots">
-              <span class="flow-dot" style="background:var(--accent)"></span>
-              <span class="flow-dot" style="background:var(--orange)"></span>
-            </div>
-            <div class="sub">cache · offline restore | cross-device sync</div>
-          </td>
-          <td class="col-network">
+          <td class="col-external">
+            <span class="chip st">CoreData</span>
+            <div class="sub">cache · offline restore</div>
             <span class="chip ep">GET /restaurants/:addressID</span>
           </td>
           <td class="col-infra" rowspan="3">
@@ -321,30 +312,27 @@
               <span class="flow-dot" style="background:var(--orange)"></span>
               <span class="flow-dot" style="background:var(--orange)"></span>
             </div>
-            <div class="sub">URLSession-based HTTP client</div>
           </td>
-          <td class="col-repo">
-            <span class="chip">RestaurantRepo</span>
-          </td>
-          <td class="col-ds">
+          <td>
+            <span class="chip">RestaurantRepo</span><br>
             <span class="chip ds">RestaurantRemoteDS</span>
             <div class="sub">RestaurantLocalDS — FetchPolicy.cached</div>
           </td>
           <td><span class="chip">FetchRestaurantsUC</span></td>
-          <td class="empty">—</td>
           <td><span class="chip">RestaurantListVM</span></td>
         </tr>
 
         <tr class="f2">
           <td class="lbl"><div class="flow-name">Manage Basket</div></td>
-          <!-- Storage rowspanned -->
-          <td class="col-network">
+          <td class="col-external">
+            <span class="chip st">CoreData</span>
+            <div class="sub">local mirror for instant restore</div>
             <span class="chip ep">POST /basket</span>
             <div class="sub">PATCH /basket on update</div>
           </td>
           <!-- Infra rowspanned -->
-          <td class="col-repo"><span class="chip">BasketRepo</span></td>
-          <td class="col-ds">
+          <td>
+            <span class="chip">BasketRepo</span><br>
             <span class="chip ds">BasketRemoteDS</span>
             <div class="sub">BasketLocalDS — local mirror for instant restore</div>
           </td>
@@ -352,7 +340,6 @@
             <span class="chip">CreateBasketUC</span>
             <div class="sub">UpdateBasketUC on PATCH</div>
           </td>
-          <td class="empty">—</td>
           <td rowspan="2">
             <span class="chip shared">BasketVM</span>
             <div class="flow-dots">
@@ -364,33 +351,33 @@
 
         <tr class="f2">
           <td class="lbl"><div class="flow-name">Place Order</div></td>
-          <td class="col-storage empty">—</td>
-          <td class="col-network">
+          <td class="col-external">
             <span class="chip ep">POST /orders</span>
             <div class="sub">idempotencyKey = UUID() at CreateOrderParam call site</div>
           </td>
           <!-- Infra rowspanned -->
-          <td class="col-repo"><span class="chip">OrderRepo</span></td>
-          <td class="col-ds"><span class="chip ds">OrderRemoteDS</span></td>
+          <td>
+            <span class="chip">OrderRepo</span><br>
+            <span class="chip ds">OrderRemoteDS</span>
+          </td>
           <td><span class="chip">CreateOrderUC</span></td>
-          <td class="empty">—</td>
           <!-- Presentation rowspanned -->
         </tr>
 
         <tr class="f3">
           <td class="lbl"><div class="flow-name">Track Courier</div></td>
-          <td class="col-storage empty">—</td>
-          <td class="col-network">
+          <td class="col-external">
             <span class="chip ep">SSE /live-order-status/:id</span>
             <div class="sub">close on viewDidDisappear — drains battery if left open</div>
           </td>
           <td class="col-infra">
-            <span class="chip infra">OrderSSEGateway</span>
+            <span class="chip infra">SSEClient</span>
+            <div class="sub">URLSession text/event-stream · transport-only</div>
+          </td>
+          <td>
+            <span class="chip ds">OrderSSEDataSource</span>
             <div class="sub">AsyncStream&lt;OrderSSEEventDTO&gt; · Domain defines protocol</div>
           </td>
-          <td class="col-repo empty">—</td>
-          <td class="col-ds empty">—</td>
-          <td class="empty">—</td>
           <td>
             <span class="chip svc">OrderService</span>
             <div class="sub">scoped to OrderCoordinator · AnyPublisher&lt;Order, AppError&gt;</div>
@@ -416,37 +403,26 @@
     <table class="arch-table">
       <thead><tr>
         <th></th>
-        <th class="col-storage">Storage</th>
-        <th class="col-network">Network</th>
+        <th class="col-external">External</th>
         <th class="col-infra">Infrastructure</th>
-        <th class="col-repo">Repository</th>
-        <th class="col-ds">DataSource</th>
-        <th>UseCase</th>
-        <th>Service</th>
+        <th>Data</th>
+        <th>Domain</th>
         <th>Presentation</th>
       </tr></thead>
       <tbody>
 
         <tr class="f1">
           <td class="lbl"><div class="flow-name">Load Thread</div></td>
-          <td class="col-storage" rowspan="4">
-            <span class="chip shared st">Realm</span>
-            <div class="flow-dots">
-              <span class="flow-dot" style="background:var(--accent)"></span>
-              <span class="flow-dot" style="background:var(--orange)"></span>
-              <span class="flow-dot" style="background:var(--green)"></span>
-              <span class="flow-dot" style="background:var(--red)"></span>
-            </div>
+          <td class="col-external">
+            <span class="chip st">Realm</span>
             <div class="sub">SSOT — live query drives all VM updates</div>
-          </td>
-          <td class="col-network">
             <span class="chip ep">GET /chat/:id/all/after?timestamp=</span>
             <div class="sub">delta only — not full reload</div>
           </td>
           <td class="col-infra">
             <span class="chip infra">APIClient</span>
           </td>
-          <td class="col-repo" rowspan="4">
+          <td>
             <span class="chip shared">MessageRepo</span>
             <div class="flow-dots">
               <span class="flow-dot" style="background:var(--accent)"></span>
@@ -454,26 +430,26 @@
               <span class="flow-dot" style="background:var(--green)"></span>
               <span class="flow-dot" style="background:var(--red)"></span>
             </div>
-          </td>
-          <td class="col-ds">
+            <br>
             <span class="chip ds">MessageLocalDS</span>
             <div class="sub">MessageRemoteDS — delta sync in background</div>
           </td>
           <td><span class="chip">FetchMessagesUC</span></td>
-          <td class="empty">—</td>
-          <td rowspan="2">
+          <td rowspan="3">
             <span class="chip shared">ChatThreadVM</span>
             <div class="flow-dots">
               <span class="flow-dot" style="background:var(--accent)"></span>
               <span class="flow-dot" style="background:var(--orange)"></span>
+              <span class="flow-dot" style="background:var(--green)"></span>
             </div>
+            <div class="sub">← observes Realm live query</div>
           </td>
         </tr>
 
         <tr class="f2">
           <td class="lbl"><div class="flow-name">Send Message</div></td>
-          <!-- Storage rowspanned -->
-          <td class="col-network">
+          <td class="col-external">
+            <span class="chip st">Realm</span><br>
             <span class="chip ep">WS /chat/:id</span>
             <div class="sub">WebSocket-first · POST /chat/:id/message fallback</div>
           </td>
@@ -485,56 +461,47 @@
             </div>
             <div class="sub">APIClient as REST fallback if socket down</div>
           </td>
-          <!-- Repo rowspanned -->
-          <td class="col-ds">
+          <td>
             <span class="chip ds">MessageLocalDS</span>
             <div class="sub">upsert isSent=false first · MessageRemoteDS on success</div>
           </td>
           <td><span class="chip">SendMessageUC</span></td>
-          <td class="empty">—</td>
           <!-- Presentation rowspanned -->
         </tr>
 
         <tr class="f3">
           <td class="lbl"><div class="flow-name">Receive via WebSocket</div></td>
-          <!-- Storage rowspanned -->
-          <td class="col-network">
+          <td class="col-external">
+            <span class="chip st">Realm</span><br>
             <span class="chip ep">← WS /chat/:id</span>
             <div class="sub">incoming push — no request</div>
           </td>
           <!-- Infra rowspanned -->
-          <!-- Repo rowspanned -->
-          <td class="col-ds">
+          <td>
             <span class="chip ds">MessageLocalDS</span>
             <div class="sub">upsert by message.id — never append</div>
           </td>
-          <td class="empty">—</td>
           <td>
             <span class="chip svc">MessageStreamService</span>
             <div class="sub">app-scoped · AnyPublisher&lt;Message, Never&gt;</div>
           </td>
-          <td>
-            <span class="chip">ViewModel</span>
-            <div class="sub">← observes Realm live query</div>
-          </td>
+          <!-- Presentation rowspanned -->
         </tr>
 
         <tr class="f4">
           <td class="lbl"><div class="flow-name">Sync Offline Queue</div></td>
-          <!-- Storage rowspanned -->
-          <td class="col-network">
+          <td class="col-external">
+            <span class="chip st">Realm</span><br>
             <span class="chip ep">POST /chat/:id/message</span>
             <div class="sub">retry on foreground · leave on failure for next active</div>
           </td>
           <td class="col-infra">
-            <span class="chip infra">APIClient</span>
+            <span class="chip infra">APIClient</span><span class="ref-badge">↑</span>
           </td>
-          <!-- Repo rowspanned -->
-          <td class="col-ds">
+          <td>
             <span class="chip ds">MessageLocalDS</span>
             <div class="sub">fetch isSent=false · MessageRemoteDS retry</div>
           </td>
-          <td class="empty">—</td>
           <td>
             <span class="chip svc">MessageSyncService</span>
             <div class="sub">app-scoped · fires on sceneDidBecomeActive</div>
@@ -560,44 +527,37 @@
     <table class="arch-table">
       <thead><tr>
         <th></th>
-        <th class="col-storage">Storage</th>
-        <th class="col-network">Network</th>
+        <th class="col-external">External</th>
         <th class="col-infra">Infrastructure</th>
-        <th class="col-repo">Repository</th>
-        <th class="col-ds">DataSource</th>
-        <th>UseCase</th>
-        <th>Service</th>
+        <th>Data</th>
+        <th>Domain</th>
         <th>Presentation</th>
       </tr></thead>
       <tbody>
 
         <tr class="f1">
           <td class="lbl"><div class="flow-name">Load Library</div></td>
-          <td class="col-storage">
+          <td class="col-external">
             <span class="chip st">GRDB</span>
             <div class="sub">render instant · Combine publisher on update</div>
-          </td>
-          <td class="col-network">
             <span class="chip ep">GET /me/library?cursor=&amp;sort=</span>
             <div class="sub">cursor pagination · opaque base64 · never parse client-side</div>
           </td>
           <td class="col-infra">
             <span class="chip infra">APIClient</span>
           </td>
-          <td class="col-repo"><span class="chip">LibraryRepo</span></td>
-          <td class="col-ds">
+          <td>
+            <span class="chip">LibraryRepo</span><br>
             <span class="chip ds">LibraryLocalDS</span>
             <div class="sub">LibraryRemoteDS — background refresh</div>
           </td>
           <td><span class="chip">FetchLibraryUC</span></td>
-          <td class="empty">—</td>
           <td><span class="chip">LibraryVM</span></td>
         </tr>
 
         <tr class="f3">
           <td class="lbl"><div class="flow-name">Stream Track (online)</div></td>
-          <td class="col-storage empty">—</td>
-          <td class="col-network">
+          <td class="col-external">
             <span class="chip ep">GET /item/:id/stream-info</span>
             <div class="sub">→ HLS CDN .m3u8 → chunks · AVPlayer adaptive bitrate</div>
           </td>
@@ -605,25 +565,20 @@
             <span class="chip infra">APIClient</span>
             <div class="sub">+ AVPlayer (HLS playback engine)</div>
           </td>
-          <td class="col-repo" rowspan="3">
+          <td>
             <span class="chip shared">DownloadRepo</span>
             <div class="flow-dots">
               <span class="flow-dot" style="background:var(--green)"></span>
               <span class="flow-dot" style="background:var(--red)"></span>
               <span class="flow-dot" style="background:var(--red)"></span>
             </div>
-          </td>
-          <td class="col-ds">
+            <br>
             <span class="chip ds">MediaRemoteDS</span>
             <div class="sub">fetches signed manifest · short-lived expiresAt</div>
           </td>
-          <td><span class="chip">FetchStreamInfoUC</span></td>
-          <td rowspan="2">
-            <span class="chip shared svc">PlayerService</span>
-            <div class="flow-dots">
-              <span class="flow-dot" style="background:var(--green)"></span>
-              <span class="flow-dot" style="background:var(--red)"></span>
-            </div>
+          <td>
+            <span class="chip">FetchStreamInfoUC</span><br>
+            <span class="chip svc">PlayerService</span>
             <div class="sub">app-scoped — music stops if VC-owned</div>
           </td>
           <td rowspan="2">
@@ -637,41 +592,39 @@
 
         <tr class="f4">
           <td class="lbl"><div class="flow-name">Play Offline</div></td>
-          <td class="col-storage">
+          <td class="col-external">
             <span class="chip st">disk file://</span>
             <div class="sub">separate from LRU — user saves never evicted by streaming pressure</div>
           </td>
-          <td class="col-network empty">—</td>
           <td class="col-infra">
             <span class="chip infra">AVPlayer</span>
             <div class="sub">file:// URL — no network request</div>
           </td>
-          <!-- Repo rowspanned -->
-          <td class="col-ds">
+          <td>
             <span class="chip ds">DownloadLocalDS</span>
             <div class="sub">itemId → filePath · MediaFileDataSource binary on disk</div>
           </td>
-          <td class="empty">—</td>
-          <!-- Service rowspanned -->
+          <td>
+            <span class="chip svc">PlayerService</span>
+            <div class="sub">app-scoped — music stops if VC-owned</div>
+          </td>
           <!-- Presentation rowspanned -->
         </tr>
 
         <tr class="f4">
           <td class="lbl"><div class="flow-name">Refresh Expired URL</div></td>
-          <td class="col-storage empty">—</td>
-          <td class="col-network">
+          <td class="col-external">
             <span class="chip ep">GET /item/:id/stream-info</span>
             <div class="sub">background — buffered audio keeps playing during refresh</div>
           </td>
           <td class="col-infra">
-            <span class="chip infra">APIClient</span>
-          </td>
-          <!-- Repo rowspanned -->
-          <td class="col-ds"><span class="chip ds">MediaRemoteDS</span></td>
-          <td>
-            <span class="chip">FetchStreamInfoUC</span><span class="ref-badge">↑</span>
+            <span class="chip infra">APIClient</span><span class="ref-badge">↑</span>
           </td>
           <td>
+            <span class="chip ds">MediaRemoteDS</span><span class="ref-badge">↑</span>
+          </td>
+          <td>
+            <span class="chip">FetchStreamInfoUC</span><span class="ref-badge">↑</span><br>
             <span class="chip svc">StreamRefreshService</span>
             <div class="sub">pure logic — checks expiresAt threshold</div>
           </td>
@@ -696,29 +649,19 @@
     <table class="arch-table">
       <thead><tr>
         <th></th>
-        <th class="col-storage">Storage</th>
-        <th class="col-network">Network</th>
+        <th class="col-external">External</th>
         <th class="col-infra">Infrastructure</th>
-        <th class="col-repo">Repository</th>
-        <th class="col-ds">DataSource</th>
-        <th>UseCase</th>
-        <th>Service</th>
+        <th>Data</th>
+        <th>Domain</th>
         <th>Presentation</th>
       </tr></thead>
       <tbody>
 
         <tr class="f1">
           <td class="lbl"><div class="flow-name">Load Feed</div></td>
-          <td class="col-storage" rowspan="3">
-            <span class="chip shared st">CoreData</span>
-            <div class="flow-dots">
-              <span class="flow-dot" style="background:var(--accent)"></span>
-              <span class="flow-dot" style="background:var(--accent)"></span>
-              <span class="flow-dot" style="background:var(--orange)"></span>
-            </div>
+          <td class="col-external">
+            <span class="chip st">CoreData</span>
             <div class="sub">write-through · fetchedAt TTL | Like queue · successfullySent flag</div>
-          </td>
-          <td class="col-network">
             <span class="chip ep">GET /users/:id/feed</span>
           </td>
           <td class="col-infra" rowspan="2">
@@ -728,14 +671,13 @@
               <span class="flow-dot" style="background:var(--accent)"></span>
             </div>
           </td>
-          <td class="col-repo" rowspan="2">
+          <td>
             <span class="chip shared">NewsFeedRepo</span>
             <div class="flow-dots">
               <span class="flow-dot" style="background:var(--accent)"></span>
               <span class="flow-dot" style="background:var(--accent)"></span>
             </div>
-          </td>
-          <td class="col-ds">
+            <br>
             <span class="chip ds">FeedLocalDS</span>
             <div class="sub">2-min TTL check · FeedRemoteDS if stale</div>
           </td>
@@ -746,7 +688,6 @@
               <span class="flow-dot" style="background:var(--accent)"></span>
             </div>
           </td>
-          <td class="empty">—</td>
           <td rowspan="3">
             <span class="chip shared">FeedVM</span>
             <div class="flow-dots">
@@ -760,39 +701,36 @@
 
         <tr class="f1">
           <td class="lbl"><div class="flow-name">Scroll / Paginate</div></td>
-          <!-- Storage rowspanned -->
-          <td class="col-network">
+          <td class="col-external">
+            <span class="chip st">CoreData</span><br>
             <span class="chip ep">GET /feed?postID=cursor&amp;limit=20</span>
             <div class="sub">cursor stable on insertions — offset would duplicate</div>
           </td>
           <!-- Infra rowspanned -->
-          <!-- Repo rowspanned -->
-          <td class="col-ds">
+          <td>
             <span class="chip ds">FeedRemoteDS</span>
             <div class="sub">cancel on cancelPrefetchingForItemsAt</div>
           </td>
-          <!-- UseCase rowspanned -->
-          <td class="empty">—</td>
+          <!-- Domain rowspanned -->
           <!-- Presentation rowspanned -->
         </tr>
 
         <tr class="f2">
           <td class="lbl"><div class="flow-name">Like Post</div></td>
-          <!-- Storage rowspanned -->
-          <td class="col-network">
+          <td class="col-external">
+            <span class="chip st">CoreData</span><br>
             <span class="chip ep">POST /users/:id/likes</span>
             <div class="sub">batch array body</div>
           </td>
           <td class="col-infra">
-            <span class="chip infra">APIClient</span>
+            <span class="chip infra">APIClient</span><span class="ref-badge">↑</span>
             <div class="sub">+ NWPathMonitor — retry on connectivity restore</div>
           </td>
-          <td class="col-repo"><span class="chip">LikeRepo</span></td>
-          <td class="col-ds">
-            <span class="chip ds">FeedLocalDS</span>
+          <td>
+            <span class="chip">LikeRepo</span><br>
+            <span class="chip ds">FeedLocalDS</span><span class="ref-badge">↑</span>
             <div class="sub">Like{successfullySent=false} · LikeRemoteDS on flush</div>
           </td>
-          <td class="empty">—</td>
           <td>
             <span class="chip svc">LikeService</span>
             <div class="sub">app-scoped · retry queue survives app kill</div>
@@ -802,21 +740,17 @@
 
         <tr class="f4">
           <td class="lbl"><div class="flow-name">Load Images</div></td>
-          <td class="col-storage">
+          <td class="col-external">
             <span class="chip st">SDWebImage disk cache</span>
             <div class="sub">decoded UIImage — zero-cost repeat display</div>
-          </td>
-          <td class="col-network">
             <span class="chip ep">S3 CDN image URLs</span>
             <div class="sub">from PostDTO.photoURLs · background download</div>
           </td>
           <td class="col-infra"><span class="chip infra">SDWebImage</span></td>
-          <td class="col-repo empty">—</td>
-          <td class="col-ds">
+          <td>
             <span class="chip ds">ImageSDKDataSource</span>
             <div class="sub">ThirdPartyDataSource — wraps SDWebImage behind protocol</div>
           </td>
-          <td class="empty">—</td>
           <td class="empty">—</td>
           <td>
             <span class="chip">UICollectionViewCell</span>
@@ -842,28 +776,19 @@
     <table class="arch-table">
       <thead><tr>
         <th></th>
-        <th class="col-storage">Storage</th>
-        <th class="col-network">Network</th>
+        <th class="col-external">External</th>
         <th class="col-infra">Infrastructure</th>
-        <th class="col-repo">Repository</th>
-        <th class="col-ds">DataSource</th>
-        <th>UseCase</th>
-        <th>Service</th>
+        <th>Data</th>
+        <th>Domain</th>
         <th>Presentation</th>
       </tr></thead>
       <tbody>
 
         <tr class="f1">
           <td class="lbl"><div class="flow-name">Search Hotels</div></td>
-          <td class="col-storage" rowspan="2">
-            <span class="chip shared st">CoreData</span>
-            <div class="flow-dots">
-              <span class="flow-dot" style="background:var(--accent)"></span>
-              <span class="flow-dot" style="background:var(--orange)"></span>
-            </div>
+          <td class="col-external">
+            <span class="chip st">CoreData</span>
             <div class="sub">search cache | OfflineReservationDTO read-only history</div>
-          </td>
-          <td class="col-network">
             <span class="chip ep">GET /hotels?offset=&amp;limit=25</span>
             <div class="sub">offset pagination — BE owns sort · no cross-device sync</div>
           </td>
@@ -874,26 +799,26 @@
               <span class="flow-dot" style="background:var(--orange)"></span>
             </div>
           </td>
-          <td class="col-repo"><span class="chip">HotelRepo</span></td>
-          <td class="col-ds">
+          <td>
+            <span class="chip">HotelRepo</span><br>
             <span class="chip ds">HotelLocalDS</span>
             <div class="sub">HotelRemoteDS if stale</div>
           </td>
           <td><span class="chip">SearchHotelsUC</span></td>
-          <td class="empty">—</td>
           <td><span class="chip">SearchVM</span></td>
         </tr>
 
         <tr class="f2">
           <td class="lbl"><div class="flow-name">Reserve Room</div></td>
-          <!-- Storage rowspanned -->
-          <td class="col-network">
+          <td class="col-external">
+            <span class="chip st">CoreData</span>
+            <div class="sub">offline record written immediately before navigating to Payment</div>
             <span class="chip ep">POST /reservations</span>
             <div class="sub">409 Conflict → room unavailable · never conflate with 5xx</div>
           </td>
           <!-- Infra rowspanned -->
-          <td class="col-repo"><span class="chip">ReservationRepo</span></td>
-          <td class="col-ds">
+          <td>
+            <span class="chip">ReservationRepo</span><br>
             <span class="chip ds">ReservationRemoteDS</span>
             <div class="sub">ReservationLocalDS — write offline record before navigating to Payment</div>
           </td>
@@ -901,7 +826,6 @@
             <span class="chip">CreateReservationUC</span>
             <div class="sub">local_id = UUID() at Param call site</div>
           </td>
-          <td class="empty">—</td>
           <td rowspan="2">
             <span class="chip shared">ReservationVM</span>
             <div class="flow-dots">
@@ -913,8 +837,7 @@
 
         <tr class="f5">
           <td class="lbl"><div class="flow-name">Hold Timer</div></td>
-          <td class="col-storage empty">—</td>
-          <td class="col-network">
+          <td class="col-external">
             <span class="chip ep">expiration_time from POST /reservations</span>
             <div class="sub">server-authoritative · no WebSocket needed</div>
           </td>
@@ -922,8 +845,6 @@
             <span class="chip infra">Timer (Foundation)</span>
             <div class="sub">cosmetic countdown only — server clock is authoritative</div>
           </td>
-          <td class="col-repo empty">—</td>
-          <td class="col-ds empty">—</td>
           <td class="empty">—</td>
           <td>
             <span class="chip svc">ReservationService</span>
@@ -934,8 +855,7 @@
 
         <tr class="f5">
           <td class="lbl"><div class="flow-name">Payment</div></td>
-          <td class="col-storage empty">—</td>
-          <td class="col-network">
+          <td class="col-external">
             <span class="chip ep">Stripe SDK → token → POST /reservations/payment</span>
             <div class="sub">app never handles raw card data</div>
           </td>
@@ -943,9 +863,10 @@
             <span class="chip infra">StripePaymentGateway</span>
             <div class="sub">implements PaymentGatewayProtocol · only file importing Stripe SDK</div>
           </td>
-          <td class="col-repo"><span class="chip">PaymentRepo</span></td>
-          <td class="col-ds"><span class="chip ds">PaymentRemoteDS</span></td>
-          <td class="empty">—</td>
+          <td>
+            <span class="chip">PaymentRepo</span><br>
+            <span class="chip ds">PaymentRemoteDS</span>
+          </td>
           <td>
             <span class="chip svc">PaymentService</span>
             <div class="sub">calls PaymentGatewayProtocol — Domain never imports Stripe SDK</div>
@@ -971,28 +892,19 @@
     <table class="arch-table">
       <thead><tr>
         <th></th>
-        <th class="col-storage">Storage</th>
-        <th class="col-network">Network</th>
+        <th class="col-external">External</th>
         <th class="col-infra">Infrastructure</th>
-        <th class="col-repo">Repository</th>
-        <th class="col-ds">DataSource</th>
-        <th>UseCase</th>
-        <th>Service</th>
+        <th>Data</th>
+        <th>Domain</th>
         <th>Presentation</th>
       </tr></thead>
       <tbody>
 
         <tr class="f1">
           <td class="lbl"><div class="flow-name">Initial Load</div></td>
-          <td class="col-storage" rowspan="2">
-            <span class="chip shared st">CoreData</span>
-            <div class="flow-dots">
-              <span class="flow-dot" style="background:var(--accent)"></span>
-              <span class="flow-dot" style="background:var(--accent)"></span>
-            </div>
+          <td class="col-external">
+            <span class="chip st">CoreData</span>
             <div class="sub">merge deltas · filter expireAt &lt; now on every read</div>
-          </td>
-          <td class="col-network">
             <span class="chip ep">GET /stories</span>
             <div class="sub">cursor=nil · full 24h window · ~50 KB · no pagination needed</div>
           </td>
@@ -1003,15 +915,14 @@
               <span class="flow-dot" style="background:var(--accent)"></span>
             </div>
           </td>
-          <td class="col-repo" rowspan="2">
+          <td>
             <span class="chip shared">StoryRepo</span>
             <div class="flow-dots">
               <span class="flow-dot" style="background:var(--accent)"></span>
               <span class="flow-dot" style="background:var(--accent)"></span>
             </div>
             <div class="sub">10-min throttle guard · filters expireAt &lt; now</div>
-          </td>
-          <td class="col-ds">
+            <br>
             <span class="chip ds">StoryLocalDS</span>
             <div class="sub">StoryRemoteDS if stale</div>
           </td>
@@ -1022,7 +933,6 @@
               <span class="flow-dot" style="background:var(--accent)"></span>
             </div>
           </td>
-          <td class="empty">—</td>
           <td rowspan="2">
             <span class="chip shared">StoryVM</span>
             <div class="flow-dots">
@@ -1034,32 +944,27 @@
 
         <tr class="f1">
           <td class="lbl"><div class="flow-name">Delta Refresh</div></td>
-          <!-- Storage rowspanned -->
-          <td class="col-network">
+          <td class="col-external">
+            <span class="chip st">CoreData</span><br>
             <span class="chip ep">GET /stories?after=latestID</span>
             <div class="sub">new stories bubble to front via StoryOrderService</div>
           </td>
           <!-- Infra rowspanned -->
-          <!-- Repo rowspanned -->
-          <td class="col-ds">
+          <td>
             <span class="chip ds">StoryRemoteDS</span>
             <div class="sub">merge deltas · filter expired · StoryLocalDS write</div>
           </td>
-          <!-- UseCase rowspanned -->
-          <td class="empty">—</td>
+          <!-- Domain rowspanned -->
           <!-- Presentation rowspanned -->
         </tr>
 
         <tr class="f5">
           <td class="lbl"><div class="flow-name">Swipe &amp; Advance</div></td>
-          <td class="col-storage empty">—</td>
-          <td class="col-network empty">—</td>
+          <td class="col-external empty">—</td>
           <td class="col-infra">
             <span class="chip infra">Timer (Foundation)</span>
             <div class="sub">starts after image download — not on transition</div>
           </td>
-          <td class="col-repo empty">—</td>
-          <td class="col-ds empty">—</td>
           <td class="empty">—</td>
           <td>
             <span class="chip svc">StoryOrderService</span>
@@ -1073,21 +978,17 @@
 
         <tr class="f4">
           <td class="lbl"><div class="flow-name">Prefetch Next Image</div></td>
-          <td class="col-storage">
+          <td class="col-external">
             <span class="chip st">SDWebImage disk cache</span>
             <div class="sub">decoded UIImage ready before user swipes</div>
-          </td>
-          <td class="col-network">
             <span class="chip ep">S3 CDN</span>
             <div class="sub">prefetch(url: nextStory.photoURL) — zero latency on swipe</div>
           </td>
           <td class="col-infra"><span class="chip infra">SDWebImage</span></td>
-          <td class="col-repo empty">—</td>
-          <td class="col-ds">
+          <td>
             <span class="chip ds">ImageSDKDataSource</span>
             <div class="sub">ThirdPartyDataSource — wraps SDWebImage behind protocol</div>
           </td>
-          <td class="empty">—</td>
           <td class="empty">—</td>
           <td>
             <span class="chip">StoryVM</span><span class="ref-badge">↑</span>
