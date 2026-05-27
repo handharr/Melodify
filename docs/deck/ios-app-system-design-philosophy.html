@@ -116,6 +116,7 @@
   ul, ol { color: var(--muted); padding-left: 20px; margin-bottom: 12px; }
   li { margin-bottom: 4px; line-height: 1.5; }
   li strong { color: var(--text); }
+  li ul { margin-top: 4px; margin-bottom: 4px; }
 
   .stack {
     background: var(--surface);
@@ -247,30 +248,38 @@
 <nav>
   <a href="index.html">Home</a>
   <span class="sep">›</span>
-  <span class="current">iOS App System Design</span>
+  <span class="current">iOS Generic Architecture</span>
 </nav>
 
 <header>
-  <div class="tag">Architecture Base</div>
-  <h1>iOS App System Design</h1>
-  <p>Generic architecture — carry this into every interview. Scenario docs extend it.</p>
+  <div class="tag">Architecture Reference</div>
+  <h1>iOS App System Design — Generic Architecture</h1>
+  <p>My default architecture for any iOS app. Carry this into every interview. Scenario docs extend this — they describe the delta, not a replacement.</p>
 </header>
 
+<!-- TOC -->
 <div class="toc">
   <div class="toc-title">Contents</div>
   <a href="#pattern">Architecture Pattern</a>
   <a href="#why">Why These Choices</a>
+  <a class="toc-sub" href="#why-clean">Clean Architecture over MVC</a>
+  <a class="toc-sub" href="#why-mvvm-mvp">MVVM over MVP</a>
+  <a class="toc-sub" href="#why-mvvm-viper">MVVM over VIPER</a>
+  <a class="toc-sub" href="#why-infra">Infrastructure as the fourth layer</a>
+  <a class="toc-sub" href="#why-external">External as the fifth layer</a>
+  <a class="toc-sub" href="#why-uikit">UIKit vs SwiftUI</a>
   <a href="#layers">Layer Breakdown</a>
-  <a class="toc-sub" href="#presentation">Presentation</a>
-  <a class="toc-sub" href="#domain">Domain</a>
-  <a class="toc-sub" href="#data">Data</a>
-  <a class="toc-sub" href="#infrastructure">Infrastructure</a>
-  <a class="toc-sub" href="#application">Application</a>
-  <a class="toc-sub" href="#external">External</a>
+  <a class="toc-sub" href="#layer-presentation">Presentation</a>
+  <a class="toc-sub" href="#layer-domain">Domain</a>
+  <a class="toc-sub" href="#layer-data">Data</a>
+  <a class="toc-sub" href="#layer-application">Application</a>
+  <a class="toc-sub" href="#layer-infrastructure">Infrastructure</a>
+  <a class="toc-sub" href="#layer-external">External</a>
   <a href="#di">Dependency Injection</a>
   <a href="#flows">Generic Data Flows</a>
-  <a class="toc-sub" href="#read-flow">Read flow (offline-first)</a>
-  <a class="toc-sub" href="#mutation-flow">Mutation flow</a>
+  <a class="toc-sub" href="#flow-read-a">Read flow — Pattern A (two awaits)</a>
+  <a class="toc-sub" href="#flow-read-b">Read flow — Pattern B (AsyncStream)</a>
+  <a class="toc-sub" href="#flow-mutation">Mutation flow</a>
   <a href="#networking">Networking</a>
   <a href="#persistence">Persistence</a>
   <a href="#navigation">Navigation</a>
@@ -283,110 +292,231 @@
 <section id="pattern">
   <h2>Architecture Pattern</h2>
   <p><strong>Clean Architecture + MVVM + UIKit</strong></p>
+
   <div class="stack">
     <div class="stack-row"><div class="stack-name">Presentation</div><div class="stack-desc">ViewController + ViewModel (Combine <code>@Published</code>)</div></div>
-    <div class="stack-row"><div class="stack-name">Domain</div><div class="stack-desc">UseCase + Service + Protocol + Model + Param + FetchPolicy</div></div>
-    <div class="stack-row"><div class="stack-name">Data</div><div class="stack-desc">Repository + DataSource + DTO + Mapper + APIClient</div></div>
-    <div class="stack-row"><div class="stack-name">Infrastructure</div><div class="stack-desc">Gateway (cross-layer SDK wrappers)</div></div>
+    <div class="stack-row"><div class="arrow">↓</div><div class="stack-name">Domain</div><div class="stack-desc">UseCase + Service + Protocol + Model + Param + FetchPolicy</div></div>
+    <div class="stack-row"><div class="arrow">↓</div><div class="stack-name">Data</div><div class="stack-desc">Repository + DataSource + DTO + Mapper</div></div>
     <div class="stack-row"><div class="stack-name">Application</div><div class="stack-desc">AppDelegate + Coordinator + DI (manual init injection)</div></div>
+    <div class="stack-row"><div class="stack-name">Infrastructure</div><div class="stack-desc">Gateway</div></div>
     <div class="stack-row"><div class="stack-name">External</div><div class="stack-desc">SDKs + OS Frameworks (Stripe, CoreData, AVFoundation, Firebase…)</div></div>
   </div>
-  <div class="rule"><strong>Layer dependency rule: Presentation → Domain ← Data. Infrastructure conforms to Domain protocols. Domain depends on nothing. External is the outermost ring — only wrapper layers (Gateway, DataSource, Service) import from it; nothing in Domain or Presentation touches External directly.</strong> Data knows Domain models (via Mapper). Presentation knows Domain models (via UseCase). Infrastructure implements Domain protocols but is never imported by Domain, Data, or Presentation — only wired by Application. External depends on nothing inside the app; it is the dependency.</div>
+
+  <div class="rule"><strong>Layer dependency rule: Presentation → Domain ← Data. Infrastructure conforms to Domain protocols. Domain depends on nothing. External is the outermost ring — only wrapper layers (Gateway, DataSource, Service) import from it; nothing in Domain or Presentation touches External directly.</strong></div>
+  <p>The Data layer knows Domain models (via Mapper). The Presentation layer knows Domain models (via UseCase). Infrastructure implements Domain protocols but is never imported by Domain, Data, or Presentation — only wired by Application. External depends on nothing inside the app; it is the dependency.</p>
 </section>
 
 <!-- WHY THESE CHOICES -->
 <section id="why">
   <h2>Why These Choices</h2>
-  <div class="callout"><strong>Clean Architecture over MVC</strong> — MVC in iOS degrades to Massive ViewController: business logic, networking, and layout all end up in one file. Clean Architecture enforces the dependency rule so each layer is independently testable and replaceable. Cost: more files. Benefit: every layer can be tested without the others.</div>
-  <div class="callout"><strong>MVVM over MVP</strong> — In MVP the Presenter holds a reference back to the View via protocol — two-way coupling. MVVM breaks that: ViewModel exposes <code>@Published</code> state and has no reference to the View. ViewModels are easier to test (no mock View needed) and bind naturally with Combine.</div>
-  <div class="callout"><strong>MVVM over VIPER</strong> — VIPER splits a screen into 5 objects. The overhead is justified for very large teams where each layer is owned by a different person. For a small team, MVVM + UseCase gives the same testability with half the files.</div>
-  <div class="callout"><strong>New app → SwiftUI.</strong> SwiftUI is the current default for greenfield iOS development. State-driven rendering and declarative layout fit cleanly with MVVM — the ViewModel exposes <code>@Published</code> state; the View subscribes with no extra Combine boilerplate.</div>
-  <div class="callout"><strong>Legacy app → stay on UIKit.</strong> Migrating an existing UIKit codebase is high risk for low gain. New screens in a UIKit app should remain UIKit unless there is a specific team mandate to migrate.</div>
-  <div class="callout"><strong>UIKit is still the right call even in a new app</strong> for: granular scroll lifecycle (<code>willDisplay cell</code> for paginated fetches), complex custom transitions, direct <code>AVPlayerViewController</code> / <code>AVPlayerLayer</code> integration, or pixel-level layout fidelity SwiftUI can't match.</div>
-  <div class="callout"><strong>Infrastructure as the fourth layer.</strong> The three-layer model (Presentation → Domain ← Data) is a simplification of Clean Architecture's four-ring model. Infrastructure is the explicit fourth layer for SDKs that <em>span multiple layers</em> — Stripe owns both Presentation (card collection UI) and Data (token API call): neither layer alone is the right home. The Gateway trigger is <strong>cross-layer span</strong>, not the presence of a third-party import. <strong>Why Gateway as the suffix?</strong> <code>Service</code> is claimed by Domain. <code>DataSource</code> is claimed by Data. <code>Gateway</code> is unclaimed and precise — it is the entry point to a cross-layer external system the app doesn't own.</div>
-  <div class="callout"><strong>External as the fifth layer (outermost ring).</strong> External is the actual SDKs and OS frameworks the app depends on — Stripe, CoreData, AVFoundation, Firebase, etc. It corresponds to the "Frameworks &amp; Drivers" ring in Clean Architecture's original four-ring model. <strong>Step 1 — Is a wrapper required?</strong> UIKit / SwiftUI / Combine → no wrapper; these are the UI and reactive primitives — they appear in every file by design, wrapping them is impractical and adds no benefit. Everything else → always wrap, including Apple's own AVFoundation, CoreData, URLSession, MapKit. "Apple-made" is not the criterion — "bounded scope" is. <strong>Step 2 — Where does the wrapper live?</strong> Count the layers it must touch. One layer → wrap there: Data networking → <code>APIClient</code> / <code>WebSocketClient</code>; Data persistence → <code>DataSource</code>; Domain logic → <code>Service</code>. Two or more layers → <code>Gateway</code> in Infrastructure (e.g. Stripe spans Presentation card UI + Data token call → <code>StripePaymentGateway</code>). <strong>Counter-example:</strong> URLSessionWebSocketTask has no Presentation footprint — it is networking transport only. Wrap it as <code>WebSocketClient</code> in Data, not as a Gateway. A persistent connection does not change the layer count.</div>
-  <div class="callout"><strong>Hybrid UIKit/SwiftUI</strong> is valid screen-by-screen. Coordinator wires them together. UIKit hosts SwiftUI via <code>UIHostingController</code>; SwiftUI embeds UIKit via <code>UIViewRepresentable</code>. <strong>Rule of thumb:</strong> lifecycle control needed → UIKit. Reactive state → UI → SwiftUI.</div>
+
+  <h3 id="why-clean">Clean Architecture over MVC</h3>
+  <p>MVC in iOS degrades to Massive ViewController — business logic, networking, and layout all end up in one file. Clean Architecture enforces the dependency rule so each layer is independently testable and replaceable. Cost: more files. Benefit: every layer can be tested without the others.</p>
+
+  <h3 id="why-mvvm-mvp">MVVM over MVP</h3>
+  <p>In MVP the Presenter holds a reference back to the View via protocol — two-way coupling. MVVM breaks that: ViewModel exposes <code>@Published</code> state and has no reference to the View. ViewModels are easier to test (no mock View needed) and work naturally with Combine.</p>
+
+  <h3 id="why-mvvm-viper">MVVM over VIPER</h3>
+  <p>VIPER splits a screen into 5 objects. The overhead is justified for very large teams where each layer is owned by a different person. For a small team, MVVM + UseCase gives the same testability with half the files.</p>
+
+  <h3 id="why-infra">Infrastructure as the fourth layer</h3>
+  <p>The three-layer model (Presentation → Domain ← Data) is a simplification of Clean Architecture's four-ring model. It breaks down for SDKs that span multiple layers — Stripe owns both Presentation (card collection UI) and Data (token API call): neither layer alone is the right home. Infrastructure is the explicit fourth layer for these cross-layer wrappers. The Gateway trigger is <strong>cross-layer span</strong>, not the presence of a third-party import.</p>
+
+  <h3 id="why-external">External as the fifth layer (outermost ring)</h3>
+  <p>External is the actual SDKs and OS frameworks the app depends on — Stripe, CoreData, AVFoundation, Firebase, etc. It corresponds to the "Frameworks &amp; Drivers" ring in Clean Architecture's original four-ring model. External lives outside all app code: it depends on nothing inside the app, and nothing inside the app imports it directly except through its designated wrapper.</p>
+
+  <h4>Step 1 — Is a wrapper required?</h4>
+  <div class="table-wrap">
+    <table>
+      <tr><th>SDK type</th><th>Rule</th></tr>
+      <tr><td>UIKit, SwiftUI, Combine only</td><td><strong>No wrapper.</strong> These are the UI and reactive primitives — they appear in every file by design. Wrapping them is impractical and adds no benefit.</td></tr>
+      <tr><td>Everything else — including Apple's own AVFoundation, CoreData, URLSession, MapKit</td><td><strong>Always wrap.</strong> "Apple-made" is not the criterion — "bounded scope" is. Wrapping enforces testability, stability (one file to update when the SDK changes), and scalability (swap the SDK without touching business logic).</td></tr>
+    </table>
+  </div>
+
+  <h4>Step 2 — Where does the wrapper live? (scope-based, not import-based)</h4>
+  <p>Count how many layers the wrapper must touch:</p>
+  <ul>
+    <li><strong>One layer → wrap in that layer:</strong>
+      <ul>
+        <li>Data concern (networking) → <code>APIClient</code> / <code>WebSocketClient</code> in Data (e.g. URLSession → <code>APIClient</code>, URLSessionWebSocketTask → <code>WebSocketClient</code>)</li>
+        <li>Data concern (persistence/storage) → <code>DataSource</code> in Data (e.g. CoreData → <code>TrackLocalDataSource</code>, Realm → <code>TrackLocalDataSource</code>)</li>
+        <li>Domain concern (business logic, stateful orchestration) → <code>Service</code> in Domain (e.g. AVFoundation → <code>PlayerService</code>)</li>
+      </ul>
+    </li>
+    <li><strong>Two or more layers → <code>Gateway</code> in Infrastructure:</strong>
+      <ul>
+        <li>e.g. Stripe spans Presentation (card collection UI) + Data (token API call) → <code>StripePaymentGateway</code></li>
+        <li>e.g. Firebase with Auth UI + Analytics spans Presentation + Data → <code>FirebaseAnalyticsGateway</code></li>
+        <li><strong>Counter-example:</strong> URLSessionWebSocketTask (Starscream) has no Presentation footprint — it is networking transport only. Wrap it as <code>WebSocketClient</code> in Data (peer to <code>APIClient</code>), not as a Gateway. The connection being persistent does not change the layer count.</li>
+      </ul>
+    </li>
+  </ul>
+
+  <div class="callout"><strong>Why not <code>Manager</code>?</strong> <code>Manager</code> became a dumping ground with no clear boundary — <code>NetworkManager</code>, <code>DataManager</code>, <code>AppManager</code>. Infrastructure is precise: every Gateway there answers the question <em>which cross-layer external system am I hiding?</em></div>
+  <div class="callout"><strong>Why <code>Gateway</code> as the suffix?</strong> <code>Service</code> is claimed by Domain Services. <code>DataSource</code> is claimed by the Data layer. <code>Gateway</code> is unclaimed and semantically accurate — it is the entry point to an external system that spans layers the app doesn't own.</div>
+
+  <h3 id="why-uikit">UIKit vs SwiftUI — Which to Default To</h3>
+  <p><strong>New app → SwiftUI.</strong> SwiftUI is the current default for greenfield iOS development. State-driven rendering, declarative layout, and native support for <code>async</code>/<code>await</code> fit cleanly with the MVVM layer. The ViewModel exposes <code>@Published</code> state; the SwiftUI View subscribes with no Combine boilerplate needed.</p>
+  <p><strong>Legacy app → stay on UIKit.</strong> Migrating an existing UIKit codebase is high risk for low gain. Hybrid apps add <code>UIHostingController</code> overhead and coordination complexity. Unless the team has a specific mandate to migrate, new screens in a UIKit app should remain UIKit.</p>
+
+  <h4>Where UIKit is still the right call even in a new app</h4>
+  <ul>
+    <li>Screens that need granular scroll lifecycle (<code>willDisplay cell</code> for paginated fetches, sticky headers with custom offsets)</li>
+    <li>Complex custom transitions and interruptible animations</li>
+    <li>Direct <code>AVPlayerViewController</code> or <code>AVPlayerLayer</code> integration requiring lifecycle control</li>
+    <li>Anything where SwiftUI's layout system cannot match the required pixel-level fidelity</li>
+  </ul>
+
+  <p><strong>Hybrid UIKit/SwiftUI</strong> is valid screen-by-screen. Coordinator wires them together. UIKit screens host SwiftUI content via <code>UIHostingController</code>; SwiftUI screens embed UIKit views via <code>UIViewRepresentable</code>. Rule of thumb: if a screen needs <code>UITableView</code>/<code>UICollectionView</code> lifecycle control, use UIKit. If it's primarily reactive state → UI, use SwiftUI.</p>
 </section>
 
 <!-- LAYER BREAKDOWN -->
 <section id="layers">
   <h2>Layer Breakdown</h2>
 
-  <h3 id="presentation">Presentation</h3>
-  <div class="stack">
-    <div class="stack-row"><div class="stack-name">ViewController</div><div class="stack-desc">Owns ViewModel (strong ref). Binds to <code>@Published</code> state via Combine sink. Calls ViewModel methods on user actions. Never calls UseCases or Repositories directly.</div></div>
-    <div class="stack-row"><div class="stack-name">ViewModel</div><div class="stack-desc"><code>@MainActor</code> — all state on main thread. <code>@Published</code> properties (tracks, isLoading, errorMessage). Calls UseCases. Maps Domain → UIModel. <code>[weak self]</code> in all closures. <code>defer { isLoading = false }</code> on every exit path.</div></div>
-    <div class="stack-row"><div class="stack-name">UIModel</div><div class="stack-desc">Flat, display-ready struct. Never pass Domain models to the View directly — the ViewModel maps Domain → UIModel so the View has zero knowledge of business types.</div></div>
-  </div>
-  <div class="rule"><strong>defer { isLoading = false }</strong> — guaranteed cleanup on success and failure. Place it immediately after setting <code>isLoading = true</code>. Never rely on individual return paths to reset state.</div>
+  <h3 id="layer-presentation">Presentation</h3>
+<pre><code>ViewController
+  └─ owns ViewModel (strong ref)
+  └─ binds to @Published state via Combine sink
+  └─ calls ViewModel methods on user actions
+  └─ never calls UseCases or Repositories directly
+
+ViewModel
+  └─ @MainActor — all state on main thread, no DispatchQueue.main.async
+  └─ @Published properties (tracks, isLoading, errorMessage)
+  └─ calls UseCases
+  └─ owns UIModel mappers (Domain → display model)
+  └─ [weak self] in all closures
+  └─ defer { isLoading = false } — guaranteed cleanup on success and failure</code></pre>
+
+  <p><strong>UIModel</strong> — a flat, display-ready struct. Never pass Domain models to the View directly. The ViewModel maps Domain → UIModel so the View has no knowledge of business types.</p>
 
   <hr class="divider">
 
-  <h3 id="domain">Domain</h3>
-  <div class="stack">
-    <div class="stack-row"><div class="stack-name">UseCase</div><div class="stack-desc">One public method: <code>execute(policy:param:) async throws → Output</code>. Stateless — created per call or injected. Orchestrates one business action. Calls Repository methods. Never touches networking or storage directly.</div></div>
-    <div class="stack-row"><div class="stack-name">Domain Service</div><div class="stack-desc">Stateful or long-lived logic not tied to a single user action. Injected, lives as long as needed (often app-scoped). No UIKit, no third-party SDK imports; Foundation always fine; stable Apple frameworks (AVFoundation, CoreData) acceptable when logic genuinely belongs here — inject via protocol so tests never touch the real framework. Examples: PlayerService, SessionService, AuthService.</div></div>
-    <div class="stack-row"><div class="stack-name">Model</div><div class="stack-desc">Pure Swift structs — no <code>import UIKit</code>, no Foundation networking types. The only type that crosses all layers.</div></div>
-    <div class="stack-row"><div class="stack-name">Param</div><div class="stack-desc">Typed struct for every UseCase input. Split into <code>path:</code> and <code>query:</code> sub-structs. Adding a field never breaks existing call sites.</div></div>
-    <div class="stack-row"><div class="stack-name">FetchPolicy</div><div class="stack-desc"><code>.fresh</code> always hits network. <code>.cached</code> returns cache if available, else network. <code>.strict</code> cache only, throws on miss. Travels ViewModel → UseCase → Repository. Repository is the only place that interprets it.</div></div>
-  </div>
+  <h3 id="layer-domain">Domain</h3>
+<pre><code>UseCase
+  └─ one public method: execute(policy:param:) async throws → Output
+  └─ stateless — created per call or injected
+  └─ orchestrates one business action
+  └─ calls one or more Repository methods
+  └─ never touches networking or storage directly
 
+Domain Service
+  └─ stateful or long-lived logic not tied to a single user action
+  └─ injected and lives as long as needed (often app-scoped)
+  └─ no UIKit, no third-party SDK imports; Foundation always fine
+  └─ stable Apple frameworks (AVFoundation, CoreData) acceptable when logic genuinely belongs here
+       — inject via protocol so tests never touch the real framework
+  └─ examples: PlayerService, SessionService, AuthService
+
+Model
+  └─ pure Swift structs — no import UIKit, no import Foundation networking
+  └─ the only type that crosses all layers
+
+Param
+  └─ typed struct for every UseCase input
+  └─ split into path: and query: sub-structs
+  └─ adding a field doesn't break existing call sites
+
+FetchPolicy
+  └─ .fresh   — always hit network, update cache
+  └─ .cached  — return cache if available, else network
+  └─ .strict  — cache only, throw on miss
+  └─ travels from ViewModel → UseCase → Repository
+  └─ Repository is the only place that interprets it</code></pre>
+
+  <h4>UseCase vs Domain Service — when to use which</h4>
   <div class="table-wrap">
     <table>
       <tr><th></th><th>UseCase</th><th>Domain Service</th></tr>
       <tr><td>Triggered by</td><td>User action</td><td>Another component</td></tr>
       <tr><td>State</td><td>Stateless</td><td>Can be stateful</td></tr>
       <tr><td>Lifetime</td><td>Per call</td><td>Injected, lives as needed</td></tr>
-      <tr><td>Imports</td><td>Nothing</td><td>No UIKit, no third-party SDKs; Foundation + stable Apple frameworks via protocol</td></tr>
-      <tr><td>Example</td><td><code>SearchTracksUseCase</code></td><td><code>PlayerService</code>, <code>SessionService</code></td></tr>
+      <tr><td>Imports</td><td>Nothing</td><td>Nothing (pure Swift)</td></tr>
     </table>
   </div>
 
-  <div class="callout"><strong>Why FetchPolicy over hardcoding cache logic per ViewModel?</strong> Without a policy, every ViewModel independently decides whether to hit the network — leading to inconsistent behaviour and duplicated cache logic. FetchPolicy centralises the decision into a typed value. The caller declares intent, the Repository enforces it. Easy to test, easy to change globally.</div>
-
   <hr class="divider">
 
-  <h3 id="data">Data</h3>
-  <div class="stack">
-    <div class="stack-row"><div class="stack-name">Repository</div><div class="stack-desc">Implements <code>RepositoryProtocol</code> (Domain interface). Coordinates <code>RemoteDataSource</code> and <code>LocalDataSource</code>. Applies FetchPolicy. Converts DTO → Domain Model via Mapper. Never exposed directly to Presentation.</div></div>
-    <div class="stack-row"><div class="stack-name">RemoteDataSource</div><div class="stack-desc">Wraps <code>APIClient</code>. Builds request URLs and decodes responses. Returns DTOs — never Domain models.</div></div>
-    <div class="stack-row"><div class="stack-name">LocalDataSource</div><div class="stack-desc">Wraps persistence backend (UserDefaults / SQLite / GRDB). Returns DTOs — never Domain models. Repository never touches the storage backend directly.</div></div>
-    <div class="stack-row"><div class="stack-name">DTO</div><div class="stack-desc">Mirrors the API or DB schema exactly. <code>Codable</code>. Disposable — only lives between the network/DB and the Mapper.</div></div>
-    <div class="stack-row"><div class="stack-name">Mapper</div><div class="stack-desc">The only type that knows both DTO and Domain model. <code>static func toDomain(_ dto: DTO) -> Model?</code> Returns Optional — invalid data is silently dropped, never crashes.</div></div>
-  </div>
+  <h3 id="layer-data">Data</h3>
+<pre><code>Repository
+  └─ implements RepositoryProtocol (Domain interface)
+  └─ coordinates RemoteDataSource and LocalDataSource
+  └─ applies FetchPolicy: check local → fetch remote → write local
+  └─ converts DTO → Domain Model via Mapper
+  └─ never exposed to Presentation or Domain UseCases directly (only via protocol)
+
+RemoteDataSource
+  └─ wraps APIClient
+  └─ builds request URLs and decodes responses
+  └─ returns DTOs — never Domain models
+
+LocalDataSource
+  └─ wraps persistence (UserDefaults / SQLite / GRDB / Core Data)
+  └─ returns DTOs — never Domain models
+  └─ Repository never touches the storage backend directly
+
+DTO (Data Transfer Object)
+  └─ mirrors the API or DB schema exactly
+  └─ Codable — conforms to external shape, not business shape
+  └─ disposable: only lives between the network/DB and the Mapper
+
+Mapper
+  └─ the only type that knows both DTO and Domain model
+  └─ static function: toDomain(_ dto: DTO) -> Model?
+  └─ returns Optional — invalid data is silently dropped, never crashes
+
+APIClient
+  └─ generic HTTP client: get/post/put/delete
+  └─ lives at Data/Network/ — not a separate layer
+  └─ no domain knowledge</code></pre>
 
   <h4>DTO → Mapper → Domain Model flow</h4>
-<pre><code><span class="nm">RemoteDataSource</span> fetches JSON
-  → decoded as <span class="ty">DTO</span>               <span class="cm">// Codable, mirrors API shape</span>
-  → <span class="ty">Mapper</span>.toDomain(dto)         <span class="cm">// Domain Model, or nil if invalid</span>
-  → <span class="ty">Repository</span> returns [<span class="ty">Model</span>]   <span class="cm">// to UseCase</span>
-  → <span class="ty">UseCase</span> returns [<span class="ty">Model</span>]      <span class="cm">// to ViewModel</span>
-  → <span class="ty">ViewModel</span> maps → <span class="ty">UIModel</span>    <span class="cm">// for the View</span></code></pre>
-
-  <div class="rule"><strong>Mapper is the seam between external data and your business logic.</strong> Keep it the only crossing point. If you find yourself converting DTOs anywhere else, move it to the Mapper.</div>
+<pre><code>RemoteDataSource fetches JSON
+  → decoded as DTO (Codable, mirrors API shape)
+  → Mapper.toDomain(dto) → Domain Model (or nil if invalid)
+  → Repository returns [Model] to UseCase
+  → UseCase returns [Model] to ViewModel
+  → ViewModel maps Model → UIModel for the View</code></pre>
+  <p>Mapper is the seam between external data and your business logic. Keep it the only crossing point.</p>
 
   <hr class="divider">
 
-  <h3 id="infrastructure">Infrastructure</h3>
-  <div class="stack">
-    <div class="stack-row"><div class="stack-name">Gateway</div><div class="stack-desc">Concrete implementation of a Domain protocol (<code>XxxGatewayProtocol</code>). Wraps one external system — SDK, OS framework, or third-party service. May import UIKit, SDKs, OS frameworks — Domain never does. Nothing depends on Gateway except DI wiring in Application.</div></div>
-  </div>
+  <h3 id="layer-application">Application</h3>
+<pre><code>AppDelegate
+  └─ entry point — wires window and root coordinator
+  └─ registers app-scoped services (analytics, player, auth)
 
-  <h4>SDK placement — scope-based decision</h4>
-  <div class="table-wrap">
-    <table>
-      <tr><th>SDK scope</th><th>Where to wrap</th><th>Component</th><th>Example</th></tr>
-      <tr><td>Spans multiple layers (Presentation + Data)</td><td>Infrastructure</td><td><code>Gateway</code></td><td>Stripe, Firebase Auth+UI</td></tr>
-      <tr><td>Data / persistence only</td><td>Data</td><td><code>DataSource</code></td><td>CoreData, Realm</td></tr>
-      <tr><td>Domain logic only</td><td>Domain</td><td><code>Service</code></td><td>AVFoundation (playback orchestration)</td></tr>
-    </table>
-  </div>
+Coordinator
+  └─ owns navigation logic — ViewControllers never push/present directly
+  └─ creates UseCases and ViewModels (DI composition root)
+  └─ one coordinator per flow
+
+DI (manual init injection)
+  └─ no DI framework — dependencies passed through init
+  └─ no default concrete arguments on Repository or UseCase inits
+  └─ DataSources and APIClient composed at Coordinator level</code></pre>
+
+  <hr class="divider">
+
+  <h3 id="layer-infrastructure">Infrastructure</h3>
+<pre><code>Gateway
+  └─ concrete implementation of a Domain protocol (XxxGatewayProtocol)
+  └─ wraps one external system — SDK, OS framework, or third-party service
+  └─ may import UIKit, SDKs, OS frameworks — Domain never does
+  └─ nothing depends on Gateway except DI wiring in Application
+  └─ examples:
+       StripePaymentGateway      → PaymentGatewayProtocol      (Stripe SDK)
+       APNsNotificationGateway   → NotificationGatewayProtocol  (UNUserNotificationCenter + APNs)
+       FirebaseAnalyticsGateway  → AnalyticsGatewayProtocol    (Firebase SDK)
+       LocalAuthGateway          → BiometricAuthGatewayProtocol (LocalAuthentication)</code></pre>
 
   <h4>Domain Service vs Gateway — when to use which</h4>
   <div class="table-wrap">
     <table>
       <tr><th></th><th>Domain Service</th><th>Gateway</th></tr>
-      <tr><td>Owns</td><td>Business logic + state</td><td>Cross-layer external system interaction</td></tr>
+      <tr><td>Owns</td><td>Business logic + state</td><td>External system interaction</td></tr>
       <tr><td>Imports</td><td>No UIKit, no third-party SDKs; Foundation + stable Apple frameworks via protocol</td><td>UIKit, SDK, OS frameworks</td></tr>
       <tr><td>Layer</td><td>Domain</td><td>Infrastructure</td></tr>
       <tr><td>Protocol lives in</td><td>Domain</td><td>Domain</td></tr>
@@ -395,21 +525,22 @@
     </table>
   </div>
 
-  <div class="rule"><strong>The rule — always wrap, then count layers.</strong> UIKit / SwiftUI / Combine: no wrapper — they are the UI and reactive primitives, appearing in every file by design. Everything else — including Apple's own AVFoundation, CoreData, URLSession — always wrap. "Apple-made" is not the criterion, "bounded scope" is. Then count layers: one layer → wrap there (<code>APIClient</code> / <code>DataSource</code> in Data, <code>Service</code> in Domain); two or more layers → <code>Gateway</code> in Infrastructure. Domain defines the protocol; Infrastructure provides the concrete for cross-layer cases.</div>
+  <div class="rule"><strong>The rule:</strong> the Gateway trigger is cross-layer span, not the presence of a third-party import. Use a Gateway when an SDK touches multiple layers — Stripe owns Presentation (card collection UI) and Data (token API call), so neither layer alone is the right home. Single-layer SDKs wrap where they naturally live: CoreData → <code>LocalDataSource</code> (Data), AVFoundation playback → <code>PlayerService</code> (Domain). Domain defines the protocol; Infrastructure provides the concrete.</div>
 
 <pre><code><span class="cm">// Domain — defines the contract, no SDK imports</span>
 <span class="kw">protocol</span> <span class="ty">PaymentGatewayProtocol</span> {
     <span class="kw">func</span> <span class="nm">collectToken</span>() <span class="kw">async throws</span> -> <span class="ty">String</span>
 }
 
-<span class="cm">// Infrastructure — Stripe spans Presentation + Data, so Gateway is the right home</span>
+<span class="cm">// Infrastructure — wraps Stripe (spans Presentation + Data), fulfills the contract</span>
 <span class="kw">final class</span> <span class="ty">StripePaymentGateway</span>: <span class="ty">PaymentGatewayProtocol</span> {
     <span class="kw">func</span> <span class="nm">collectToken</span>() <span class="kw">async throws</span> -> <span class="ty">String</span> { ... }
 }
 
-<span class="cm">// Data — CoreData is persistence-only, no Gateway needed</span>
+<span class="cm">// Data — CoreData is persistence-only, wraps directly in DataSource (no Gateway needed)</span>
 <span class="kw">final class</span> <span class="ty">TrackLocalDataSource</span>: <span class="ty">TrackLocalDataSourceProtocol</span> {
-    <span class="kw">private let</span> context: <span class="ty">NSManagedObjectContext</span>  <span class="cm">// CoreData import stays in Data</span>
+    <span class="kw">private let</span> context: <span class="ty">NSManagedObjectContext</span>  <span class="cm">// CoreData import stays in Data layer</span>
+    ...
 }</code></pre>
 
   <h4>Suffix clarity — one suffix per layer</h4>
@@ -420,48 +551,38 @@
       <tr><td><code>Service</code></td><td>Domain</td><td><code>PlayerService</code>, <code>ReservationService</code></td></tr>
       <tr><td><code>Repository</code></td><td>Data</td><td><code>TrackRepository</code></td></tr>
       <tr><td><code>DataSource</code></td><td>Data</td><td><code>TrackRemoteDataSource</code></td></tr>
-      <tr><td><code>Gateway</code></td><td>Infrastructure</td><td><code>StripePaymentGateway</code>, <code>APNsNotificationGateway</code></td></tr>
+      <tr><td><code>Gateway</code></td><td>Infrastructure</td><td><code>StripePaymentGateway</code></td></tr>
       <tr><td><em>(SDK name itself)</em></td><td>External</td><td><code>Stripe</code>, <code>CoreData</code>, <code>AVFoundation</code></td></tr>
     </table>
   </div>
 
   <hr class="divider">
 
-  <h3 id="application">Application</h3>
-  <div class="stack">
-    <div class="stack-row"><div class="stack-name">AppDelegate</div><div class="stack-desc">Entry point. Wires window and root Coordinator. Registers app-scoped services (analytics, player, auth).</div></div>
-    <div class="stack-row"><div class="stack-name">Coordinator</div><div class="stack-desc">Owns navigation logic — ViewControllers never push/present directly. Creates UseCases and ViewModels (DI composition root). One Coordinator per flow.</div></div>
-    <div class="stack-row"><div class="stack-name">DI (manual init injection)</div><div class="stack-desc">No DI framework. Dependencies passed through <code>init</code>. No default concrete arguments on Repository or UseCase inits. DataSources and APIClient composed at Coordinator level.</div></div>
-  </div>
+  <h3 id="layer-external">External</h3>
+  <p>The outermost ring. External is the actual SDKs and OS frameworks — the real dependencies the app imports via SPM or CocoaPods.</p>
+  <p><strong>No wrapper: UIKit, SwiftUI, and Combine only.</strong> These are the UI and reactive primitives — they span every file by design. Wrapping them is impractical and adds no benefit. <strong>Always wrap everything else</strong>, including Apple's own service frameworks (AVFoundation, CoreData, URLSession, MapKit). "Apple-made" is not the criterion — "bounded scope" is. The wrapper placement depends on how many layers the SDK touches (see "Why These Choices → External as the fifth layer" above).</p>
 
-  <hr class="divider">
+<pre><code>External SDK / Framework    No-wrap?  Wrapper              Lives in
+────────────────────────────────────────────────────────────────────────────────
+SwiftUI / UIKit / Combine   ✅        —                    (used directly)
+Stripe                                StripePaymentGateway  Infrastructure (Presentation + Data)
+Firebase (Auth + Analytics)           FirebaseGateway       Infrastructure (multiple layers)
+APNs / UNUserNotification             APNsGateway           Infrastructure (OS + Data)
+CoreData                              TrackLocalDataSource  Data (persistence only)
+Realm                                 TrackLocalDataSource  Data (persistence only)
+AVFoundation                          PlayerService         Domain (orchestration logic)
+URLSession                            APIClient             Data (networking only)
+URLSessionWebSocketTask (Starscream)  WebSocketClient       Data (networking only)</code></pre>
 
-  <h3 id="external">External</h3>
-  <p>The outermost ring. External is the actual SDKs and OS frameworks — the real dependencies the app imports via SPM or CocoaPods. <strong>No wrapper: UIKit, SwiftUI, and Combine only.</strong> These are the UI and reactive primitives — they span every file by design. <strong>Always wrap everything else</strong>, including Apple's own service frameworks (AVFoundation, CoreData, URLSession, MapKit). "Apple-made" is not the criterion — "bounded scope" is.</p>
-
-  <div class="table-wrap">
-    <table>
-      <tr><th>External SDK / Framework</th><th>No-wrap?</th><th>Wrapper</th><th>Layer (reason)</th></tr>
-      <tr><td>SwiftUI / UIKit / Combine</td><td>✅</td><td>—</td><td>Used directly — platform-native</td></tr>
-      <tr><td>Stripe</td><td></td><td><code>StripePaymentGateway</code></td><td>Infrastructure — spans Presentation + Data</td></tr>
-      <tr><td>Firebase (Auth + Analytics)</td><td></td><td><code>FirebaseGateway</code></td><td>Infrastructure — spans multiple layers</td></tr>
-      <tr><td>APNs / UNUserNotification</td><td></td><td><code>APNsGateway</code></td><td>Infrastructure — spans OS + Data</td></tr>
-      <tr><td>CoreData</td><td></td><td><code>TrackLocalDataSource</code></td><td>Data — persistence only</td></tr>
-      <tr><td>Realm</td><td></td><td><code>TrackLocalDataSource</code></td><td>Data — persistence only</td></tr>
-      <tr><td>AVFoundation</td><td></td><td><code>PlayerService</code></td><td>Domain — orchestration logic</td></tr>
-      <tr><td>URLSession</td><td></td><td><code>APIClient</code></td><td>Data — networking only</td></tr>
-      <tr><td>URLSessionWebSocketTask (Starscream)</td><td></td><td><code>WebSocketClient</code></td><td>Data — networking only (no Presentation footprint)</td></tr>
-    </table>
-  </div>
-
-  <div class="rule"><strong>Nothing in Domain or Presentation imports an External SDK (except SwiftUI / UIKit / Combine).</strong> The wrapper is the only crossing point. Swapping one External SDK for another (e.g. CoreData → GRDB) touches one file — the wrapper — and nothing else. The Repository, UseCase, and ViewModel are completely unaffected.</div>
+  <div class="rule"><strong>Nothing in Domain or Presentation imports an External SDK (except SwiftUI/UIKit/Combine).</strong> The wrapper is the only crossing point. Swapping one External SDK for another (e.g. CoreData → GRDB) touches one file — the wrapper — and nothing else.</div>
 </section>
 
 <!-- DEPENDENCY INJECTION -->
 <section id="di">
-  <h2>Dependency Injection</h2>
+  <h2>Dependency Injection — The Rule</h2>
   <p>Dependencies flow inward. Each layer receives its dependencies via <code>init</code>. No layer constructs its own dependencies.</p>
-<pre><code><span class="cm">// Coordinator — composition root, builds the full graph</span>
+
+<pre><code><span class="cm">// Coordinator (composition root) — builds the full graph</span>
 <span class="kw">let</span> client           = <span class="ty">APIClient</span>()
 <span class="kw">let</span> remoteDataSource = <span class="ty">TrackRemoteDataSource</span>(client: client)
 <span class="kw">let</span> localDataSource  = <span class="ty">TrackLocalDataSource</span>()
@@ -469,41 +590,51 @@
 <span class="kw">let</span> useCase          = <span class="ty">SearchTracksUseCase</span>(repository: repository)
 <span class="kw">let</span> viewModel        = <span class="ty">TrackListViewModel</span>(searchTracks: useCase)</code></pre>
 
-  <div class="warn"><strong>No default concrete args in Repository inits.</strong> A default argument that instantiates a concrete type (<code>= TrackLocalDataSource()</code>) hides the dependency and breaks testability. The default belongs in the DI composition root, not the <code>init</code> signature.</div>
-  <div class="rule"><strong>Protocol at every boundary.</strong> <code>TrackRemoteDataSourceProtocol</code>, <code>TrackLocalDataSourceProtocol</code>, <code>TrackRepositoryProtocol</code> — replace with mock in tests, real impl in production. No mocking of concrete types.</div>
+  <div class="warn"><strong>No default concrete args in Repository inits.</strong> The default should come from the DI registration, not the init signature. Default args that instantiate concrete types hide dependencies and make testing harder.</div>
 </section>
 
 <!-- GENERIC DATA FLOWS -->
 <section id="flows">
   <h2>Generic Data Flows</h2>
 
-  <h3 id="read-flow">Read flow — loading a screen (offline-first)</h3>
+  <div class="rule"><strong>Dependency rule — enforced in every flow: Presentation → Domain ← Data.</strong><br>
+  ViewModel calls UseCase. UseCase calls Repository. Repository calls DataSource.<br>
+  ViewModel never calls Repository or DataSource directly.<br>
+  UseCase never calls DataSource directly.<br>
+  No layer skips the one above it.</div>
+
+<pre><code>ViewController → ViewModel → UseCase → Repository → DataSource
+                                  ↑                       ↑
+                              Domain boundary          Data boundary</code></pre>
+
+  <p>Skipping a layer (e.g. ViewModel → Repository) breaks testability — the ViewModel can no longer be tested against a mock UseCase, and business logic leaks into the Presentation layer.</p>
+
+  <h3 id="flow-read-a">Read flow — Pattern A (two awaits, canonical)</h3>
   <p><code>async/await</code> is single-return — <code>UseCase.execute()</code> returns once. Offline-first (cache renders immediately, then network updates) requires <strong>two separate awaits</strong> in the ViewModel.</p>
 
-  <h4>Pattern A — Two awaits (canonical)</h4>
-<pre><code><span class="nm">ViewController</span>.viewDidLoad()
-  → <span class="nm">ViewModel</span>.load()
-      → isLoading = <span class="kw">true</span>
+<pre><code>ViewController.viewDidLoad()
+  → ViewModel.load()
+      → isLoading = true
 
-      <span class="cm">// Phase 1 — cache (instant)</span>
-      <span class="kw">if let</span> cached = <span class="kw">try</span>? <span class="kw">await</span> <span class="ty">UseCase</span>.execute(policy: .strict, param:)
-          → <span class="ty">Repository</span> checks <span class="nm">LocalDataSource</span> only — throws on miss
-          → maps cached <span class="ty">Model</span> → <span class="ty">UIModel</span>
+      // Phase 1 — cache (instant)
+      if let cached = try? await UseCase.execute(policy: .strict, param:)
+          → Repository checks LocalDataSource only — throws on miss
+          → ViewModel maps cached Model → UIModel
           → @Published state updated → View renders immediately
 
-      <span class="cm">// Phase 2 — network (background)</span>
-      <span class="kw">let</span> fresh = <span class="kw">try await</span> <span class="ty">UseCase</span>.execute(policy: .fresh, param:)
-          → <span class="ty">Repository</span> fetches <span class="nm">RemoteDataSource</span> → <span class="ty">DTO</span> → <span class="ty">Mapper</span> → <span class="ty">Model</span>
-          → <span class="nm">LocalDataSource</span>.save(dto)
-          → maps <span class="ty">Model</span> → <span class="ty">UIModel</span>
+      // Phase 2 — network (background)
+      let fresh = try await UseCase.execute(policy: .fresh, param:)
+          → Repository fetches RemoteDataSource → DTO → Mapper → Model
+          → LocalDataSource.save(dto)
+          → ViewModel maps Model → UIModel
           → @Published state updated → View refreshes
 
-      → <span class="kw">defer</span>: isLoading = <span class="kw">false</span></code></pre>
+      → defer: isLoading = false</code></pre>
 
-  <div class="rule"><strong>Why two calls, not one?</strong> <code>async/await</code> returns once — a single <code>execute(policy: .cached)</code> can only yield one value. For the UI to render from cache <em>and then</em> update from the network, the ViewModel needs two distinct awaits, one per phase.</div>
-  <div class="callout"><strong>.strict for phase 1, .fresh for phase 2.</strong> <code>.strict</code> = cache only, throws on miss (zero network cost). The <code>try?</code> suppresses the throw so a cold cache silently skips phase 1 — the user sees a brief loading state, then the network result arrives. <code>.fresh</code> = always hits network regardless of cache state.</div>
+  <div class="callout"><strong>Why two calls, not one?</strong> <code>async/await</code> returns once. A single <code>execute(policy: .cached)</code> can only yield one value — it can't update the UI twice. For cache-then-network, the ViewModel must make two distinct awaits, one per phase.</div>
+  <div class="callout"><strong><code>.strict</code> for phase 1, <code>.fresh</code> for phase 2.</strong> <code>.strict</code> = cache only, throws on miss (zero network cost). The <code>try?</code> suppresses the throw so a cold cache silently skips phase 1 and the user just sees a brief loading state before the network result arrives. <code>.fresh</code> = always hits network regardless of cache state.</div>
 
-  <h4>Pattern B — AsyncStream (alternative)</h4>
+  <h3 id="flow-read-b">Read flow — Pattern B (AsyncStream)</h3>
   <p>The UseCase returns an <code>AsyncStream&lt;[Model]&gt;</code> that yields twice — cache first, network second. The ViewModel iterates with <code>for await</code>. Use this when the two-phase logic is shared across many screens and repeating two calls per ViewModel becomes noisy.</p>
 
   <div class="table-wrap">
@@ -515,85 +646,91 @@
       <tr><td>Complexity</td><td>Low</td><td>Higher</td></tr>
     </table>
   </div>
-  <div class="rule"><strong>Default to Pattern A.</strong> Pattern B is a valid optimization when two-phase loading is a cross-cutting concern repeated across many screens — not the default choice.</div>
+  <div class="rule"><strong>Default to Pattern A.</strong> Pattern B is a valid optimization when two-phase loading is a cross-cutting concern, not a one-off.</div>
 
-  <h3 id="mutation-flow">Mutation flow — create / update</h3>
-<pre><code><span class="nm">ViewController</span> sends user input
-  → <span class="nm">ViewModel</span>.submit(input)
-      → isLoading = <span class="kw">true</span>
-      → <span class="ty">UseCase</span>.execute(param:)
-          → validates param  <span class="cm">// throws if invalid — before any network call</span>
-          → <span class="ty">Repository</span>.create/update(param:)
-              → <span class="nm">RemoteDataSource</span>.post/put() → <span class="ty">DTO</span> → <span class="ty">Mapper</span> → <span class="ty">Model</span>
-          → returns <span class="ty">Model</span>
-      → maps <span class="ty">Model</span> → <span class="ty">UIModel</span> → updates @Published state
-      → <span class="kw">defer</span>: isLoading = <span class="kw">false</span></code></pre>
+  <h3 id="flow-mutation">Mutation flow (e.g. create / update)</h3>
+<pre><code>ViewController sends user input
+  → ViewModel.submit(input)
+      → isLoading = true
+      → UseCase.execute(param:)
+          → (validates param — throws if invalid)
+          → Repository.create/update(param:)
+              → RemoteDataSource.post/put() → DTO → Mapper → Model
+          → returns Model
+      → ViewModel maps Model → UIModel → updates @Published state
+      → defer: isLoading = false</code></pre>
 
-  <div class="rule"><strong>Validate in the UseCase, before the Repository call.</strong> The Repository assumes its input is valid — it shouldn't know what "valid" means for the business. The UseCase is the gatekeeper.</div>
-
-  <div class="rule"><strong>Idempotency keys on mutations.</strong> For any mutation that could be retried (network timeout, app restart mid-request), generate a client-side UUID before building the request and include it as a field (e.g. <code>localId</code>). If the request is retried with the same UUID, the server returns the existing record rather than creating a duplicate. Applies to reservations, orders, payments — any operation where a duplicate would cause business harm. Generate the UUID at the <code>Param</code> struct call site, not inside the Repository or DataSource.</div>
+  <div class="callout"><strong>Idempotency keys on mutations</strong> — for any mutation that could be retried (network timeout, app restart during request), generate a client-side UUID before building the request and include it as a field (e.g. <code>localId</code>). If the request is retried with the same UUID, the server returns the existing record rather than creating a duplicate. This applies to reservations, orders, payments, and any operation where a duplicate would cause business harm. The UUID is generated at the <code>Param</code> struct call site, not inside the Repository or DataSource.</div>
 </section>
 
 <!-- NETWORKING -->
 <section id="networking">
   <h2>Networking</h2>
-  <div class="stack">
-    <div class="stack-row"><div class="stack-name">APIClient</div><div class="stack-desc">Generic <code>URLSession</code>-based HTTP client. <code>get&lt;T: Decodable&gt;(_ url:)</code>, <code>post&lt;T, B: Encodable&gt;(_ url:, body:)</code>, etc. No domain knowledge.</div></div>
-    <div class="stack-row"><div class="stack-name">Request structs</div><div class="stack-desc">One per endpoint: <code>TrackSearchRequest</code>, <code>CreatePlaylistRequest</code>. Carries the fields needed to build the URL and body. Lives at <code>Data/Network/Requests/</code>.</div></div>
-    <div class="stack-row"><div class="stack-name">APIError</div><div class="stack-desc">Typed enum: <code>.invalidURL</code>, <code>.notFound</code>, <code>.networkError</code>, <code>.decodingError</code>, <code>.conflict</code>. Propagates <code>async throws</code> up to ViewModel. ViewModel catches and sets <code>errorMessage: String?</code>.</div></div>
-  </div>
 
-  <h4>HTTP status code semantics — map at RemoteDataSource level, never in the ViewModel</h4>
-  <div class="table-wrap">
-    <table>
-      <tr><th>Status</th><th>Meaning</th><th>Client action</th></tr>
-      <tr><td><code>400</code></td><td>Bad Request — malformed request</td><td>Log and show generic error</td></tr>
-      <tr><td><code>401</code></td><td>Unauthorized — session expired</td><td>Trigger re-auth flow</td></tr>
-      <tr><td><code>403</code></td><td>Forbidden — user lacks permission</td><td>Show access denied</td></tr>
-      <tr><td><code>404</code></td><td>Not Found — resource gone</td><td>Remove from local cache</td></tr>
-      <tr><td><code>409</code></td><td>Conflict — concurrency event (item claimed by another user)</td><td>Domain-specific UX — NOT a generic retry</td></tr>
-      <tr><td><code>5xx</code></td><td>Server error — transient</td><td>Show retry UI</td></tr>
-      <tr><td>Network timeout</td><td>Transient</td><td>Show retry UI</td></tr>
-    </table>
-  </div>
-  <div class="warn"><strong>409 and 5xx must never share a code path.</strong> A 409 means a specific domain event occurred (another user acted first) — it requires domain-specific UX ("room no longer available", "item already claimed"). A 5xx means "try again later." Conflating them produces a confusing user experience and masks real concurrency bugs.</div>
+<pre><code>APIClient
+  └─ URLSession-based generic HTTP client
+  └─ func get&lt;T: Decodable&gt;(_ url: URL) async throws -&gt; T
+  └─ func post&lt;T: Decodable, B: Encodable&gt;(_ url: URL, body: B) async throws -&gt; T
 
-  <div class="rule"><strong>APIClient lives inside Data/Network/ — not a separate layer.</strong> It's an implementation detail of RemoteDataSources. Nothing in Domain or Presentation ever touches it.</div>
+Request structs
+  └─ one per endpoint: TrackSearchRequest, CreatePlaylistRequest, etc.
+  └─ carries the fields needed to build the URL and body
+  └─ lives at Data/Network/Requests/
+
+Error handling
+  └─ typed APIError enum: .invalidURL, .notFound, .networkError, .decodingError, .conflict
+  └─ propagates async throws up to ViewModel
+  └─ ViewModel catches and sets errorMessage: String?
+
+HTTP status code semantics — map at the RemoteDataSource level, never in the ViewModel:
+  └─ 4xx client errors:
+       └─ 400 Bad Request    — malformed request; log and show generic error
+       └─ 401 Unauthorized   — session expired; trigger re-auth flow
+       └─ 403 Forbidden      — user lacks permission; show access denied
+       └─ 404 Not Found      — resource gone; remove from local cache
+       └─ 409 Conflict       — concurrency conflict (e.g. item already claimed by another user)
+                               → distinct error path with specific UX, NOT a generic retry
+  └─ 5xx server errors       — transient; show retry UI
+  └─ network timeout         — transient; show retry UI</code></pre>
+
+  <div class="warn"><strong>409 and 5xx must never share a code path.</strong> A 409 means a specific domain event occurred (another user acted first) and requires domain-specific UX. A 5xx means "try again later."</div>
+  <p><strong>APIClient lives inside the Data layer, not a separate Network layer.</strong> It's an implementation detail of RemoteDataSources. Nothing in Domain or Presentation touches it.</p>
 </section>
 
 <!-- PERSISTENCE -->
 <section id="persistence">
   <h2>Persistence</h2>
-  <div class="stack">
-    <div class="stack-row"><div class="stack-name">LocalDataSource</div><div class="stack-desc">Wraps the storage backend. Repositories never touch the backend directly — always through LocalDataSource. Stores and retrieves DTOs, not Domain models. Keyed by request parameters for cache lookup.</div></div>
-  </div>
 
-  <div class="table-wrap">
-    <table>
-      <tr><th>Backend</th><th>Use when</th></tr>
-      <tr><td>UserDefaults</td><td>Simple key-value cache, small payloads, no relational queries needed</td></tr>
-      <tr><td>GRDB (SQLite)</td><td>Relational queries, Combine publishers, no magic — preferred for greenfield</td></tr>
-      <tr><td>Core Data</td><td>Only if CloudKit sync required or an existing stack already exists</td></tr>
-    </table>
-  </div>
+<pre><code>LocalDataSource
+  └─ wraps the storage backend (UserDefaults / GRDB / Core Data)
+  └─ Repositories never touch the backend directly — always through LocalDataSource
+  └─ stores and retrieves DTOs, not Domain models
+  └─ keyed by request parameters for cache lookup
 
-  <div class="callout"><strong>Why wrap storage in LocalDataSource?</strong> The Repository doesn't know or care what's underneath. Swapping UserDefaults for GRDB touches one file — <code>LocalDataSource</code> — and nothing else. The Repository, UseCase, and ViewModel are completely unaffected.</div>
+Storage backend choice:
+  └─ UserDefaults   — simple key-value cache, small payloads
+  └─ GRDB (SQLite)  — relational queries, Combine publishers, no magic
+  └─ Core Data      — only if CloudKit sync or existing stack required</code></pre>
+
+  <div class="callout"><strong>Why wrap storage in LocalDataSource?</strong> The Repository doesn't know or care what's underneath. Swapping UserDefaults for GRDB touches one file — <code>LocalDataSource</code> — and nothing else.</div>
 </section>
 
 <!-- NAVIGATION -->
 <section id="navigation">
   <h2>Navigation</h2>
-  <div class="stack">
-    <div class="stack-row"><div class="stack-name">AppCoordinator</div><div class="stack-desc">Root coordinator. Owns tab bar. Handles deep links. Routes to feature coordinators.</div></div>
-    <div class="stack-row"><div class="stack-name">FeatureCoordinator</div><div class="stack-desc">One per flow (e.g. <code>SearchCoordinator</code>, <code>HomeCoordinator</code>). Creates ViewModels and ViewControllers. ViewControllers never call push/present directly.</div></div>
-  </div>
 
-<pre><code><span class="cm">// Deep link flow</span>
-<span class="ty">NotificationCenter</span>.default.post(.handleDeepLink, object: link)
-  → <span class="nm">AppCoordinator</span>.handle(link)
-      → selects correct tab
-      → delegates to feature coordinator
-      → coordinator creates <span class="ty">ViewModel</span> + <span class="ty">ViewController</span> and pushes</code></pre>
+<pre><code>Coordinator pattern
+  └─ AppCoordinator — root, owns tab bar, handles deep links
+  └─ FeatureCoordinator (e.g. SearchCoordinator, HomeCoordinator) — one per flow
+  └─ ViewControllers never call push/present directly
+  └─ deep links handled at AppCoordinator level, delegated to feature coordinators
+
+Deep link flow:
+  NotificationCenter.post(.handleDeepLink, object: link)
+    → AppCoordinator.handle(link)
+        → selects correct tab
+        → delegates to feature coordinator
+        → feature coordinator creates ViewModel + ViewController and pushes</code></pre>
 
   <div class="warn"><strong>App-scoped services (e.g. PlayerService) must be registered at AppCoordinator level</strong> — not owned by any ViewController. If owned by a ViewController, they deallocate when that screen is popped.</div>
 </section>
@@ -601,21 +738,21 @@
 <!-- CONCURRENCY -->
 <section id="concurrency">
   <h2>Concurrency</h2>
-  <div class="stack">
-    <div class="stack-row"><div class="stack-name">@MainActor on ViewModel</div><div class="stack-desc">All state mutations on main thread. No <code>DispatchQueue.main.async</code> needed.</div></div>
-    <div class="stack-row"><div class="stack-name">async/await throughout</div><div class="stack-desc">No completion handlers. Clean call stack, propagates throws naturally.</div></div>
-    <div class="stack-row"><div class="stack-name">async let</div><div class="stack-desc">Two concurrent fetches with fixed known count.</div></div>
-    <div class="stack-row"><div class="stack-name">withThrowingTaskGroup</div><div class="stack-desc">N concurrent fetches with dynamic count (e.g. fetch detail for each item in a list).</div></div>
-    <div class="stack-row"><div class="stack-name">[weak self]</div><div class="stack-desc">All closures that capture self. Prevents retain cycles between ViewController and ViewModel.</div></div>
-    <div class="stack-row"><div class="stack-name">defer { isLoading = false }</div><div class="stack-desc">Cleanup on any exit path — success, throw, or early return. Place immediately after <code>isLoading = true</code>.</div></div>
-  </div>
 
+<pre><code>@MainActor on ViewModel — all state mutations on main thread
+async/await throughout — no completion handlers
+async let — two concurrent fetches
+withThrowingTaskGroup — N concurrent fetches
+[weak self] — all closures that capture self
+defer { isLoading = false } — cleanup on any exit path</code></pre>
+
+  <h4><code>async let</code> vs <code>withThrowingTaskGroup</code></h4>
   <div class="table-wrap">
     <table>
-      <tr><th></th><th>async let</th><th>withThrowingTaskGroup</th></tr>
-      <tr><td>Use when</td><td>Fixed small N (2–3 concurrent)</td><td>Dynamic N</td></tr>
-      <tr><td>Syntax</td><td>Cleaner, inline</td><td>More explicit, loop-based</td></tr>
-      <tr><td>Example</td><td>Fetch tracks + playlists in parallel</td><td>Fetch detail for each item in a list</td></tr>
+      <tr><th></th><th><code>async let</code></th><th><code>withThrowingTaskGroup</code></th></tr>
+      <tr><td>Use when</td><td>Fixed small N (2–3)</td><td>Dynamic N</td></tr>
+      <tr><td>Syntax</td><td>Cleaner</td><td>More explicit</td></tr>
+      <tr><td>Example</td><td>Fetch tracks + playlists</td><td>Fetch detail for each item in a list</td></tr>
     </table>
   </div>
 </section>
@@ -623,51 +760,50 @@
 <!-- TESTING STRATEGY -->
 <section id="testing">
   <h2>Testing Strategy</h2>
+
   <div class="rule"><strong>Rule: mock the layer below, assert on the layer you just built.</strong></div>
 
   <div class="table-wrap">
     <table>
       <tr><th>Layer</th><th>What to mock</th><th>What to assert</th></tr>
-      <tr><td>ViewModel</td><td>MockUseCase</td><td><code>@Published</code> state after user action</td></tr>
-      <tr><td>UseCase</td><td>MockRepository</td><td>Return value, thrown error, param forwarding</td></tr>
-      <tr><td>Repository</td><td>MockRemoteDataSource + MockLocalDataSource</td><td>FetchPolicy logic, Mapper output, cache read/write order</td></tr>
-      <tr><td>DataSource</td><td>MockAPIClient / in-memory store</td><td>Request shape, URL construction, response decoding</td></tr>
-      <tr><td>Gateway</td><td>MockGatewayProtocol (in Domain tests)</td><td>Protocol method called, correct input forwarded</td></tr>
+      <tr><td>ViewModel</td><td><code>MockUseCase</code></td><td>@Published state after action</td></tr>
+      <tr><td>UseCase</td><td><code>MockRepository</code></td><td>Return value, thrown error</td></tr>
+      <tr><td>Repository</td><td><code>MockRemoteDataSource</code> + <code>MockLocalDataSource</code></td><td>FetchPolicy logic, Mapper output</td></tr>
+      <tr><td>DataSource</td><td><code>MockAPIClient</code> / in-memory DB</td><td>Request shape, response decoding</td></tr>
+      <tr><td>Gateway</td><td><code>MockGatewayProtocol</code> (in Domain tests)</td><td>Protocol method called, correct input forwarded</td></tr>
     </table>
   </div>
 
-<pre><code><span class="cm">// Mock pattern — same shape for every layer</span>
-<span class="kw">final class</span> <span class="ty">MockSearchTracksUseCase</span>: <span class="ty">SearchTracksUseCaseProtocol</span> {
-    <span class="kw">var</span> stubbedResult: <span class="ty">Result</span>&lt;[<span class="ty">Track</span>], <span class="ty">Error</span>&gt; = .success([])
-    <span class="kw">private(set) var</span> lastParam: <span class="ty">SearchTracksParam</span>?
+<pre><code>MockUseCase
+  └─ var stubbedResult: Result&lt;Output, Error&gt;
+  └─ private(set) var lastParam: Param?
+  └─ func execute(...) async throws → returns stubbedResult
 
-    <span class="kw">func</span> <span class="nm">execute</span>(policy: <span class="ty">FetchPolicy</span>, param: <span class="ty">SearchTracksParam</span>) <span class="kw">async throws</span> -> [<span class="ty">Track</span>] {
-        lastParam = param
-        <span class="kw">return try</span> stubbedResult.get()
-    }
-}</code></pre>
+Test pattern:
+  1. Arrange: set stubbed result on mock
+  2. Act: call ViewModel/UseCase method
+  3. Assert: check @Published state or return value</code></pre>
 
-  <div class="callout"><strong>No mocking of concrete types.</strong> Every dependency is injected via a protocol — replace with mock in tests, real impl in production. If you can't swap it, the DI is wrong.</div>
+  <p>No mocking of concrete types. Every dependency is injected via a protocol — replace with mock in tests, real impl in production.</p>
 </section>
 
 <!-- ADAPTING TO A SCENARIO -->
 <section id="adapting">
   <h2>Adapting to a Scenario</h2>
-  <p>When given an interview problem, map it onto this architecture in order:</p>
+  <p>When given an interview problem, map it onto this architecture:</p>
 
   <div class="stack">
-    <div class="stack-row"><div class="stack-name">1. Identify the domain</div><div class="stack-desc">What are the entities? (Track, Playlist, User, Order, Ride…)</div></div>
-    <div class="stack-row"><div class="stack-name">2. Name the Repositories</div><div class="stack-desc">One per domain entity or aggregate. Each gets a Remote + Local DataSource.</div></div>
-    <div class="stack-row"><div class="stack-name">3. Name the UseCases</div><div class="stack-desc">One per user action or screen load. Stateless, single execute method.</div></div>
-    <div class="stack-row"><div class="stack-name">4. Identify Domain Services</div><div class="stack-desc">Anything stateful, long-lived, or shared across screens. App-scoped.</div></div>
-    <div class="stack-row"><div class="stack-name">5. Apply FetchPolicy</div><div class="stack-desc">Does this screen need fresh data? Can it show stale? Offline-first?</div></div>
-    <div class="stack-row"><div class="stack-name">6. Identify local storage need</div><div class="stack-desc">Cache only? Offline-first with user-controlled saves? File storage? LRU eviction?</div></div>
-    <div class="stack-row"><div class="stack-name">7. Identify external SDKs</div><div class="stack-desc">List every SDK/OS framework the scenario touches — they all go in the External layer. Then for each: (a) SwiftUI / UIKit / Combine? → no wrapper, use directly. (b) Otherwise → always wrap. (c) How many layers does the wrapper touch? One layer → wrap there (<code>Service</code> in Domain, <code>DataSource</code> / <code>APIClient</code> in Data). Two or more layers → <code>Gateway</code> in Infrastructure. The trigger for Gateway is cross-layer span, not the presence of a third-party import.</div></div>
-    <div class="stack-row"><div class="stack-name">8. Draw the data flow</div><div class="stack-desc">Top to bottom, out loud, immediately after the diagram. Catches missing dependencies and edge cases live.</div></div>
+    <div class="stack-row"><div class="stack-name">1. Identify the domain</div><div class="stack-desc">What are the entities? (Track, Playlist, User, Order…)</div></div>
+    <div class="stack-row"><div class="stack-name">2. Name the Repositories</div><div class="stack-desc">One per domain entity or aggregate</div></div>
+    <div class="stack-row"><div class="stack-name">3. Name the UseCases</div><div class="stack-desc">One per user action or screen load</div></div>
+    <div class="stack-row"><div class="stack-name">4. Identify Domain Services</div><div class="stack-desc">Anything stateful, long-lived, or shared across screens</div></div>
+    <div class="stack-row"><div class="stack-name">5. Apply FetchPolicy</div><div class="stack-desc">Does this screen need fresh data? Can it show stale?</div></div>
+    <div class="stack-row"><div class="stack-name">6. Identify local storage need</div><div class="stack-desc">Cache only, or offline-first with user-controlled saves?</div></div>
+    <div class="stack-row"><div class="stack-name">7. Identify external SDKs</div><div class="stack-desc">List every SDK/OS framework the scenario touches — they all go in the External layer. Then for each: (a) SwiftUI / UIKit / Combine? → no wrapper needed, use directly. (b) Otherwise → always wrap. (c) How many layers does the wrapper touch? One layer → wrap there (<code>Service</code> in Domain, <code>DataSource</code> / <code>APIClient</code> in Data). Two or more layers → <code>Gateway</code> in Infrastructure. The trigger for Gateway is cross-layer span, not the presence of a third-party import.</div></div>
+    <div class="stack-row"><div class="stack-name">8. Draw the data flow</div><div class="stack-desc">Top to bottom, out loud, immediately after the diagram</div></div>
   </div>
 
-  <div class="rule"><strong>State your principles first, then draw.</strong> Before touching the whiteboard: "I'll use Clean Architecture — Presentation → Domain ← Data. Domain depends on nothing. Let me name the layers for this scenario." One sentence. Then draw.</div>
-  <div class="callout"><strong>The scenario doc fills in the specifics.</strong> This is the skeleton. See <code>docs/scenarios/</code> for worked examples of how this maps onto specific interview problems.</div>
+  <div class="callout"><strong>The scenario doc fills in the specifics. This doc is the skeleton.</strong> Scenario-specific patterns (WebSocket, offline queues, three-tier API) belong in delta sections of the scenario doc, not here.</div>
 </section>
 
 <div class="bottom-nav">

@@ -12,9 +12,9 @@ Scenario-specific docs extend this — they describe the delta, not a replacemen
 ```
 Presentation    →  ViewController + ViewModel (Combine @Published)
 Domain          →  UseCase + Service + Protocol + Model + Param + FetchPolicy
-Data            →  Repository + DataSource + DTO + Mapper + APIClient
-Infrastructure  →  Gateway (cross-layer SDK wrappers)
+Data            →  Repository + DataSource + DTO + Mapper
 Application     →  AppDelegate + Coordinator + DI (manual init injection)
+Infrastructure  →  Gateway
 External        →  SDKs + OS Frameworks (Stripe, CoreData, AVFoundation, Firebase…)
 ```
 
@@ -196,6 +196,24 @@ RemoteDataSource fetches JSON
 
 Mapper is the seam between external data and your business logic. Keep it the only crossing point.
 
+### Application
+
+```
+AppDelegate
+  └─ entry point — wires window and root coordinator
+  └─ registers app-scoped services (analytics, player, auth)
+
+Coordinator
+  └─ owns navigation logic — ViewControllers never push/present directly
+  └─ creates UseCases and ViewModels (DI composition root)
+  └─ one coordinator per flow
+
+DI (manual init injection)
+  └─ no DI framework — dependencies passed through init
+  └─ no default concrete arguments on Repository or UseCase inits
+  └─ DataSources and APIClient composed at Coordinator level
+```
+
 ### Infrastructure
 
 ```
@@ -253,24 +271,6 @@ final class TrackLocalDataSource: TrackLocalDataSourceProtocol {
 | `Gateway` | Infrastructure | `StripePaymentGateway` |
 | *(SDK name itself)* | External | `Stripe`, `CoreData`, `AVFoundation` |
 
-### Application
-
-```
-AppDelegate
-  └─ entry point — wires window and root coordinator
-  └─ registers app-scoped services (analytics, player, auth)
-
-Coordinator
-  └─ owns navigation logic — ViewControllers never push/present directly
-  └─ creates UseCases and ViewModels (DI composition root)
-  └─ one coordinator per flow
-
-DI (manual init injection)
-  └─ no DI framework — dependencies passed through init
-  └─ no default concrete arguments on Repository or UseCase inits
-  └─ DataSources and APIClient composed at Coordinator level
-```
-
 ### External
 
 The outermost ring. External is the actual SDKs and OS frameworks — the real dependencies the app imports via SPM or CocoaPods.
@@ -314,6 +314,21 @@ let viewModel = TrackListViewModel(searchTracks: useCase)
 ---
 
 ## Generic Data Flows
+
+**Dependency rule — enforced in every flow: Presentation → Domain ← Data.**
+
+- ViewModel calls UseCase. UseCase calls Repository. Repository calls DataSource.
+- ViewModel never calls Repository or DataSource directly.
+- UseCase never calls DataSource directly.
+- No layer skips the one above it.
+
+```
+ViewController → ViewModel → UseCase → Repository → DataSource
+                                  ↑                       ↑
+                              Domain boundary          Data boundary
+```
+
+Skipping a layer (e.g. ViewModel → Repository) breaks testability — the ViewModel can no longer be tested against a mock UseCase, and business logic leaks into the Presentation layer.
 
 ### Read flow (e.g. load a screen)
 

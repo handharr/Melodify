@@ -135,8 +135,6 @@
   th.col-repo    { color: var(--muted); }
   th.col-ds      { color: var(--muted); }
 
-  .arch-table tbody tr { border-bottom: 1px solid var(--border); }
-  .arch-table tbody tr:last-child { border-bottom: none; }
   .arch-table tbody td {
     padding: 10px 12px;
     border-right: 1px solid var(--border);
@@ -562,8 +560,9 @@
             <div class="sub">→ HLS CDN .m3u8 → chunks · AVPlayer adaptive bitrate</div>
           </td>
           <td class="col-infra">
-            <span class="chip infra">APIClient</span>
-            <div class="sub">+ AVPlayer (HLS playback engine)</div>
+            <span class="chip infra">APIClient</span><span class="ref-badge">↑</span><br>
+            <span class="chip infra">AVPlayer</span>
+            <div class="sub">HLS playback engine</div>
           </td>
           <td>
             <span class="chip shared">DownloadRepo</span>
@@ -597,7 +596,7 @@
             <div class="sub">separate from LRU — user saves never evicted by streaming pressure</div>
           </td>
           <td class="col-infra">
-            <span class="chip infra">AVPlayer</span>
+            <span class="chip infra">AVPlayer</span><span class="ref-badge">↑</span>
             <div class="sub">file:// URL — no network request</div>
           </td>
           <td>
@@ -727,9 +726,8 @@
             <div class="sub">+ NWPathMonitor — retry on connectivity restore</div>
           </td>
           <td>
-            <span class="chip">LikeRepo</span><br>
-            <span class="chip ds">FeedLocalDS</span><span class="ref-badge">↑</span>
-            <div class="sub">Like{successfullySent=false} · LikeRemoteDS on flush</div>
+            <span class="chip">LikeRepo</span>
+            <div class="sub">FeedLocalDS — Like{successfullySent=false} · LikeRemoteDS on flush</div>
           </td>
           <td>
             <span class="chip svc">LikeService</span>

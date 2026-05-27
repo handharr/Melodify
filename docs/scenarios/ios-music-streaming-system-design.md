@@ -11,21 +11,8 @@
 ## Delta — What This Scenario Adds
 
 ### Same as generic architecture
-- Clean Architecture + MVVM + UIKit
-- DTO → Mapper → Domain Model
-- FetchPolicy (.fresh / .cached / .strict) on all Repository reads
-- Typed Param structs on every UseCase
-- `@MainActor` on ViewModel — all state mutations on main thread, no `DispatchQueue.main.async`
-- `defer { isLoading = false }` — guaranteed cleanup on success and failure
-- `[weak self]` in all closures to avoid retain cycles
-- Coordinator-based navigation, app-scoped services via manual init injection
-- Mock-the-layer-below testing strategy
-- `async/await` for I/O; Combine for reactive binding to `@Published` state
-- `ThirdPartyDataSource` (SDK facade) — wraps third-party SDKs as a `RemoteDataSource`; app calls protocol, never SDK directly
-- Idempotency keys on mutations — client-generated UUID at `Param` call site for any retryable mutation
-- HTTP `409 ≠ 5xx` — concurrency conflicts and transient server errors must never share a code path
-- Infrastructure layer (`Gateway` suffix) — Gateway trigger is cross-layer span, not SDK imports; single-layer SDKs wrap in their natural layer (DataSource or Service); Domain defines protocol; concrete in Infrastructure; nothing depends on Gateway except DI wiring in Application
-- External layer (outermost ring) — actual SDKs and OS frameworks; UIKit / SwiftUI / Combine need no wrapper (reactive/UI primitives used directly); all other SDKs always wrapped; wrapper placement scope-based: single-layer SDK → DataSource or Service, cross-layer SDK → Gateway in Infrastructure
+
+All patterns not listed above are unchanged — see [ios-app-system-design-philosophy.md](../ios-app-system-design-philosophy.md).
 
 ### What this scenario adds
 | Concept | Generic | Music Streaming |
@@ -36,7 +23,7 @@
 | Domain Services | Generic (SessionService example) | `PlayerService` (app-scoped, owns queue + playback state) · `StreamRefreshService` (manifest expiry logic) |
 | Streaming | Not in generic | HLS via `AVPlayer` — adaptive bitrate, chunk-based, short-lived signed URLs |
 | Pagination | Not in generic | Cursor-based (not offset) — library syncs live across devices |
-| Playback asset resolution | Not in generic | `PlaybackAssetResolver`: offline file → HLS manifest → AVPlayer |
+| Playback asset resolution | Not in generic | logic inside `PlayerService`: offline file → HLS manifest → AVPlayer |
 | UI framework | SwiftUI default for new apps; UIKit when scroll lifecycle, AVPlayer, or custom transitions needed; hybrid valid screen-by-screen | UIKit throughout — AVPlayer integration, scroll lifecycle for library list, custom transitions for playback screen |
 
 ### Key decisions unique to this scenario
@@ -255,6 +242,9 @@ Presentation
   PlayerViewController        → PlayerViewModel         → PlayerService (app-scoped)
                                                         → ResolvePlaybackAssetUseCase
 
+  UIModels: LibraryUIModel, CollectionUIModel, PlaybackUIModel
+    └─ All ViewModels map Domain model → UIModel; View never receives Domain types directly.
+
 Domain
   Protocols:  LibraryRepositoryProtocol
               CollectionRepositoryProtocol
@@ -274,10 +264,21 @@ Domain
                                           calls AudioPlayerProtocol for actual audio playback
               StreamRefreshService        pure logic — given StreamInfo.expiresAt,
                                           decides when to trigger FetchStreamInfoUseCase
+                                          Note: Domain Service (not a UseCase) — it is stateful
+                                          (holds expiry thresholds, manages timing) and
+                                          long-lived; fails both UseCase criteria (stateless,
+                                          triggered per user action)
 
   Models:     LibraryItem, CollectionSummary, CollectionDetail
               PlayableItem (enum: track / episode), Track, Episode
               PlayableAsset, StreamInfo, PlaybackState
+
+  AVPlayerAdapter: AudioPlayerProtocol
+    └─ wraps AVPlayer + AVAudioSession (AVFoundation)
+    └─ exposes play(url:), pause(), stop(), seek(to:), configure(audioSessionCategory:)
+    └─ AVFoundation is Domain-scoped — AVPlayer driven programmatically via AudioPlayerProtocol;
+       no Presentation footprint (AVPlayerViewController / AVPlayerLayer not used);
+       wraps as AVPlayerAdapter implementing AudioPlayerProtocol in Domain
 
 Data
   LibraryRepository
@@ -303,20 +304,13 @@ Data
     PlayableItemMapper.toDomain(_:)    ← handles Track vs Episode polymorphism
     StreamInfoMapper.toDomain(_:)
 
-  AVPlayerAdapter: AudioPlayerProtocol
-    └─ wraps AVPlayer + AVAudioSession (AVFoundation)
-    └─ exposes play(url:), pause(), stop(), seek(to:), configure(audioSessionCategory:)
-    └─ AVFoundation is single-layer (Domain concern) → wraps in Data, not Infrastructure
-    └─ Domain defines AudioPlayerProtocol; Application wires AVPlayerAdapter at startup
-
 Infrastructure
-  None — AVFoundation is single-layer (no Presentation footprint); wraps as AVPlayerAdapter in
-  Data. PlayerService calls AudioPlayerProtocol (Domain protocol), never AVFoundation directly.
+  None
 
 External
-  AVFoundation    →  AVPlayerAdapter (Data) — AVPlayer + AVAudioSession
-  GRDB            →  LibraryLocalDataSource · CollectionLocalDataSource · PlayableItemLocalDataSource · DownloadLocalDataSource (Data)
-  URLSession      →  APIClient (Data)
+  AVFoundation
+  GRDB
+  URLSession
 
 Application
   AppCoordinator (composition root — builds full dependency graph, registers app-scoped services)
@@ -402,7 +396,7 @@ Two separate `MediaFileDataSource` instances — offline saves can never be evic
 ### HLS Flow (recap)
 ```
 PlayerService triggers playback
-  → PlaybackAssetResolver checks DownloadRepository (DownloadRepositoryProtocol)
+  → logic inside PlayerService checks DownloadRepository (DownloadRepositoryProtocol)
       ├─ downloaded? → file:// URL → AVPlayerAdapter (AudioPlayerProtocol)
       └─ not downloaded? → FetchStreamInfoUseCase → DownloadRepository (DownloadRepositoryProtocol) → MediaRemoteDataSource → HLS CDN
                              → manifest (.m3u8)
@@ -420,10 +414,10 @@ PlayerService triggers playback
 
 | Scenario | Approach |
 |---|---|
-| Standard downloaded files | `PlaybackAssetResolver` returns `file://` URL directly to `AVPlayer` — no extra work |
+| Standard downloaded files | logic inside `PlayerService` returns `file://` URL directly to `AVPlayer` — no extra work |
 | Protected / chunked format | Custom `AVAssetResourceLoadingDelegate` intercepts requests and serves local binary data |
 
-Initial implementation uses the simple `file://` path. `DownloadLocalDataSource` holds the `itemId → localFilePath` mapping; `PlaybackAssetResolver` (inside `PlayerService`) accesses it via `DownloadRepository`.
+Initial implementation uses the simple `file://` path. `DownloadLocalDataSource` holds the `itemId → localFilePath` mapping; logic inside `PlayerService` accesses it via `DownloadRepository`.
 
 > **Why `file://` URL over `AVAssetResourceLoadingDelegate`?**
 > `AVAssetResourceLoadingDelegate` lets you intercept every network request AVPlayer makes and serve data yourself — useful for DRM, encryption, or proprietary chunk formats. But it adds significant complexity (manage loading requests, handle cancellation, deal with byte-range requests). For standard downloaded audio files, a plain `file://` URL is sufficient and far simpler. Use `AVAssetResourceLoadingDelegate` only when the file format or protection requires it.
@@ -594,7 +588,7 @@ Your job is to give it the right URL and configure `AVAudioSession`.
 Without this, audio stops when the screen locks or the app backgrounds:
 
 ```swift
-// Call this once at app startup, before any playback
+// Called inside AVPlayerAdapter (Domain) — never in AppDelegate or ViewModel directly
 try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
 try AVAudioSession.sharedInstance().setActive(true)
 ```
@@ -617,7 +611,7 @@ Tier 1: Memory buffer (AVPlayer owns this)
   → Freed when track changes
   → You never touch this
 
-Tier 2: LRU disk cache (your DownloadService writes this)
+Tier 2: LRU disk cache (your DownloadTrackUseCase / MediaFileDataSource writes this)
   → Recently streamed chunk files on disk
   → Max size: 5 GB, evicts least-recently-used when full
   → Purpose: if user replays a track, skip the network entirely
@@ -650,7 +644,7 @@ let player = AVPlayer(url: url)
 player.play()
 ```
 
-`PlaybackAssetResolver` (inside `PlayerService`) decides which URL to hand to `AVPlayer` by calling through `DownloadRepository` (injected via `DownloadRepositoryProtocol`):
+Logic inside `PlayerService` decides which URL to hand to `AVPlayer` by calling through `DownloadRepository` (injected via `DownloadRepositoryProtocol`):
 ```
 DownloadRepository.localFilePath(for: itemId)   // protocol call — Domain knows nothing about DownloadLocalDataSource
   ├─ found → file:// URL (offline)
@@ -837,7 +831,7 @@ NotificationCenter.default.addObserver(
 | Stream URL expires mid-playback | CDN returns 403 on next chunk | `StreamRefreshService` refreshes before expiry |
 | Network drops mid-stream | AVPlayer stalls, `timeControlStatus == .waitingToPlayAtSpecifiedRate` | Observe `timeControlStatus`, show buffering UI |
 | Offline file deleted externally | `file://` URL exists in DB but file is gone | Check file exists before handing URL to AVPlayer, fall back to stream |
-| App killed during download | Partial file on disk | `DownloadService` checks file integrity on resume, restarts incomplete downloads |
+| App killed during download | Partial file on disk | `DownloadTrackUseCase` / `MediaFileDataSource` checks file integrity on resume, restarts incomplete downloads |
 | LRU cache full | Eviction of old chunks | Silent — user just re-downloads on next play |
 
 ---
@@ -949,10 +943,10 @@ Key point: `.seeking` is transient — it always resolves back to `.playing` or 
 | Fetching and playing chunks | AVPlayer |
 | Switching quality levels | AVPlayer |
 | Buffering ahead of playhead | AVPlayer |
-| Deciding online vs offline path | `PlaybackAssetResolver` (your code) |
+| Deciding online vs offline path | logic inside `PlayerService` (your code) |
 | Refreshing expired manifest URLs | `StreamRefreshService` (your code) |
-| Writing chunks to LRU disk cache | `DownloadService` (your code) |
-| Managing explicit offline downloads | `DownloadService` (your code) |
+| Writing chunks to LRU disk cache | `DownloadTrackUseCase` / `MediaFileDataSource` (your code) |
+| Managing explicit offline downloads | `DownloadTrackUseCase` / `MediaFileDataSource` (your code) |
 | Background audio session config | `PlayerService` at app startup (your code) |
 
 ---

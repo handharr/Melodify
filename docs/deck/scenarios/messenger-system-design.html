@@ -254,7 +254,7 @@
 <header>
   <div class="tag">System Design</div>
   <h1>iOS Messenger App</h1>
-  <p>Offline-first · real-time WebSocket · three-tier REST · Domain Services · Clean Architecture</p>
+  <p>WebSocket real-time · offline write queue · three-tier REST · Realm SSOT · cursor pagination</p>
 </header>
 
 <!-- TOC -->
@@ -265,24 +265,23 @@
   <a href="#api">API Design</a>
   <a href="#model">Data Model</a>
   <a href="#architecture">Architecture</a>
-  <a href="#dataflow">Data Flow</a>
-  <a class="toc-sub" href="#flow-thread-load">1. Load chat thread</a>
-  <a class="toc-sub" href="#flow-send">2. Send message</a>
-  <a class="toc-sub" href="#flow-bgsync">3. Background sync</a>
-  <a class="toc-sub" href="#flow-list-load">4. Load chat list</a>
-  <a class="toc-sub" href="#flow-list-page">5. Chat list pagination</a>
-  <a class="toc-sub" href="#flow-ws-receive">6. Receive message (cross-screen)</a>
-  <a class="toc-sub" href="#flow-foreground">7. App foreground gap recovery</a>
-  <a class="toc-sub" href="#flow-thread-page">8. Thread scroll pagination</a>
-  <a class="toc-sub" href="#flow-mark-read">9. Mark as read</a>
+  <a href="#dataflow">Data Flows</a>
+  <a class="toc-sub" href="#flow-load-thread">1. Load Chat Thread (offline-first)</a>
+  <a class="toc-sub" href="#flow-send">2. Send Message (with offline queue)</a>
+  <a class="toc-sub" href="#flow-sync">3. Background Sync (MessageSyncService)</a>
+  <a class="toc-sub" href="#flow-load-list">4. Load Chat List (offline-first)</a>
+  <a class="toc-sub" href="#flow-pagination">5. Chat List Scroll Pagination</a>
+  <a class="toc-sub" href="#flow-receive-ws">6. Receive Message via WebSocket</a>
+  <a class="toc-sub" href="#flow-foreground">7. App Foreground — Gap Recovery</a>
+  <a class="toc-sub" href="#flow-scroll-up">8. Chat Thread Scroll Pagination</a>
+  <a class="toc-sub" href="#flow-mark-read">9. Mark as Read</a>
   <a href="#deepdive">Deep Dives</a>
-  <a class="toc-sub" href="#websocket">1. WebSocket lifecycle</a>
-  <a class="toc-sub" href="#threetier">2. Three-tier REST vs FetchPolicy</a>
-  <a class="toc-sub" href="#pagination">3. Pagination inconsistency</a>
-  <a class="toc-sub" href="#viewstate">4. ViewState machine</a>
-  <a href="#exclusions">MVP Exclusions — Extension Notes</a>
-  <a class="toc-sub" href="#exclusions">Push notifications · Typing · Group chat</a>
-  <a href="#feedback">Interviewer Feedback &amp; Key Takeaways</a>
+  <a class="toc-sub" href="#ws-lifecycle">1. WebSocket Lifecycle</a>
+  <a class="toc-sub" href="#three-tier">2. Three-Tier REST vs FetchPolicy</a>
+  <a class="toc-sub" href="#pagination-weakness">3. Pagination Inconsistency</a>
+  <a class="toc-sub" href="#viewstate">4. ViewState Machine</a>
+  <a href="#extensions">MVP Exclusions — Extension Notes</a>
+  <a href="#feedback">Interviewer Feedback</a>
 </div>
 
 <!-- DELTA -->
@@ -293,41 +292,38 @@
   <h3>Same as generic architecture</h3>
   <ul>
     <li>Clean Architecture + MVVM + UIKit</li>
-    <li>DTO → Mapper → Domain Model (Mapper is the only type that knows both)</li>
+    <li>DTO → Mapper → Domain Model</li>
     <li><code>FetchPolicy</code> (.fresh / .cached / .strict) on all Repository reads</li>
     <li>Typed <code>Param</code> structs on every UseCase</li>
     <li><code>@MainActor</code> on ViewModel — all state mutations on main thread, no <code>DispatchQueue.main.async</code></li>
     <li><code>defer { isLoading = false }</code> — guaranteed cleanup on success and failure</li>
     <li><code>[weak self]</code> in all closures to avoid retain cycles</li>
     <li>Coordinator-based navigation, DI via manual init injection</li>
-    <li>Mock-the-layer-below testing strategy</li>
-    <li><code>async/await</code> for I/O; Combine for reactive binding to <code>@Published</code> state</li>
-    <li><code>ThirdPartyDataSource</code> facade pattern — wraps third-party SDKs; app calls protocol, never SDK directly</li>
     <li>Idempotency keys on mutations — client-generated UUID at <code>Param</code> call site for any retryable mutation</li>
     <li>HTTP <code>409 ≠ 5xx</code> — concurrency conflicts and transient server errors must never share a code path</li>
-    <li>Infrastructure layer (<code>Gateway</code> suffix) — Gateway trigger is cross-layer span, not SDK imports; single-layer SDKs wrap in their natural layer (DataSource or Service); <strong>this scenario has no Gateway</strong> — WebSocket is networking-transport only (no Presentation footprint) and wraps as <code>WebSocketClient</code> in Data, not as a Gateway</li>
-    <li>External layer (outermost ring) — actual SDKs and OS frameworks; UIKit / SwiftUI / Combine need no wrapper (reactive/UI primitives used directly); all other SDKs always wrapped; wrapper placement scope-based: single-layer SDK → DataSource or Service, cross-layer SDK → Gateway in Infrastructure</li>
+    <li>Infrastructure and External layers follow the philosophy doc exactly — see there for Gateway/wrapper rules.</li>
   </ul>
 
   <h3>What this scenario adds</h3>
   <div class="table-wrap">
     <table>
-      <tr><th>Concept</th><th>Generic</th><th>Messenger</th></tr>
+      <tr><th>Concept</th><th>Generic</th><th>This Scenario</th></tr>
       <tr><td>Real-time data</td><td>Not covered</td><td><code>MessageStreamService</code> Domain Service — calls <code>MessageStreamDataSourceProtocol</code>; <code>MessageStreamDataSource</code> wraps <code>WebSocketClient</code> in Data, exposes <code>AnyPublisher&lt;Message, Never&gt;</code> per chat</td></tr>
       <tr><td>Offline write queue</td><td>Not covered</td><td><code>MessageSyncService</code> Domain Service — queues <code>isSent = false</code> messages, flushes on app foreground</td></tr>
       <tr><td>Three-tier API strategy</td><td><code>FetchPolicy</code> covers read intent</td><td>Initial load / cursor pagination / delta sync by <code>sequenceId</code> — three distinct endpoints per list screen</td></tr>
       <tr><td>Local DB as SSOT</td><td><code>LocalDataSource</code> for cache</td><td>Realm via <code>LocalDataSource</code> — renders immediately from cache, syncs in background; WebSocket frames upsert into same store</td></tr>
-      <tr><td>File/attachment storage</td><td>Not in generic</td><td><code>AttachmentFileDataSource</code> — stores media binaries; only URL stored in <code>MessageLocalDataSource</code></td></tr>
+      <tr><td>File/attachment storage</td><td>Not in generic</td><td><code>AttachmentLocalFileDataSource</code> — stores media binaries; only URL stored in <code>MessageLocalDataSource</code></td></tr>
       <tr><td>Message status lifecycle</td><td>Not covered</td><td><code>sentTime</code> / <code>receivedTime</code> / <code>readTime</code> + <code>isSent: Bool</code> for local delivery tracking</td></tr>
     </table>
   </div>
 
   <h3>Key decisions unique to this scenario</h3>
-  <div class="rule"><strong><code>MessageStreamService</code> must be app-scoped.</strong> If owned by <code>ChatThreadViewModel</code>, the WebSocket closes when the screen pops — incoming messages are silently missed. Register at app startup in the DI composition root.</div>
+  <div class="rule"><strong><code>MessageStreamService</code> must be app-scoped.</strong> If owned by <code>ChatThreadViewModel</code>, the WebSocket closes when the screen pops — incoming messages are silently missed.</div>
   <div class="rule"><strong><code>MessageSyncService</code> triggers on app lifecycle, not a timer.</strong> Fires on <code>sceneDidBecomeActive</code> / <code>applicationDidBecomeActive</code>, not on a polling interval.</div>
-  <div class="rule"><strong>Local DB is the single source of truth.</strong> ViewModels never read from the network. Network writes flow into <code>MessageLocalDataSource</code> (upsert by <code>id</code>); the LocalDataSource stream drives the ViewModel.</div>
-  <div class="callout"><strong>Three-tier REST is required alongside <code>FetchPolicy</code>.</strong> FetchPolicy (.fresh / .cached) covers read intent but doesn't model delta sync — fetching only records changed since a known <code>sequenceId</code> is a separate concern with a separate endpoint.</div>
-  <div class="rule"><strong>Upsert by <code>message.id</code>, never append.</strong> A message can arrive via both WebSocket and a delta REST sync. Appending creates duplicates. Upsert is idempotent — the same message arriving twice produces exactly one record.</div>
+  <div class="callout"><strong>ViewModels map <code>Message</code> → <code>MessageUIModel</code></strong> (flat display struct); raw <code>Message</code> domain models are never passed to the View.</div>
+  <div class="callout"><strong>Local DB is the single source of truth.</strong> ViewModels never read from the network. Network writes flow into <code>MessageLocalDataSource</code> (upsert by <code>id</code>); the LocalDataSource stream drives the ViewModel.</div>
+  <div class="callout"><strong>Three-tier REST is required alongside FetchPolicy.</strong> FetchPolicy (<code>.fresh</code> / <code>.cached</code>) covers read intent but doesn't model delta sync — fetching only records changed since a known <code>sequenceId</code> is a separate concern.</div>
+  <div class="warn"><strong>Upsert by <code>message.id</code>, never append.</strong> A message can arrive via both WebSocket and a delta REST sync. Appending would duplicate it; upserting by <code>id</code> is idempotent.</div>
 </section>
 
 <!-- REQUIREMENTS -->
@@ -335,20 +331,20 @@
   <h2>Requirements</h2>
   <h3>Functional</h3>
   <div class="stack">
-    <div class="stack-row"><div class="stack-name">1-to-1 Messaging</div><div class="stack-desc">1-to-1 chat messaging — no group chats for MVP</div></div>
+    <div class="stack-row"><div class="stack-name">1-to-1 Chat</div><div class="stack-desc">1-to-1 messaging only — no group chats for MVP</div></div>
     <div class="stack-row"><div class="stack-name">Chat List</div><div class="stack-desc">Avatar, name, message preview, timestamp — sorted by most recent activity</div></div>
-    <div class="stack-row"><div class="stack-name">Chat Thread</div><div class="stack-desc">Scrollable message history, send and receive messages</div></div>
-    <div class="stack-row"><div class="stack-name">Media Sharing</div><div class="stack-desc">Image and file attachments with thumbnail (low-res) and full-resolution variants</div></div>
-    <div class="stack-row"><div class="stack-name">Offline Mode</div><div class="stack-desc">View cached chat history; queue sends locally and deliver on reconnect</div></div>
+    <div class="stack-row"><div class="stack-name">Chat Thread</div><div class="stack-desc">Scrollable message history — send and receive messages</div></div>
+    <div class="stack-row"><div class="stack-name">Media Sharing</div><div class="stack-desc">Image and file attachments with thumbnail and full-resolution variants</div></div>
+    <div class="stack-row"><div class="stack-name">Offline Mode</div><div class="stack-desc">View cached chat history; queue and deliver pending sends on reconnect</div></div>
   </div>
 
   <h3>Non-Functional</h3>
   <div class="table-wrap">
     <table>
       <tr><th>Requirement</th><th>Detail</th></tr>
-      <tr><td>Offline-first</td><td>Every screen renders immediately from local cache — no loading spinner on return visits</td></tr>
-      <tr><td>Battery / bandwidth</td><td>Delta sync (change-proportional payload), no polling</td></tr>
-      <tr><td>Real-time</td><td>WebSocket after initial REST sync — as close to zero latency as possible</td></tr>
+      <tr><td>Offline-first</td><td>Render from local cache immediately on every screen open</td></tr>
+      <tr><td>Battery / bandwidth</td><td>Delta sync (not full refresh), no polling</td></tr>
+      <tr><td>Real-time</td><td>WebSocket after initial REST sync</td></tr>
       <tr><td>MVP exclusions</td><td>Push notifications, typing indicators</td></tr>
     </table>
   </div>
@@ -358,38 +354,37 @@
 <section id="api">
   <h2>API Design</h2>
   <h3>REST — Three-Tier Strategy</h3>
-  <p>Every list screen uses three endpoint tiers. Each has a distinct job — mixing them leads to redundant data or missed updates.</p>
-
+  <p>Every list screen has three endpoint tiers, each with a distinct job:</p>
 <pre><code><span class="cm">// Chat List</span>
-<span class="gr">GET</span>  /chat/all                          → { chats: [Chat], nextCursor: String? } — initial 15
-<span class="gr">GET</span>  /chat/all?cursor=&lt;cursor&gt;          → { chats: [Chat], nextCursor: String? } — next 15 (scroll)
-<span class="gr">GET</span>  /chat/all/delta?sequenceId=&lt;id&gt;   → only chats changed since sequenceId (background sync)
+<span class="gr">GET</span>  /chat/all                         → { chats: [<span class="ty">Chat</span>], nextCursor: <span class="ty">String</span>? }  <span class="cm">// initial 15</span>
+<span class="gr">GET</span>  /chat/all?cursor=&lt;cursor&gt;         → { chats: [<span class="ty">Chat</span>], nextCursor: <span class="ty">String</span>? }  <span class="cm">// next 15 (scroll)</span>
+<span class="gr">GET</span>  /chat/all/delta?sequenceId=&lt;id&gt;  → only chats changed since sequenceId      <span class="cm">// background sync</span>
 
 <span class="cm">// Chat Thread</span>
-<span class="gr">GET</span>  /chat/{chat_id}/all                     → 50 most recent messages (initial load)
-<span class="gr">GET</span>  /chat/{chat_id}/all/before?timestamp=   → next 50 older messages (scroll up — timestamp stable, append-only)
-<span class="gr">GET</span>  /chat/{chat_id}/all/after?timestamp=    → messages since timestamp (foreground sync)
+<span class="gr">GET</span>  /chat/{chat_id}/all                    → 50 most recent messages              <span class="cm">// initial load</span>
+<span class="gr">GET</span>  /chat/{chat_id}/all/before?timestamp=  → next 50 older messages               <span class="cm">// scroll up</span>
+<span class="gr">GET</span>  /chat/{chat_id}/all/after?timestamp=   → messages since timestamp             <span class="cm">// foreground sync</span>
 
-<span class="cm">// Send — REST fallback; prefer WebSocket when socket is live</span>
-<span class="gr">POST</span> /chat/{chat_id}/message                 → send a Message object
+<span class="cm">// Send (REST fallback — prefer WebSocket when socket is live)</span>
+<span class="gr">POST</span> /chat/{chat_id}/message                → send a Message object
 
 <span class="cm">// Real-time</span>
-WS   /chat/{chat_id}                          → event stream after REST sync</code></pre>
+<span class="gr">WS</span>   /chat/{chat_id}                        → event stream after REST sync</code></pre>
 
-  <div class="callout"><strong>Why three tiers?</strong> Each tier has a distinct job: initial load for snappiness, pagination to avoid large payloads, delta sync for battery efficiency — payload size is proportional to change, not list size. You can't collapse these into one endpoint without sacrificing one of the three goals.</div>
+  <div class="callout"><strong>Why three tiers?</strong> Each tier has a distinct job: initial load for snappiness, pagination to avoid large payloads (load older records on demand), delta sync for battery efficiency (payload size proportional to change, not list size).</div>
 
   <h3>WebSocket Event Model</h3>
-<pre><code><span class="kw">struct</span> <span class="ty">WSEvent</span>&lt;T: <span class="ty">Decodable</span>&gt; {
+<pre><code><span class="kw">struct</span> <span class="ty">WSEvent</span>&lt;<span class="ty">T</span>: <span class="ty">Decodable</span>&gt; {
     <span class="kw">let</span> type: <span class="ty">WSEventType</span>
-    <span class="kw">let</span> payload: T
+    <span class="kw">let</span> payload: <span class="ty">T</span>
 }
 
 <span class="kw">enum</span> <span class="ty">WSEventType</span> {
-    <span class="kw">case</span> <span class="nm">messageSent</span>
-    <span class="kw">case</span> <span class="nm">messageReceived</span>
+    <span class="kw">case</span> messageSent
+    <span class="kw">case</span> messageReceived
     <span class="cm">// case typingIndicator  // future — additive, no breaking change</span>
 }</code></pre>
-  <div class="callout"><strong>Why a generic typed envelope?</strong> New event types are additive — add a case to the enum and a new payload type. No stringly-typed <code>if eventType == "message_sent"</code> scattered across the codebase.</div>
+  <div class="callout"><strong>Strongly-typed envelope</strong> makes new event types additive. No stringly-typed <code>if eventType == "message_sent"</code> scattered across the codebase.</div>
 </section>
 
 <!-- DATA MODEL -->
@@ -398,49 +393,48 @@ WS   /chat/{chat_id}                          → event stream after REST sync</
   <h3>Domain Models</h3>
 <pre><code><span class="kw">struct</span> <span class="ty">Chat</span> {
     <span class="kw">let</span> chatId: <span class="ty">String</span>
-    <span class="kw">let</span> users: [<span class="ty">User</span>]          <span class="cm">// array enables future group chat</span>
-    <span class="kw">let</span> status: <span class="ty">ChatStatus</span>    <span class="cm">// .read | .unread</span>
-    <span class="kw">let</span> preview: <span class="ty">String</span>       <span class="cm">// last message snippet for chat list</span>
-    <span class="kw">let</span> lastActivity: <span class="ty">Date</span>    <span class="cm">// drives sort order — optimistically updated on send</span>
+    <span class="kw">let</span> users: [<span class="ty">User</span>]           <span class="cm">// array enables future group chat</span>
+    <span class="kw">let</span> status: <span class="ty">ChatStatus</span>      <span class="cm">// .read | .unread</span>
+    <span class="kw">let</span> preview: <span class="ty">String</span>         <span class="cm">// last message snippet for chat list</span>
+    <span class="kw">let</span> lastActivity: <span class="ty">Date</span>      <span class="cm">// drives sort order — optimistically updated on send</span>
 }
 
-<span class="kw">enum</span> <span class="ty">ChatStatus</span> { <span class="kw">case</span> <span class="nm">read</span>, <span class="nm">unread</span> }
+<span class="kw">enum</span> <span class="ty">ChatStatus</span> { <span class="kw">case</span> read, unread }
 
 <span class="kw">struct</span> <span class="ty">User</span> {
     <span class="kw">let</span> userId: <span class="ty">String</span>
-    <span class="kw">let</span> imageThumbnail: <span class="ty">URL</span>   <span class="cm">// low-res, used in chat list</span>
-    <span class="kw">let</span> imageFullRes: <span class="ty">URL</span>     <span class="cm">// high-res, used in profile view</span>
+    <span class="kw">let</span> imageThumbnail: <span class="ty">URL</span>     <span class="cm">// low-res, used in chat list</span>
+    <span class="kw">let</span> imageFullRes: <span class="ty">URL</span>       <span class="cm">// high-res, used in profile view</span>
     <span class="kw">let</span> firstName: <span class="ty">String</span>
     <span class="kw">let</span> lastName: <span class="ty">String</span>
-    <span class="kw">let</span> isActive: <span class="ty">Bool</span>         <span class="cm">// online indicator</span>
+    <span class="kw">let</span> isActive: <span class="ty">Bool</span>          <span class="cm">// online indicator</span>
 }
 
 <span class="kw">struct</span> <span class="ty">Message</span> {
-    <span class="kw">let</span> id: <span class="ty">String</span>             <span class="cm">// dedup key — upsert by this, never append</span>
+    <span class="kw">let</span> id: <span class="ty">String</span>              <span class="cm">// dedup key — upsert, never append</span>
     <span class="kw">let</span> text: <span class="ty">String</span>
     <span class="kw">let</span> attachments: [<span class="ty">Attachment</span>]
     <span class="kw">let</span> sentTime: <span class="ty">Date</span>
     <span class="kw">let</span> receivedTime: <span class="ty">Date</span>?
     <span class="kw">let</span> readTime: <span class="ty">Date</span>?
-    <span class="kw">let</span> isSent: <span class="ty">Bool</span>           <span class="cm">// local flag: has this been delivered to server?</span>
+    <span class="kw">let</span> isSent: <span class="ty">Bool</span>            <span class="cm">// local flag: has this been delivered to server?</span>
     <span class="kw">let</span> isRead: <span class="ty">Bool</span>
 }
 
 <span class="kw">struct</span> <span class="ty">Attachment</span> {
-    <span class="kw">let</span> type: <span class="ty">AttachmentType</span>   <span class="cm">// .image | .video | .pdf</span>
-    <span class="kw">let</span> url: <span class="ty">URL</span>               <span class="cm">// URL only — binary stored in AttachmentFileDataSource</span>
+    <span class="kw">let</span> type: <span class="ty">AttachmentType</span>    <span class="cm">// .image | .video | .pdf</span>
+    <span class="kw">let</span> url: <span class="ty">URL</span>                <span class="cm">// URL only — binary stored in AttachmentLocalFileDataSource</span>
 }
 
-<span class="kw">enum</span> <span class="ty">AttachmentType</span> { <span class="kw">case</span> <span class="nm">image</span>, <span class="nm">video</span>, <span class="nm">pdf</span> }</code></pre>
+<span class="kw">enum</span> <span class="ty">AttachmentType</span> { <span class="kw">case</span> image, video, pdf }</code></pre>
 
-  <div class="callout"><strong>Why <code>isSent: Bool</code> on the domain model?</strong> Optimistic sends need a local flag to distinguish "queued locally" from "confirmed by server." The Repository sets <code>isSent = false</code> on local save, then updates to <code>true</code> on server ACK. <code>MessageSyncService</code> queries for <code>isSent == false</code> on foreground.</div>
-
-  <h3>DTOs (Codable, mirror API shape)</h3>
-<pre><code><span class="kw">struct</span> <span class="ty">ChatDTO</span>:       <span class="ty">Codable</span> { chat_id, users, status, preview, last_activity }
-<span class="kw">struct</span> <span class="ty">UserDTO</span>:       <span class="ty">Codable</span> { user_id, image_thumbnail, image_fullres, first_name, last_name, is_active }
-<span class="kw">struct</span> <span class="ty">MessageDTO</span>:    <span class="ty">Codable</span> { id, text, attachments, sent_time, received_time, read_time, is_sent, is_read }
+  <h3>DTOs (mirror API shape, Codable)</h3>
+<pre><code><span class="kw">struct</span> <span class="ty">ChatDTO</span>: <span class="ty">Codable</span>       { chat_id, users, status, preview, last_activity }
+<span class="kw">struct</span> <span class="ty">UserDTO</span>: <span class="ty">Codable</span>       { user_id, image_thumbnail, image_fullres, first_name, last_name, is_active }
+<span class="kw">struct</span> <span class="ty">MessageDTO</span>: <span class="ty">Codable</span>    { id, text, attachments, sent_time, received_time, read_time, is_sent, is_read }
 <span class="kw">struct</span> <span class="ty">AttachmentDTO</span>: <span class="ty">Codable</span> { type, url }</code></pre>
-  <p>Mappers (<code>ChatMapper</code>, <code>MessageMapper</code>) are the only types that know both DTO and Domain model. <code>toDomain(_ dto:) -&gt; Model?</code> returns Optional — invalid data is silently dropped, never crashes.</p>
+
+  <div class="callout"><strong>Mappers (<code>ChatMapper</code>, <code>MessageMapper</code>)</strong> are the only types that know both DTO and Domain model.</div>
 </section>
 
 <!-- ARCHITECTURE -->
@@ -450,15 +444,70 @@ WS   /chat/{chat_id}                          → event stream after REST sync</
 
   <h3>Layer Breakdown</h3>
   <div class="stack">
-    <div class="stack-row"><div class="stack-name">Presentation</div><div class="stack-desc"><code>ChatListViewController</code> → <code>ChatListViewModel</code> → <code>FetchChatsUseCase</code> · <code>MessageStreamService.subscribe()</code><br><code>ChatThreadViewController</code> → <code>ChatThreadViewModel</code> → <code>FetchMessagesUseCase</code> · <code>SendMessageUseCase</code> · <code>MarkReadUseCase</code> · <code>MessageStreamService</code> (same app-scoped instance) · <code>MessageSyncService</code></div></div>
-    <div class="stack-row"><div class="arrow">↓</div><div class="stack-name">UseCases</div><div class="stack-desc"><code>FetchChatsUseCase</code> — <code>execute(policy:param:) → [Chat]</code> → <code>ChatRepositoryProtocol</code><br><code>FetchMessagesUseCase</code> — <code>execute(policy:param:) → [Message]</code> → <code>MessageRepositoryProtocol</code><br><code>SendMessageUseCase</code> — <code>execute(param:)</code> → <code>MessageRepositoryProtocol</code><br><code>MarkReadUseCase</code> — <code>execute(param:)</code> → <code>MessageRepositoryProtocol</code></div></div>
-    <div class="stack-row"><div class="stack-name">Domain Services</div><div class="stack-desc"><code>MessageStreamService</code> (app-scoped) — connect/disconnect · <code>subscribe(chatId:) → AnyPublisher&lt;Message, Never&gt;</code> · calls <code>MessageStreamDataSourceProtocol</code> — never touches WebSocket library directly<br><code>MessageSyncService</code> (app-scoped) — <code>syncPending()</code> on foreground · calls <code>SendMessageUseCase</code> for retries</div></div>
-    <div class="stack-row"><div class="stack-name">Domain Models</div><div class="stack-desc"><code>Chat</code>, <code>Message</code>, <code>User</code>, <code>Attachment</code>, <code>ChatStatus</code>, <code>AttachmentType</code></div></div>
-    <div class="stack-row"><div class="stack-name">Domain Params</div><div class="stack-desc"><code>ChatListParam()</code> · <code>ChatParam(chatId:)</code> · <code>SendMessageParam(chatId:, message:)</code> · <code>MarkReadParam(chatId:, messageIds:)</code></div></div>
-    <div class="stack-row"><div class="arrow">↓</div><div class="stack-name">Repositories</div><div class="stack-desc"><code>MessageRepository: MessageRepositoryProtocol</code> — <code>MessageRemoteDataSource</code> (APIClient, three-tier REST) + <code>MessageLocalDataSource</code> (Realm, SSOT — upsert by <code>message.id</code>) + <code>MessageMapper</code><br><code>ChatRepository: ChatRepositoryProtocol</code> — <code>ChatRemoteDataSource</code> (APIClient, GET /chat/all with cursor) + <code>ChatLocalDataSource</code> (Realm live query drives <code>ChatListViewModel</code>) + <code>ChatMapper</code><br><code>MessageStreamDataSource: MessageStreamDataSourceProtocol</code> — wraps <code>WebSocketClient</code>; decodes raw frames → <code>MessageDTO</code><br><code>WebSocketClient</code> — wraps <code>URLSessionWebSocketTask</code> (or Starscream); <code>connect(to:)</code> / <code>send(_:)</code> / <code>receive() → AsyncStream&lt;Data&gt;</code> / <code>disconnect()</code><br><code>AttachmentFileDataSource</code> — binary files on disk; only URL stored in <code>MessageLocalDataSource</code></div></div>
-    <div class="stack-row"><div class="stack-name">Infrastructure</div><div class="stack-desc">None — no SDK in this scenario spans multiple layers; WebSocket is Data-only</div></div>
-    <div class="stack-row"><div class="stack-name">External</div><div class="stack-desc"><code>URLSessionWebSocketTask / Starscream</code> → <code>WebSocketClient</code> (Data) · <code>Realm</code> → <code>MessageLocalDataSource</code> · <code>ChatLocalDataSource</code> (Data) · <code>URLSession</code> → <code>APIClient</code> (Data)</div></div>
-    <div class="stack-row"><div class="stack-name">Application</div><div class="stack-desc"><code>AppCoordinator</code> + <code>ChatCoordinator</code> (navigation only) + DI via manual init injection</div></div>
+    <div class="stack-row">
+      <div class="stack-name">Presentation</div>
+      <div class="stack-desc">
+        <code>ChatListViewController</code> → <code>ChatListViewModel</code> → <code>FetchChatsUseCase</code> · <code>MessageStreamService.subscribe()</code><br>
+        <code>ChatThreadViewController</code> → <code>ChatThreadViewModel</code> → <code>FetchMessagesUseCase</code> · <code>SendMessageUseCase</code> · <code>MarkReadUseCase</code> · <code>MessageStreamService</code> (same app-scoped instance) · <code>MessageSyncService</code>
+      </div>
+    </div>
+    <div class="stack-row">
+      <div class="arrow">↓</div>
+      <div class="stack-name">Domain</div>
+      <div class="stack-desc">
+        <strong>UseCases (stateless):</strong><br>
+        <code>FetchChatsUseCase</code> — execute(policy:param:) → [Chat] — calls <code>ChatRepositoryProtocol</code><br>
+        <code>FetchMessagesUseCase</code> — execute(policy:param:) → [Message] — calls <code>MessageRepositoryProtocol</code><br>
+        <code>SendMessageUseCase</code> — execute(param:) — calls <code>MessageRepositoryProtocol</code><br>
+        <code>MarkReadUseCase</code> — execute(param:) — calls <code>MessageRepositoryProtocol</code><br><br>
+        <strong>Domain Services (stateful / app-scoped):</strong><br>
+        <code>MessageStreamService</code> — connect/disconnect · subscribe(chatId:) → AnyPublisher&lt;Message, Never&gt; · calls <code>MessageStreamDataSourceProtocol</code> — never touches WebSocket library directly<br>
+        <code>MessageSyncService</code> — syncPending() on foreground — flushes isSent=false messages · calls <code>SendMessageUseCase</code> for retries<br><br>
+        <strong>Models:</strong> Chat, Message, User, Attachment, ChatStatus, AttachmentType<br>
+        <strong>Params:</strong> ChatListParam(), ChatParam(chatId:), SendMessageParam(chatId:, message:), MarkReadParam(chatId:, messageIds:)
+      </div>
+    </div>
+    <div class="stack-row">
+      <div class="arrow">↓</div>
+      <div class="stack-name">Data</div>
+      <div class="stack-desc">
+        <code>MessageRepository : MessageRepositoryProtocol</code><br>
+        &nbsp;&nbsp;└─ <code>MessageRemoteDataSource</code> → APIClient (three-tier REST endpoints)<br>
+        &nbsp;&nbsp;└─ <code>MessageLocalDataSource</code> → Realm (SSOT — upsert by message.id)<br>
+        &nbsp;&nbsp;└─ <code>MessageMapper</code><br><br>
+        <code>ChatRepository : ChatRepositoryProtocol</code><br>
+        &nbsp;&nbsp;└─ <code>ChatRemoteDataSource</code> → APIClient (GET /chat/all with cursor)<br>
+        &nbsp;&nbsp;└─ <code>ChatLocalDataSource</code> → Realm (live query drives ChatListViewModel)<br>
+        &nbsp;&nbsp;└─ <code>ChatMapper</code><br><br>
+        <code>MessageStreamDataSource : MessageStreamDataSourceProtocol</code><br>
+        &nbsp;&nbsp;└─ <code>WebSocketClient</code> (connect / receive() → AsyncStream&lt;Data&gt; / disconnect)<br>
+        &nbsp;&nbsp;└─ decodes raw frames → MessageDTO; MessageStreamService calls via protocol, never the SDK directly<br><br>
+        <code>WebSocketClient</code> — wraps URLSessionWebSocketTask (or Starscream) · connect(to:) / send(_:) / receive() → AsyncStream&lt;Data&gt; / disconnect() · persistent-connection peer to APIClient — networking transport only, no Presentation footprint<br><br>
+        <code>AttachmentLocalFileDataSource</code> — binary files on disk; only URL stored in MessageLocalDataSource
+      </div>
+    </div>
+    <div class="stack-row">
+      <div class="stack-name">Infrastructure</div>
+      <div class="stack-desc">None — no SDK in this scenario spans multiple layers; WebSocket is Data-only</div>
+    </div>
+    <div class="stack-row">
+      <div class="stack-name">External</div>
+      <div class="stack-desc">
+        URLSessionWebSocketTask / Starscream<br>
+        Realm<br>
+        URLSession
+      </div>
+    </div>
+    <div class="stack-row">
+      <div class="stack-name">Application</div>
+      <div class="stack-desc">
+        <code>AppCoordinator</code> + <code>ChatCoordinator</code> (navigation only) + DI via manual init injection<br>
+        App-scoped singletons registered in AppCoordinator (or AppDelegate):<br>
+        &nbsp;&nbsp;– <code>MessageStreamService</code> — receives MessageStreamDataSource via init injection<br>
+        &nbsp;&nbsp;– <code>MessageSyncService</code> — receives Realm-backed DataSources via init injection<br>
+        Neither service is owned by any ViewController or feature coordinator.
+      </div>
+    </div>
   </div>
 
   <h3>Vocabulary Translation</h3>
@@ -474,232 +523,248 @@ WS   /chat/{chat_id}                          → event stream after REST sync</
       <tr><td><code>StateManager</code></td><td><code>ViewState&lt;T&gt;</code> enum + <code>@Published var state</code> on ViewModel</td><td>Presentation</td></tr>
       <tr><td><code>OfflineSyncManager</code></td><td><code>MessageSyncService</code> Domain Service</td><td>Domain</td></tr>
       <tr><td><code>Local DB (Realm)</code></td><td><code>MessageLocalDataSource</code> (Realm as backend)</td><td>Data</td></tr>
-      <tr><td><code>File Storage</code></td><td><code>AttachmentFileDataSource</code></td><td>Data</td></tr>
+      <tr><td><code>File Storage</code></td><td><code>AttachmentLocalFileDataSource</code></td><td>Data</td></tr>
     </table>
   </div>
-  <div class="callout"><strong>Note on naming:</strong> The interview used "Coordinator" for both navigation and data orchestration. In this architecture those are separate concerns: <code>ChatCoordinator</code> handles navigation (Application layer); <code>FetchMessagesUseCase</code> handles data access (Domain); <code>MessageStreamService</code> owns the WebSocket (Domain Service, app-scoped).</div>
+  <p>The interview used "Coordinator" for both navigation and data orchestration. In this architecture those are two separate concerns: <code>ChatCoordinator</code> handles navigation (Application layer); <code>FetchMessagesUseCase</code> handles data access (Domain); <code>MessageStreamService</code> owns the WebSocket (Domain Service, app-scoped).</p>
 
   <h3>Component Graph</h3>
-<pre><code><span class="ty">AppCoordinator</span>
-  └── <span class="ty">ChatCoordinator</span> <span class="cm">// navigation only</span>
-         ├── <span class="ty">ChatListViewController</span> + <span class="ty">ChatListViewModel</span>
-         │       <span class="nm">FetchChatsUseCase</span> → <span class="ty">ChatRepository</span> → <span class="ty">ChatRemoteDataSource</span> (<span class="ty">APIClient</span>)
-         │                                             → <span class="ty">ChatLocalDataSource</span> (Realm)
-         │       <span class="ty">MessageStreamService</span>.<span class="nm">subscribe</span>(chatId:) → <span class="ty">AnyPublisher</span>&lt;<span class="ty">Message</span>, <span class="ty">Never</span>&gt;
+<pre><code><span class="nm">AppCoordinator</span>
+  └── <span class="nm">ChatCoordinator</span> (navigation only)
+         ├── <span class="nm">ChatListViewController</span> + <span class="nm">ChatListViewModel</span>
+         │       <span class="nm">FetchChatsUseCase</span> → <span class="nm">ChatRepository</span> → <span class="nm">ChatRemoteDataSource</span> (<span class="nm">APIClient</span>)
+         │                                          → <span class="nm">ChatLocalDataSource</span> (Realm)
+         │       <span class="nm">MessageStreamService</span>.subscribe(chatId:) → <span class="ty">AnyPublisher</span>&lt;<span class="ty">Message</span>, <span class="ty">Never</span>&gt;
          │
-         └── <span class="ty">ChatThreadViewController</span> + <span class="ty">ChatThreadViewModel</span>
-                 <span class="nm">FetchMessagesUseCase</span> → <span class="ty">MessageRepository</span> → <span class="ty">MessageRemoteDataSource</span> (<span class="ty">APIClient</span>)
-                                                             → <span class="ty">MessageLocalDataSource</span> (Realm)
-                 <span class="ty">MessageStreamService</span> <span class="cm">// same app-scoped instance</span>
-                     └── <span class="ty">MessageStreamDataSource</span> → <span class="ty">WebSocketClient</span> (<span class="ty">URLSessionWebSocketTask</span>)
-                 <span class="ty">MessageSyncService</span>   <span class="cm">// app-scoped — flushes isSent=false on foreground</span>
+         └── <span class="nm">ChatThreadViewController</span> + <span class="nm">ChatThreadViewModel</span>
+                 <span class="nm">FetchMessagesUseCase</span> → <span class="nm">MessageRepository</span> → <span class="nm">MessageRemoteDataSource</span> (<span class="nm">APIClient</span>)
+                                                          → <span class="nm">MessageLocalDataSource</span> (Realm)
+                 <span class="nm">MessageStreamService</span> (same app-scoped instance)
+                     └── <span class="nm">MessageStreamDataSource</span> → <span class="nm">WebSocketClient</span> (<span class="ty">URLSessionWebSocketTask</span>)
+                 <span class="nm">MessageSyncService</span> (app-scoped — flushes isSent=false on foreground)
 
-<span class="ty">AttachmentFileDataSource</span> — stores attachment binaries, referenced by URL in Message model</code></pre>
+<span class="nm">AttachmentLocalFileDataSource</span> — stores attachment binaries, referenced by URL in Message model</code></pre>
 </section>
 
-<!-- DATA FLOW -->
+<!-- DATA FLOWS -->
 <section id="dataflow">
-  <h2>Data Flow</h2>
+  <h2>Data Flows</h2>
 
-  <h3 id="flow-thread-load">Load Chat Thread (offline-first)</h3>
+  <h3 id="flow-load-thread">1. Load Chat Thread (offline-first)</h3>
   <p>Pattern A — two awaits in the ViewModel. <code>async/await</code> returns once; a single <code>execute()</code> cannot update state twice.</p>
-<pre><code><span class="ty">ChatThreadViewController</span>.<span class="nm">viewDidLoad</span>()
-  → <span class="ty">ChatThreadViewModel</span>.<span class="nm">load</span>()
+<pre><code><span class="nm">ChatThreadViewController</span>.viewDidLoad()
+  → <span class="nm">ChatThreadViewModel</span>.load()
       state = .loading
 
       <span class="cm">// Phase 1 — cache (instant)</span>
-      <span class="kw">if let</span> cached = <span class="kw">try</span>? <span class="kw">await</span> <span class="nm">FetchMessagesUseCase</span>.<span class="nm">execute</span>(policy: .strict, param: <span class="ty">ChatParam</span>(chatId:))
-          → <span class="ty">MessageRepository</span> checks <span class="ty">MessageLocalDataSource</span> only — throws on miss
+      <span class="kw">if let</span> cached = <span class="kw">try</span>? <span class="kw">await</span> <span class="nm">FetchMessagesUseCase</span>.execute(policy: .strict, param: <span class="ty">ChatParam</span>(chatId:))
+          → <span class="nm">MessageRepository</span> checks <span class="nm">MessageLocalDataSource</span> only — throws on miss
           → ViewModel maps [<span class="ty">Message</span>] → UIModel
           → state = .success(cached)                    <span class="cm">// renders immediately from cache</span>
 
       <span class="cm">// Phase 2 — network (background)</span>
-      <span class="kw">let</span> fresh = <span class="kw">try await</span> <span class="nm">FetchMessagesUseCase</span>.<span class="nm">execute</span>(policy: .fresh, param: <span class="ty">ChatParam</span>(chatId:))
-          → <span class="ty">MessageRepository</span> fetches <span class="ty">MessageRemoteDataSource</span> → [<span class="ty">MessageDTO</span>] → <span class="ty">MessageMapper</span> → [<span class="ty">Message</span>]
-          → <span class="ty">MessageLocalDataSource</span>.<span class="nm">upsert</span>(dtos)          <span class="cm">// upsert by message.id</span>
+      <span class="kw">let</span> fresh = <span class="kw">try await</span> <span class="nm">FetchMessagesUseCase</span>.execute(policy: .fresh, param: <span class="ty">ChatParam</span>(chatId:))
+          → <span class="nm">MessageRepository</span> fetches <span class="nm">MessageRemoteDataSource</span> → [<span class="ty">MessageDTO</span>] → <span class="ty">MessageMapper</span> → [<span class="ty">Message</span>]
+          → <span class="nm">MessageLocalDataSource</span>.upsert(dtos)          <span class="cm">// upsert by message.id</span>
           → ViewModel maps merged [<span class="ty">Message</span>] → UIModel
           → state = .success(fresh)                      <span class="cm">// view refreshes with latest</span>
 
-      defer: isLoading = <span class="kw">false</span>
+      <span class="kw">defer</span>: isLoading = <span class="kw">false</span>
 
-      → <span class="ty">MessageStreamService</span>.<span class="nm">subscribe</span>(chatId: chatId) → <span class="ty">AnyPublisher</span>&lt;<span class="ty">Message</span>, <span class="ty">Never</span>&gt;
-          → each incoming <span class="ty">Message</span>: <span class="ty">MessageLocalDataSource</span>.<span class="nm">upsert</span>(dto) → state updated</code></pre>
+      → <span class="nm">MessageStreamService</span>.subscribe(chatId: chatId) → <span class="ty">AnyPublisher</span>&lt;<span class="ty">Message</span>, <span class="ty">Never</span>&gt;
+          → each incoming Message: <span class="nm">MessageLocalDataSource</span>.upsert(dto) → state updated</code></pre>
 
-  <h3 id="flow-send">Send Message (with offline queue)</h3>
+  <hr class="divider">
+
+  <h3 id="flow-send">2. Send Message (with offline queue)</h3>
 <pre><code>User taps send
-  → <span class="ty">ChatThreadViewModel</span>.<span class="nm">send</span>(text:)
-      → <span class="ty">MessageLocalDataSource</span>.<span class="nm">upsert</span>(<span class="ty">MessageDTO</span>(id: <span class="ty">UUID</span>(), text:, isSent: <span class="kw">false</span>))
-      → state updated optimistically  <span class="cm">// message appears as "pending"</span>
-      → <span class="nm">SendMessageUseCase</span>.<span class="nm">execute</span>(param: <span class="ty">SendMessageParam</span>(chatId:, message:))
-          → <span class="ty">MessageRepository</span>.<span class="nm">send</span>()
-              → <span class="ty">MessageRemoteDataSource</span>.<span class="nm">post</span>(/chat/{chat_id}/message)
-              → on success: <span class="ty">MessageLocalDataSource</span>.<span class="nm">update</span>(id:, isSent: <span class="kw">true</span>)
-              → on failure: isSent remains <span class="kw">false</span>  <span class="cm">// MessageSyncService will retry</span></code></pre>
+  → <span class="nm">ChatThreadViewModel</span>.send(text:)
+      → <span class="nm">MessageRepository</span>.stageOptimistic(message: <span class="ty">Message</span>(id: UUID(), text: text, isSent: <span class="kw">false</span>))
+          → <span class="nm">MessageLocalDataSource</span>.upsert(...)            <span class="cm">// ViewModel calls Repository (via protocol), not DataSource directly</span>
+      → state updated optimistically (message appears as "pending")
+      → <span class="nm">SendMessageUseCase</span>.execute(param: <span class="ty">SendMessageParam</span>(chatId:, message:))
+          → <span class="nm">MessageRepository</span>.send()
+              → <span class="nm">MessageRemoteDataSource</span>.post(/chat/{chat_id}/message)
+              → on success: <span class="nm">MessageLocalDataSource</span>.update(id:, isSent: <span class="kw">true</span>)
+              → on failure: isSent remains <span class="kw">false</span> → <span class="nm">MessageSyncService</span> will retry</code></pre>
 
-  <h3 id="flow-bgsync">Background Sync (MessageSyncService)</h3>
+  <hr class="divider">
+
+  <h3 id="flow-sync">3. Background Sync (MessageSyncService)</h3>
 <pre><code>sceneDidBecomeActive / applicationDidBecomeActive
-  → <span class="ty">MessageSyncService</span>.<span class="nm">syncPending</span>()
-      → <span class="ty">MessageLocalDataSource</span>.<span class="nm">fetch</span>(where: isSent == <span class="kw">false</span>) → [<span class="ty">MessageDTO</span>]
-      → <span class="kw">for each</span>: <span class="nm">SendMessageUseCase</span>.<span class="nm">execute</span>(param:)
-          → on success: <span class="ty">MessageLocalDataSource</span>.<span class="nm">update</span>(id:, isSent: <span class="kw">true</span>)
+  → <span class="nm">MessageSyncService</span>.syncPending()
+      → <span class="nm">MessageLocalDataSource</span>.fetch(<span class="kw">where</span>: isSent == <span class="kw">false</span>) → [<span class="ty">MessageDTO</span>]
+      → <span class="kw">for</span> each: <span class="nm">SendMessageUseCase</span>.execute(param:)
+          → on success: <span class="nm">MessageLocalDataSource</span>.update(id:, isSent: <span class="kw">true</span>)
           → on failure: leave for next foreground event</code></pre>
 
-  <h3 id="flow-list-load">Load Chat List (offline-first)</h3>
+  <hr class="divider">
+
+  <h3 id="flow-load-list">4. Load Chat List (offline-first)</h3>
   <p>Pattern A — two awaits in the ViewModel.</p>
-<pre><code><span class="ty">ChatListViewController</span>.<span class="nm">viewDidLoad</span>()
-  → <span class="ty">ChatListViewModel</span>.<span class="nm">load</span>()
+<pre><code><span class="nm">ChatListViewController</span>.viewDidLoad()
+  → <span class="nm">ChatListViewModel</span>.load()
       state = .loading
 
       <span class="cm">// Phase 1 — cache (instant)</span>
-      <span class="kw">if let</span> cached = <span class="kw">try</span>? <span class="kw">await</span> <span class="nm">FetchChatsUseCase</span>.<span class="nm">execute</span>(policy: .strict, param: <span class="ty">ChatListParam</span>())
-          → <span class="ty">ChatRepository</span> checks <span class="ty">ChatLocalDataSource</span> only — throws on miss
+      <span class="kw">if let</span> cached = <span class="kw">try</span>? <span class="kw">await</span> <span class="nm">FetchChatsUseCase</span>.execute(policy: .strict, param: <span class="ty">ChatListParam</span>())
+          → <span class="nm">ChatRepository</span> checks <span class="nm">ChatLocalDataSource</span> only — throws on miss
           → ViewModel maps [<span class="ty">Chat</span>] → UIModel
           → state = .success(cached)                  <span class="cm">// renders immediately from cache</span>
 
       <span class="cm">// Phase 2 — network (background)</span>
-      <span class="kw">let</span> response = <span class="kw">try await</span> <span class="nm">FetchChatsUseCase</span>.<span class="nm">execute</span>(policy: .fresh, param: <span class="ty">ChatListParam</span>())
-          → <span class="ty">ChatRemoteDataSource</span>.<span class="nm">fetch</span>()              <span class="cm">// GET /chat/all</span>
+      <span class="kw">let</span> response = <span class="kw">try await</span> <span class="nm">FetchChatsUseCase</span>.execute(policy: .fresh, param: <span class="ty">ChatListParam</span>())
+          → <span class="nm">ChatRemoteDataSource</span>.fetch()              <span class="cm">// GET /chat/all</span>
           → <span class="ty">PagedChatsResponse</span> { chats: [<span class="ty">ChatDTO</span>], nextCursor: <span class="ty">String</span>? }
-          → <span class="ty">ChatLocalDataSource</span>.<span class="nm">upsert</span>(dtos)          <span class="cm">// upsert by chatId</span>
-          → nextCursor stored in <span class="ty">ChatListViewModel</span>
+          → <span class="nm">ChatLocalDataSource</span>.upsert(dtos)          <span class="cm">// upsert by chatId</span>
+          → nextCursor stored in <span class="nm">ChatListViewModel</span>
           → state = .success(merged chats, sorted by lastActivity)
 
-      defer: isLoading = <span class="kw">false</span></code></pre>
+      <span class="kw">defer</span>: isLoading = <span class="kw">false</span></code></pre>
 
-  <h3 id="flow-list-page">Chat List Scroll Pagination (cursor-based)</h3>
+  <hr class="divider">
+
+  <h3 id="flow-pagination">5. Chat List Scroll Pagination (cursor-based)</h3>
 <pre><code>User scrolls to bottom of chat list
-  → <span class="ty">ChatListViewModel</span>.<span class="nm">loadNextPage</span>()
+  → <span class="nm">ChatListViewModel</span>.loadNextPage()
       <span class="kw">guard let</span> cursor = nextCursor <span class="kw">else</span> { <span class="kw">return</span> }   <span class="cm">// nil = no more pages</span>
-      → <span class="nm">FetchChatsUseCase</span>.<span class="nm">execute</span>(policy: .fresh, param: <span class="ty">ChatListParam</span>(cursor: cursor))
-          → <span class="ty">ChatRemoteDataSource</span>.<span class="nm">fetch</span>()               <span class="cm">// GET /chat/all?cursor=&lt;cursor&gt;</span>
+      → <span class="nm">FetchChatsUseCase</span>.execute(policy: .fresh, param: <span class="ty">ChatListParam</span>(cursor: cursor))
+          → <span class="nm">ChatRemoteDataSource</span>.fetch()               <span class="cm">// GET /chat/all?cursor=&lt;cursor&gt;</span>
           → <span class="ty">PagedChatsResponse</span> { chats: [<span class="ty">ChatDTO</span>], nextCursor: <span class="ty">String</span>? }
-          → <span class="ty">ChatLocalDataSource</span>.<span class="nm">upsert</span>(dtos)
+          → <span class="nm">ChatLocalDataSource</span>.upsert(dtos)
           → nextCursor updated (nil = end of list reached)
           → state appended with next page of chats</code></pre>
 
-  <h3 id="flow-ws-receive">Receive Message via WebSocket (foreground, cross-screen)</h3>
+  <hr class="divider">
+
+  <h3 id="flow-receive-ws">6. Receive Message via WebSocket (foreground, cross-screen)</h3>
 <pre><code>WebSocket receives <span class="ty">WSEvent</span> { type: .messageReceived, payload: <span class="ty">MessageDTO</span> }
-  → <span class="ty">MessageStreamDataSource</span> decodes raw frame → <span class="ty">MessageDTO</span>
-  → <span class="ty">MessageStreamService</span> receives <span class="ty">MessageDTO</span>:
-      1. calls <span class="ty">MessageRepository</span>.<span class="nm">receiveMessage</span>(dto:)   <span class="cm">// upsert into local DB before publishing</span>
-             → <span class="ty">MessageLocalDataSource</span>.<span class="nm">upsert</span>(dto)       <span class="cm">// upsert by message.id</span>
+  → <span class="nm">MessageStreamDataSource</span> decodes raw frame → <span class="ty">MessageDTO</span>
+  → <span class="nm">MessageStreamService</span> receives <span class="ty">MessageDTO</span>:
+      1. calls <span class="nm">MessageRepository</span>.receiveMessage(dto:)    <span class="cm">// upsert into local DB before publishing</span>
+             → <span class="nm">MessageLocalDataSource</span>.upsert(dto)        <span class="cm">// upsert by message.id</span>
                → Realm live query fires
-               → <span class="ty">ChatThreadViewModel</span>.state updated         <span class="cm">// if this thread is open</span>
-             → <span class="ty">ChatLocalDataSource</span>.<span class="nm">upsert</span>(<span class="ty">ChatDTO</span>(
+               → <span class="nm">ChatThreadViewModel</span>.state updated (if this thread is open)
+             → <span class="nm">ChatLocalDataSource</span>.upsert(<span class="ty">ChatDTO</span>(
                    chatId: dto.chatId,
                    preview: dto.text,
                    lastActivity: dto.sentTime))
                → Realm live query fires
-               → <span class="ty">ChatListViewModel</span>.state re-sorted         <span class="cm">// chat bubbles to top, preview updated</span>
+               → <span class="nm">ChatListViewModel</span>.state re-sorted (chat bubbles to top, preview updated)
       2. publishes <span class="ty">Message</span> (Domain model) via <span class="ty">AnyPublisher</span>&lt;<span class="ty">Message</span>, <span class="ty">Never</span>&gt;
          → ViewModel subscribers receive domain model; no second upsert needed
 
-<span class="cm">Key: MessageStreamService writes to local DB first (via MessageRepository), then publishes.
-     ViewModels observe their own Realm DataSource and the publisher independently —
-     neither knows about the other.</span></code></pre>
-  <div class="callout"><strong>Why ViewModels are decoupled:</strong> neither ViewModel knows about the other. Both observe their own Realm DataSource. <code>MessageStreamService</code> writes to local DB first (via <code>MessageRepository</code>), then publishes — DB triggers the Realm live queries; the publisher carries the Domain model to any additional subscribers.</div>
+<span class="cm">Key: MessageStreamService writes to local DB first (via MessageRepository), then publishes.</span>
+<span class="cm">     ViewModels observe their own Realm DataSource and the publisher independently —</span>
+<span class="cm">     neither knows about the other.</span></code></pre>
 
-  <h3 id="flow-foreground">App Foreground — Gap Recovery</h3>
+  <hr class="divider">
+
+  <h3 id="flow-foreground">7. App Foreground — Gap Recovery</h3>
 <pre><code>sceneDidBecomeActive / applicationDidBecomeActive
-  → <span class="ty">AppCoordinator</span>.<span class="nm">handleForeground</span>():
+  → <span class="nm">AppCoordinator</span>.handleForeground():
 
-      1. <span class="ty">MessageStreamService</span>.<span class="nm">connect</span>()
+      1. <span class="nm">MessageStreamService</span>.connect()
          → WebSocket reopened
 
-      2. <span class="kw">for each</span> open / recently-visited chatId:
-         <span class="nm">FetchMessagesUseCase</span>.<span class="nm">execute</span>(policy: .fresh,
+      2. <span class="kw">withThrowingTaskGroup</span>: one <span class="nm">FetchMessagesUseCase</span> call per chatId, all concurrent
+         <span class="nm">FetchMessagesUseCase</span>.execute(policy: .fresh,
              param: <span class="ty">MessageParam</span>(chatId:, after: lastKnownTimestamp))
          → <span class="gr">GET</span> /chat/{id}/all/after?timestamp=lastKnown
-         → <span class="ty">MessageLocalDataSource</span>.<span class="nm">upsert</span>(dtos)        <span class="cm">// fill gap from background period</span>
+         → <span class="nm">MessageLocalDataSource</span>.upsert(dtos)        <span class="cm">// fill gap from background period</span>
          → state updated with missed messages
 
-      3. <span class="ty">MessageSyncService</span>.<span class="nm">syncPending</span>()
-         → fetch isSent == <span class="kw">false</span> → retry sends</code></pre>
-  <div class="rule"><strong>Order matters:</strong> fill the REST gap before relying on WebSocket. Messages that arrived during the background period are fetched by REST. WebSocket handles only new messages from reconnect forward.</div>
+      3. <span class="nm">MessageSyncService</span>.syncPending()
+         → fetch isSent == <span class="kw">false</span> → retry sends
 
-  <h3 id="flow-thread-page">Chat Thread Scroll Pagination (scroll up for older messages)</h3>
+<span class="cm">Order matters: fill the REST gap before relying on WebSocket.</span>
+<span class="cm">Messages that arrived during the background period are fetched by REST.</span>
+<span class="cm">WebSocket handles only new messages from reconnect forward.</span></code></pre>
+
+  <hr class="divider">
+
+  <h3 id="flow-scroll-up">8. Chat Thread Scroll Pagination (scroll up for older messages)</h3>
 <pre><code>User scrolls to top of message thread
-  → <span class="ty">ChatThreadViewModel</span>.<span class="nm">loadOlderMessages</span>()
+  → <span class="nm">ChatThreadViewModel</span>.loadOlderMessages()
       <span class="kw">guard let</span> oldestTimestamp = messages.first?.sentTime <span class="kw">else</span> { <span class="kw">return</span> }
-      → <span class="nm">FetchMessagesUseCase</span>.<span class="nm">execute</span>(policy: .fresh,
+      → <span class="nm">FetchMessagesUseCase</span>.execute(policy: .fresh,
              param: <span class="ty">MessageParam</span>(chatId:, before: oldestTimestamp))
-          → <span class="ty">MessageRemoteDataSource</span>.<span class="nm">fetch</span>()            <span class="cm">// GET /chat/{id}/all/before?timestamp=</span>
-          → [<span class="ty">MessageDTO</span>] → <span class="ty">MessageMapper</span>.<span class="nm">toDomain</span>() → [<span class="ty">Message</span>]
-          → <span class="ty">MessageLocalDataSource</span>.<span class="nm">upsert</span>(dtos)        <span class="cm">// persist for future offline access</span>
-          → state prepended with older messages</code></pre>
-  <div class="callout"><strong>Why timestamp is stable here:</strong> message threads are append-only at the tail — new messages arrive at the bottom, never interspersed with older ones. The inconsistency risk only applies to live-sorting lists (chat list, social feed).</div>
+          → <span class="nm">MessageRemoteDataSource</span>.fetch()            <span class="cm">// GET /chat/{id}/all/before?timestamp=</span>
+          → [<span class="ty">MessageDTO</span>] → <span class="ty">MessageMapper</span>.toDomain() → [<span class="ty">Message</span>]
+          → <span class="nm">MessageLocalDataSource</span>.upsert(dtos)        <span class="cm">// persist for future offline access</span>
+          → state prepended with older messages
 
-  <h3 id="flow-mark-read">Mark as Read</h3>
-<pre><code>User opens <span class="ty">ChatThread</span> (or scrolls to bottom, viewing latest messages)
-  → <span class="ty">ChatThreadViewModel</span>.<span class="nm">markAsRead</span>(visibleMessageIds: [...])
-      → <span class="ty">MessageLocalDataSource</span>.<span class="nm">update</span>(ids:, readTime: <span class="ty">Date</span>())   <span class="cm">// optimistic update</span>
+<span class="cm">Note: timestamp is stable here — message threads are append-only at the tail.</span>
+<span class="cm">      New messages arrive at the bottom; older messages never reorder.</span></code></pre>
+
+  <hr class="divider">
+
+  <h3 id="flow-mark-read">9. Mark as Read</h3>
+<pre><code>User opens ChatThread (or scrolls to bottom, viewing latest messages)
+  → <span class="nm">ChatThreadViewModel</span>.markAsRead(visibleMessageIds: [...])
+      → <span class="nm">MessageLocalDataSource</span>.update(ids:, readTime: <span class="ty">Date</span>())   <span class="cm">// optimistic update</span>
       → state updated immediately (read tick appears)
-      → <span class="nm">MarkReadUseCase</span>.<span class="nm">execute</span>(param: <span class="ty">MarkReadParam</span>(chatId:, messageIds:))
-          → <span class="ty">MessageRemoteDataSource</span>.<span class="nm">post</span>(<span class="gr">PATCH</span> /chat/{chat_id}/read)
+      → <span class="nm">MarkReadUseCase</span>.execute(param: <span class="ty">MarkReadParam</span>(chatId:, messageIds:))
+          → <span class="nm">MessageRemoteDataSource</span>.post(<span class="gr">PATCH</span> /chat/{chat_id}/read)
           → on success: server confirmed — local state already correct
           → on failure: readTime remains set locally; reconcile on next delta sync
 
-      → <span class="ty">ChatLocalDataSource</span>.<span class="nm">update</span>(chatId:, status: .read)
+      → <span class="nm">ChatLocalDataSource</span>.update(chatId:, status: .read)
          → Realm live query fires
-         → <span class="ty">ChatListViewModel</span>.state updated             <span class="cm">// unread indicator clears on chat list</span></code></pre>
-  <div class="rule"><strong>Optimistic read marking:</strong> update the local DB immediately so the UI feels instant. The server PATCH confirms later. On failure, leave <code>readTime</code> set — the user has seen the message; the server will reconcile via delta sync.</div>
+         → <span class="nm">ChatListViewModel</span>.state updated             <span class="cm">// unread indicator clears on chat list</span></code></pre>
 </section>
 
 <!-- DEEP DIVES -->
 <section id="deepdive">
   <h2>Deep Dives</h2>
 
-  <!-- 1. WEBSOCKET -->
-  <h3 id="websocket">1. WebSocket Lifecycle</h3>
-  <p><code>MessageStreamService</code> is a Domain Service — stateful, app-scoped, long-lived:</p>
+  <h3 id="ws-lifecycle">1. WebSocket Lifecycle</h3>
+  <p><code>MessageStreamService</code> is a Domain Service (app-scoped singleton):</p>
 <pre><code><span class="kw">class</span> <span class="ty">MessageStreamService</span> {
     <span class="kw">private let</span> streamDataSource: <span class="ty">MessageStreamDataSourceProtocol</span>   <span class="cm">// Data — injected via DI</span>
+    <span class="kw">private let</span> messageRepository: <span class="ty">MessageRepositoryProtocol</span>        <span class="cm">// Domain protocol — not the concrete MessageRepository</span>
 
     <span class="kw">func</span> <span class="nm">connect</span>()
-    <span class="kw">func</span> <span class="nm">subscribe</span>(to chatId: <span class="ty">String</span>) -> <span class="ty">AnyPublisher</span>&lt;<span class="ty">Message</span>, <span class="ty">Never</span>&gt;
+    <span class="kw">func</span> <span class="nm">subscribe</span>(to chatId: <span class="ty">String</span>) -&gt; <span class="ty">AnyPublisher</span>&lt;<span class="ty">Message</span>, <span class="ty">Never</span>&gt;
     <span class="kw">func</span> <span class="nm">disconnect</span>()
 }</code></pre>
 
-  <div class="stack">
-    <div class="stack-row"><div class="stack-name">App foreground</div><div class="stack-desc"><code>AppCoordinator</code> calls <code>messageStreamService.connect()</code></div></div>
-    <div class="stack-row"><div class="stack-name">View appears</div><div class="stack-desc">ViewModel calls <code>subscribe(to: chatId)</code> — stores <code>AnyCancellable</code>, cancels on <code>viewWillDisappear</code></div></div>
-    <div class="stack-row"><div class="stack-name">App backgrounds</div><div class="stack-desc"><code>messageStreamService.disconnect()</code> — socket closed to save battery</div></div>
-    <div class="stack-row"><div class="stack-name">App foregrounds</div><div class="stack-desc"><code>connect()</code>, then <code>FetchMessagesUseCase</code> with delta endpoint to catch messages missed during gap</div></div>
-  </div>
+  <ol>
+    <li>App foreground → <code>AppCoordinator</code> calls <code>messageStreamService.connect()</code></li>
+    <li>View appears → ViewModel calls <code>messageStreamService.subscribe(to: chatId)</code>, cancels on <code>viewWillDisappear</code></li>
+    <li>App backgrounds → <code>messageStreamService.disconnect()</code> (socket closed to save battery)</li>
+    <li>App foregrounds → <code>connect()</code>, then <code>FetchMessagesUseCase</code> with delta endpoint to catch messages missed during the background gap</li>
+  </ol>
 
-  <p>The ViewModel subscribes to both <code>FetchMessagesUseCase</code> and <code>MessageStreamService</code> — both feed the same <code>@Published var state: ViewState&lt;[Message]&gt;</code>.</p>
-
-  <div class="rule"><strong>Always delta-sync before re-opening WebSocket on foreground.</strong> Messages that arrived while the app was backgrounded won't come through the socket — they must be fetched via <code>GET /chat/{id}/all/after?timestamp=&lt;lastKnown&gt;</code> first.</div>
-  <div class="warn"><strong>Common gotcha:</strong> if <code>MessageStreamService</code> is owned by a ViewModel, it deallocates when the screen pops — the WebSocket closes and the app misses incoming messages from other threads. Register it at app startup, not inside a ViewController.</div>
+  <div class="callout"><strong>The ViewModel subscribes to both <code>FetchMessagesUseCase</code> and <code>MessageStreamService</code></strong> — both feed the same <code>@Published var state: ViewState&lt;[Message]&gt;</code>.</div>
 
   <hr class="divider">
 
-  <!-- 2. THREE-TIER REST -->
-  <h3 id="threetier">2. Three-Tier REST vs FetchPolicy</h3>
+  <h3 id="three-tier">2. Three-Tier REST vs FetchPolicy</h3>
   <p><code>FetchPolicy</code> covers read intent (.fresh / .cached / .strict) but doesn't model delta sync. Three-tier maps onto FetchPolicy as:</p>
   <div class="table-wrap">
     <table>
-      <tr><th>Tier</th><th>Endpoint</th><th>FetchPolicy analog</th><th>When used</th></tr>
-      <tr><td>Initial load</td><td><code>GET /chat/{id}/all</code></td><td><code>.cached</code> → show local, then <code>.fresh</code> in background</td><td>Screen opens</td></tr>
-      <tr><td>Cursor pagination</td><td><code>GET .../before?timestamp=</code></td><td><code>.fresh</code> — always hits network for older pages</td><td>User scrolls up</td></tr>
-      <tr><td>Delta sync</td><td><code>GET .../delta/after?sequenceId=</code></td><td>No analog — payload is change-proportional, not list-proportional</td><td>Foreground, background sync</td></tr>
+      <tr><th>Tier</th><th>Endpoint</th><th>FetchPolicy analog</th></tr>
+      <tr><td>Initial load</td><td><code>GET /chat/{id}/all</code></td><td><code>.strict</code> (phase 1, cache-only, throws on miss) + <code>.fresh</code> (phase 2, always network)</td></tr>
+      <tr><td>Cursor pagination</td><td><code>GET .../before?timestamp=</code></td><td><code>.fresh</code> — always hits network for older pages</td></tr>
+      <tr><td>Delta sync</td><td><code>GET .../delta/after?sequenceId=</code></td><td>No analog — payload is change-proportional, not list-proportional</td></tr>
     </table>
   </div>
-  <div class="callout"><strong>Why delta sync is battery-efficient:</strong> instead of re-fetching 50 messages, fetch only the 3 that arrived while the app was in the background. Payload size is proportional to change, not list size.</div>
+  <div class="callout"><strong>Delta sync is the battery-efficiency win:</strong> instead of re-fetching 50 messages, fetch only the 3 that arrived while the app was in the background.</div>
 
   <hr class="divider">
 
-  <!-- 3. PAGINATION -->
-  <h3 id="pagination">3. Pagination Inconsistency (Interviewer-Flagged Weakness)</h3>
-  <p>Timestamp-based pagination is fragile when new items arrive mid-scroll:</p>
+  <h3 id="pagination-weakness">3. Pagination Inconsistency (Interviewer-Flagged Weakness)</h3>
+  <p>Timestamp-based pagination is fragile when new messages arrive mid-scroll:</p>
 <pre><code>Chat list, Page 1: [Chat_A (t=100), Chat_B (t=90), Chat_C (t=80)]
                              ↑
               New message arrives in Chat_D → Chat_D.last_activity = t=95
 
 Page 2 request: after?timestamp=80
-Server returns:  [Chat_E (t=70), ...]   ← Chat_D (t=95) was missed</code></pre>
+Server returns:  [Chat_E (t=70), ...]  ← Chat_D (t=95) was missed</code></pre>
 
-  <div class="callout"><strong>Fix (applied in API design above): server-issued opaque cursor.</strong> The server anchors the page boundary at query time — new inserts don't shift the anchor. The client stores the cursor and echoes it; never parses it.</div>
+  <div class="warn"><strong>Fix:</strong> server-issued opaque cursor instead of client-supplied timestamp. The server anchors the page boundary at query time — new inserts don't shift the anchor. The client stores the cursor and echoes it; never parses it.</div>
+
 <pre><code><span class="kw">struct</span> <span class="ty">PagedChatsResponse</span>: <span class="ty">Decodable</span> {
     <span class="kw">let</span> chats: [<span class="ty">ChatDTO</span>]
     <span class="kw">let</span> nextCursor: <span class="ty">String</span>?   <span class="cm">// nil = no more pages</span>
@@ -711,106 +776,113 @@ Server returns:  [Chat_E (t=70), ...]   ← Chat_D (t=95) was missed</code></pre
     <span class="kw">private var</span> nextCursor: <span class="ty">String</span>? = <span class="kw">nil</span>
 
     <span class="kw">func</span> <span class="nm">loadNextPage</span>() {
-        <span class="kw">guard let</span> cursor = nextCursor <span class="kw">else</span> { <span class="kw">return</span> }   <span class="cm">// nil = already at the end</span>
+        <span class="kw">guard let</span> cursor = nextCursor <span class="kw">else</span> { <span class="kw">return</span> }
         <span class="cm">// FetchChatsUseCase.execute(policy: .fresh, param: ChatListParam(cursor: cursor))</span>
     }
 }</code></pre>
-  <div class="rule"><strong>Why thread scroll-up keeps <code>before?timestamp=</code>:</strong> Message threads are append-only at the tail — new messages arrive at the bottom, not interspersed. Scrolling up visits positions that never reorder, so timestamp is stable here. The inconsistency risk only applies to live-sorting lists (chat list, social feed).</div>
-  <div class="table-wrap">
-    <table>
-      <tr><th></th><th>Timestamp cursor</th><th>Opaque server cursor</th></tr>
-      <tr><td>Stable across inserts</td><td>❌</td><td>✅</td></tr>
-      <tr><td>Client complexity</td><td>Low (client builds it)</td><td>Low (client echoes it)</td></tr>
-      <tr><td>Server complexity</td><td>Low</td><td>Higher (must maintain cursor state)</td></tr>
-      <tr><td>Jump to arbitrary page</td><td>✅</td><td>❌ (opaque, sequential only)</td></tr>
-    </table>
-  </div>
-  <div class="rule"><strong>Rule:</strong> opaque server cursor when data order changes live (chat list, social feed); timestamp cursor only for append-only data (message thread scroll-up).</div>
+
+  <div class="callout"><strong>Why thread scroll-up keeps <code>before?timestamp=</code>:</strong> message threads are append-only at the tail — new messages arrive at the bottom, not interspersed with older ones. Scrolling up visits positions that never reorder, so timestamp is stable here. The inconsistency risk only applies to live-sorting lists (chat list, social feed).</div>
 
   <hr class="divider">
 
-  <!-- 4. VIEWSTATE -->
   <h3 id="viewstate">4. ViewState Machine</h3>
-  <p>Not a separate component — embedded in ViewModel as a generic enum:</p>
-<pre><code><span class="kw">enum</span> <span class="ty">ViewState</span>&lt;T&gt; {
-    <span class="kw">case</span> <span class="nm">loading</span>
-    <span class="kw">case</span> <span class="nm">success</span>(T)
-    <span class="kw">case</span> <span class="nm">error</span>(<span class="ty">Error</span>)
+  <p>Not a separate component — embedded in ViewModel:</p>
+<pre><code><span class="kw">enum</span> <span class="ty">ViewState</span>&lt;<span class="ty">T</span>&gt; {
+    <span class="kw">case</span> loading
+    <span class="kw">case</span> success(<span class="ty">T</span>)
+    <span class="kw">case</span> error(<span class="ty">Error</span>)
 }
 
-<span class="cm">// ViewModel</span>
 <span class="kw">@MainActor</span>
 <span class="kw">class</span> <span class="ty">ChatThreadViewModel</span>: <span class="ty">ObservableObject</span> {
     <span class="kw">@Published var</span> state: <span class="ty">ViewState</span>&lt;[<span class="ty">Message</span>]&gt; = .loading
 
     <span class="kw">func</span> <span class="nm">load</span>() {
-        state = .loading            <span class="cm">// before UseCase call</span>
-        <span class="cm">// UseCase call...</span>
-        state = .success(messages)  <span class="cm">// on data received</span>
+        state = .loading                           <span class="cm">// before UseCase call</span>
+        <span class="cm">// ... UseCase call ...</span>
+        state = .success(messages)                 <span class="cm">// on data received</span>
         <span class="cm">// on error:</span>
         state = .error(error)
     }
 }</code></pre>
 
-  <div class="rule"><strong>Transition sequence:</strong> set <code>.loading</code> before calling UseCase → set <code>.success(data)</code> or <code>.error</code> after. All views enforce this same lifecycle — no ad-hoc <code>isLoading: Bool</code> scattered per-screen.</div>
-  <div class="callout"><strong>Why generic over booleans?</strong> <code>ViewState&lt;T&gt;</code> makes illegal states unrepresentable. You can't have <code>isLoading = true</code> and <code>data != nil</code> simultaneously — the enum only allows one state at a time. The compiler enforces the state machine at every switch statement.</div>
+  <div class="rule"><strong>Transition sequence:</strong> set <code>.loading</code> before calling UseCase → set <code>.success(data)</code> or <code>.error</code> after. All views in the app enforce this same lifecycle — no ad-hoc <code>isLoading: Bool</code> scattered per-screen.</div>
 </section>
 
 <!-- MVP EXCLUSIONS -->
-<section id="exclusions">
+<section id="extensions">
   <h2>MVP Exclusions — Extension Notes</h2>
-  <p>Features scoped out of MVP. Each entry covers only the delta — what changes in the data model, what new component is needed, what the tricky part is.</p>
+  <p>Features scoped out of MVP, with the minimal delta needed to add each.</p>
 
   <h3>Push Notifications</h3>
-  <div class="stack">
-    <div class="stack-row"><div class="stack-name">New component</div><div class="stack-desc"><code>NotificationService</code> (app-scoped Domain Service) — registers APNS device token at login, stores token server-side</div></div>
-    <div class="stack-row"><div class="stack-name">On tap</div><div class="stack-desc"><code>AppCoordinator</code> receives <code>chatId</code> from notification payload → pushes <code>ChatThreadViewController</code> directly, bypassing the chat list</div></div>
-    <div class="stack-row"><div class="stack-name">Gap fill</div><div class="stack-desc">Tapping a PN may cold-launch the app — <code>MessageSyncService.syncPending()</code> + delta fetch must run before the thread renders</div></div>
-    <div class="stack-row"><div class="stack-name">Scoping rule</div><div class="stack-desc">Same as <code>MessageStreamService</code> — register at app startup, not inside a ViewController. If owned by a ViewModel it deallocates on screen pop and notifications go silent.</div></div>
-  </div>
+  <ul>
+    <li><strong>New component:</strong> <code>NotificationService</code> (app-scoped Domain Service) — registers APNS device token at login, stores token server-side</li>
+    <li><strong>On tap:</strong> Push notification tap → <code>NotificationCenter.post(.handleDeepLink, object: chatId)</code> → <code>AppCoordinator.handle(link:)</code> → selects tab, delegates to <code>ChatCoordinator</code> → creates <code>ChatThreadViewModel + ChatThreadViewController</code> and pushes</li>
+    <li><strong>Gap fill on cold launch:</strong> tapping a PN may cold-launch the app — <code>MessageSyncService.syncPending()</code> + delta fetch must run before the thread renders</li>
+    <li><strong>Scoping rule:</strong> same as <code>MessageStreamService</code> — register at app startup, not inside a ViewController; if owned by a ViewModel it deallocates on screen pop and notifications go silent</li>
+  </ul>
 
   <h3>Typing Indicators</h3>
-  <div class="stack">
-    <div class="stack-row"><div class="stack-name">No DB change</div><div class="stack-desc">Ephemeral — never persisted to <code>MessageLocalDataSource</code> or <code>ChatLocalDataSource</code></div></div>
-    <div class="stack-row"><div class="stack-name">Already reserved</div><div class="stack-desc"><code>WSEventType.typingIndicator</code> is commented out in the event model — adding it is additive, no breaking change to existing clients</div></div>
-    <div class="stack-row"><div class="stack-name">ViewModel state</div><div class="stack-desc"><code>@Published var isTypingVisible: Bool</code> — set <code>true</code> on incoming event, auto-clear after ~3 s via a cancellable <code>Task.sleep</code></div></div>
-    <div class="stack-row"><div class="stack-name">Sending</div><div class="stack-desc">Debounce keypress in <code>ChatThreadViewModel</code> — fire WS event at most once per ~1 s to avoid flooding the socket with every keystroke</div></div>
-  </div>
+  <ul>
+    <li><strong>No data model change:</strong> ephemeral — never persisted to <code>MessageLocalDataSource</code> or <code>ChatLocalDataSource</code></li>
+    <li><strong>Already reserved:</strong> <code>WSEventType.typingIndicator</code> is commented out in the WebSocket event model — adding it is additive, no breaking change to existing clients</li>
+    <li><strong>ViewModel state:</strong> <code>@Published var isTypingVisible: Bool</code> — set <code>true</code> on incoming event, auto-clear after ~3s via a cancellable <code>Task.sleep</code></li>
+    <li><strong>Sending:</strong> debounce keypress in <code>ChatThreadViewModel</code> — fire WS event at most once per ~1s to avoid flooding the socket with every keystroke</li>
+  </ul>
 
   <h3>Group Chats</h3>
-  <div class="stack">
-    <div class="stack-row"><div class="stack-name">Data model</div><div class="stack-desc"><code>Chat.users: [User]</code> already supports it — the array was intentional. No field change needed on <code>Chat</code>.</div></div>
-    <div class="stack-row"><div class="stack-name">Read receipts</div><div class="stack-desc"><code>Message.readTime: Date?</code> becomes <code>Message.readReceipts: [ReadReceipt]</code> where <code>ReadReceipt = { userId, readTime }</code> — one entry per participant instead of a single timestamp</div></div>
-    <div class="stack-row"><div class="stack-name">Send path</div><div class="stack-desc">Unchanged on the client — <code>SendMessageUseCase</code> posts to the same endpoint; server handles fan-out to all group members</div></div>
-    <div class="stack-row"><div class="stack-name">Pagination</div><div class="stack-desc">Same three-tier strategy; endpoints gain a <code>groupId</code> param alongside (or replacing) <code>chatId</code></div></div>
-  </div>
+  <ul>
+    <li><strong>Data model:</strong> <code>Chat.users: [User]</code> already supports it — the array was intentional. No field change needed on <code>Chat</code>.</li>
+    <li><strong>Read receipts:</strong> <code>Message.readTime: Date?</code> becomes <code>Message.readReceipts: [ReadReceipt]</code> where <code>ReadReceipt = { userId, readTime }</code> — one entry per participant instead of a single timestamp</li>
+    <li><strong>Send path:</strong> unchanged on the client — <code>SendMessageUseCase</code> posts to the same endpoint; server handles fan-out to all group members</li>
+    <li><strong>Pagination:</strong> same three-tier strategy; endpoints gain a <code>groupId</code> param alongside (or replacing) <code>chatId</code></li>
+  </ul>
 </section>
 
-<!-- FEEDBACK -->
+<!-- INTERVIEWER FEEDBACK -->
 <section id="feedback">
-  <h2>Interviewer Feedback &amp; Key Takeaways</h2>
+  <h2>Interviewer Feedback</h2>
+  <div class="rule"><strong>Rating: 4/5 across all pillars</strong></div>
 
-  <h3>Rating Pillars (4/5 across all)</h3>
-  <div class="table-wrap">
-    <table>
-      <tr><th>Pillar</th><th>Rating</th><th>Notes</th></tr>
-      <tr><td>Problem Breakdown</td><td>4/5</td><td>Strong requirements gathering. Defined scope clearly (1-to-1, offline-first, no push for MVP). Systematic plan of attack before drawing.</td></tr>
-      <tr><td>System Architecture</td><td>4/5</td><td>✅ Layered approach, Repository pattern, offline-first SSOT · ❌ Pagination inconsistency not addressed · ❌ POST alongside WebSocket is redundant</td></tr>
-      <tr><td>Technical Proficiency</td><td>4/5</td><td>Strong SwiftUI + Combine command. Clean <code>AnyPublisher</code> boundary. StateManager pattern is sound.</td></tr>
-      <tr><td>Communication</td><td>4/5</td><td>Discussed trade-offs clearly. Offered multiple options with pros/cons when challenged.</td></tr>
-    </table>
-  </div>
+  <h3>Problem Breakdown (4/5)</h3>
+  <ul>
+    <li>Strong requirements gathering — defined scope clearly (1-to-1, offline-first, no push for MVP)</li>
+    <li>Systematic plan of attack before drawing</li>
+  </ul>
 
-  <div class="rule"><strong>"Data orchestrator Coordinator" is an anti-pattern.</strong> Coordinator = navigation only. Split data orchestration into <code>FetchMessagesUseCase</code> (Repository access) and <code>MessageStreamService</code> (WebSocket, Domain Service).</div>
-  <div class="rule"><strong>Three-tier API is the right answer for offline-first + real-time.</strong> Initial load, cursor pagination, and delta sync have different jobs — they can't be collapsed into one endpoint without sacrificing one of the three goals.</div>
-  <div class="rule"><strong>WebSocket-first for sends.</strong> Route message sends through WebSocket when the socket is live. Fall back to <code>POST</code> only when the socket is unavailable. Using <code>POST</code> as primary adds a round-trip for every message.</div>
-  <div class="warn"><strong>Timestamp cursors are fragile for live-updating lists.</strong> Any list where new items arrive and change order during pagination needs a server-issued opaque cursor, not a client-supplied timestamp.</div>
-  <div class="callout"><strong>Domain Services must be app-scoped.</strong> <code>MessageStreamService</code> and <code>MessageSyncService</code> must be registered at app startup — not created inside ViewModels. The same pattern applies to <code>PlayerService</code> in the music streaming scenario.</div>
+  <h3>System Architecture (4/5)</h3>
+  <ul>
+    <li>Layered approach (Presentation / Domain / Data)</li>
+    <li>Repository pattern with local DB as SSOT</li>
+    <li>Offline-first with <code>isSent</code> flag and background sync</li>
+    <li>Did not address pagination inconsistency when new messages arrive during scroll</li>
+    <li>Suggested POST for sends alongside WebSocket — redundant; prefer WebSocket-first</li>
+  </ul>
+
+  <h3>Technical Proficiency (4/5)</h3>
+  <ul>
+    <li>Strong SwiftUI + Combine command</li>
+    <li>Clean <code>AnyPublisher</code> boundary between data layer and ViewModel</li>
+    <li>StateManager pattern is sound</li>
+  </ul>
+
+  <h3>Communication (4/5)</h3>
+  <ul>
+    <li>Discussed trade-offs clearly</li>
+    <li>Offered multiple options with pros/cons when challenged</li>
+  </ul>
+
+  <h3>Key Takeaways</h3>
+  <div class="rule"><strong>"Data orchestrator Coordinator" is an anti-pattern</strong> — Coordinator = navigation only. Split data orchestration into UseCase + Domain Service.</div>
+  <div class="rule"><strong>The three-tier API strategy</strong> (initial / pagination / delta) is the right answer for any offline-first + real-time app.</div>
+  <div class="callout"><strong>Route message sends through WebSocket-first;</strong> fall back to POST only when the socket is unavailable.</div>
+  <div class="warn"><strong>Timestamp cursors are fragile for live data</strong> — default to server-issued opaque cursors.</div>
+  <div class="rule"><strong><code>MessageStreamService</code> and <code>MessageSyncService</code> must be app-scoped Domain Services,</strong> not ViewModel-owned components.</div>
 </section>
 
 <div class="bottom-nav">
   <a href="../index.html">← Home</a>
-  <span></span>
+  <a class="right" href="music-streaming-system-design.html">Music Streaming →</a>
 </div>
 
 </body>

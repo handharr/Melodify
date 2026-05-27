@@ -19,12 +19,10 @@
 - `[weak self]` in all closures to avoid retain cycles
 - Coordinator-based navigation, manual init injection
 - Mock-the-layer-below testing strategy
-- `async/await` for I/O; Combine for reactive binding to `@Published` state
+- `async/await` for UseCase/Repository I/O
 - `ThirdPartyDataSource` facade pattern — app calls protocol, never SDK directly
 - Idempotency keys on mutations — `POST /orders` is retryable; generate UUID at `Param` call site
-- HTTP `409 ≠ 5xx` — concurrency conflicts and transient server errors must never share a code path
-- Infrastructure layer (`Gateway` suffix) — Gateway trigger is cross-layer span, not SDK imports; single-layer SDKs wrap in their natural layer (DataSource or Service); Domain defines protocol; concrete in Infrastructure; nothing depends on Gateway except DI wiring in Application
-- External layer (outermost ring) — actual SDKs and OS frameworks; UIKit / SwiftUI / Combine need no wrapper (reactive/UI primitives used directly); all other SDKs always wrapped; wrapper placement scope-based: single-layer SDK → DataSource or Service, cross-layer SDK → Gateway in Infrastructure
+- Infrastructure and External layers follow the philosophy doc exactly — see there for Gateway/wrapper rules.
 
 ### What this scenario adds
 
@@ -32,10 +30,15 @@
 |---|---|---|
 | Real-time updates | Not in generic | `OrderService` opens a persistent SSE connection via `OrderSSEDataSource`; publishes `AnyPublisher<Order, AppError>` |
 | SSE stream pattern | Not in generic | Multi-fire publisher (vs single-value UseCase); screen lifecycle scopes the connection; `SSEClient` in Data (transport-only, same as `WebSocketClient` in Messenger) |
+| SSE publisher type | Not in generic | `AnyPublisher<Order, AppError>` chosen over `AsyncStream`: `OrderService` is a Domain Service living alongside other `@Published` Combine state in the ViewModel; Combine's backpressure operators (debounce, throttle) are available for rapid SSE events. This is distinct from Pattern A/B (one-shot fetch flows) — SSE is a persistent multi-fire publisher. |
 | Server-hosted basket | Not in generic | Basket lives on backend for cross-device continuity; `BasketRepository` always writes remote on mutation |
 | Image loading | Not in generic | `UIImageView` extension wrapping SDWebImage/Kingfisher — same facade pattern as `ThirdPartyDataSource` |
 | Cross-device session state | Not in generic | `lastUsedAddress` on `User` drives restaurant list without an extra fetch |
-| UI framework | SwiftUI default for new apps; UIKit when scroll lifecycle, AVPlayer, or custom transitions needed; hybrid valid screen-by-screen | UIKit throughout — restaurant list and menu use `UITableView`/`UICollectionView` for scroll lifecycle and pagination hooks; Order Status screen embeds `MKMapView` (custom view integration) |
+| UI framework | SwiftUI default for new apps; UIKit when scroll lifecycle, AVPlayer, or custom transitions needed; hybrid valid screen-by-screen | UIKit throughout — restaurant list and menu use `UITableView`/`UICollectionView` for scroll lifecycle and pagination hooks; Order Status screen embeds `OrderMapView` (UIView subclass wrapping `MKMapView`); MapKit `MKMapView` requires direct lifecycle control and is a UIKit-native view component — falls under the philosophy doc's 'direct UIKit-native view integration' UIKit trigger. |
+| `AnyPublisher` from `OrderService` | Not in generic | Persistent multi-fire Combine publisher for the Order Status screen; not a UseCase, not a one-shot await. |
+
+### Also in this scenario
+- `UIImageView` extension pattern — applies the philosophy doc's External SDK isolation rule to Presentation-layer image loading. Swapping SDWebImage for Kingfisher touches one file.
 
 ### Key decisions unique to this scenario
 - **SSE over polling.** Courier tracking sends updates every ~5 seconds. A 1-second poll for 10 minutes = 600 HTTP requests per order. SSE replaces all of that with one persistent connection. Polling is simpler to implement but wastes battery and overloads the backend.
@@ -157,7 +160,7 @@ enum OrderStatus {
 |---|--------|------|---------|
 | 9 | GET | `/live-order-status/<orderID>` | `text/event-stream` — courier coords + status per event |
 
-**Why idempotency on `POST /orders`?** If the network times out after the server creates the order, the app may retry. Without an idempotency key the server creates a duplicate order. Include a client-generated UUID (`localId`) in the body — server returns the existing record on duplicate submission. Key is generated at the `CreateOrderParam` call site, not inside the Repository.
+`CreateOrderParam` includes `idempotencyKey: UUID()` generated at the call site (not in Repository or DataSource).
 
 ---
 
@@ -173,11 +176,18 @@ Presentation
     └─ calls ViewModel on user actions
     └─ calls Coordinator for navigation
     └─ subscribes/cancels OrderService publisher with screen lifecycle
+    └─ Order Status screen hosts OrderMapView (UIView subclass wrapping MKMapView)
 
   ViewModel (@MainActor, @Published)
     └─ calls UseCases for all one-shot actions
     └─ subscribes to OrderService.orderUpdates for live tracking
     └─ maps Domain → UIModel, never exposes Domain types to View
+
+  UIModels (flat display-ready structs — ViewModel maps Domain → UIModel; View never receives Domain types directly)
+    RestaurantUIModel
+    DishUIModel
+    BasketUIModel
+    OrderUIModel
 
 Domain
   UseCases (stateless, one per user action)
@@ -198,7 +208,8 @@ Domain
          (no global playback state — only active while tracking screen is visible)
 
   Models:     User, Address, Restaurant, Dish, Basket, Order, OrderStatus
-  Params:     FetchRestaurantsParam(addressID:), FetchDishesParam(restaurantID:),
+  Params:     FetchUserParam(userID: String),
+              FetchRestaurantsParam(addressID:), FetchDishesParam(restaurantID:),
               CreateBasketParam(userID:, restaurantID:, dishID:, count:),
               UpdateBasketParam(basketID:, dishID:, count:),
               FetchBasketParam(basketID:),
@@ -241,8 +252,7 @@ Data
     └─ transport-only peer to APIClient — same rationale as WebSocketClient in Messenger
 
 Infrastructure
-  None — SSE is transport-only (no Presentation footprint); wraps as SSEClient +
-  OrderSSEDataSource in Data. OrderService calls OrderSSEDataSourceProtocol (Domain).
+  None
 
 Application
   AppCoordinator
@@ -255,10 +265,10 @@ Application
     └─ handles push/pop and state passing between screens
 
 External
-  URLSession (SSE)       →  SSEClient (Data, via OrderSSEDataSource)
-  URLSession (HTTP)      →  APIClient (Data)
-  CoreData               →  RestaurantLocalDataSource · DishLocalDataSource · BasketLocalDataSource · UserLocalDataSource (Data)
-  SDWebImage/Kingfisher  →  UIImageView extension (Presentation-layer helper — UIImageView is UIKit; wraps SDK behind a UIImageView method; same isolation principle as ThirdPartyDataSource)
+  URLSession
+  CoreData
+  SDWebImage / Kingfisher
+  MapKit
 ```
 
 ### High-Level Diagram

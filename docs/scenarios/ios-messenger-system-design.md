@@ -10,17 +10,10 @@
 ## Delta — What This Scenario Adds
 
 ### Same as generic architecture
-- Clean Architecture + MVVM + UIKit
-- DTO → Mapper → Domain Model (Mapper is the only type that knows both)
-- `FetchPolicy` (.fresh / .cached / .strict) on all Repository reads
-- Typed `Param` structs on every UseCase
-- `@MainActor` on ViewModel — all state mutations on main thread
-- `defer { isLoading = false }` — guaranteed cleanup on success and failure
-- `[weak self]` in all closures to avoid retain cycles
+
+All standard Clean Architecture + MVVM patterns as per the philosophy doc — not repeated here.
+
 - Coordinator-based navigation, DI via manual init injection
-- Mock-the-layer-below testing strategy
-- `async/await` for I/O; Combine for reactive binding to `@Published` state
-- `ThirdPartyDataSource` facade pattern — wraps third-party SDKs; app calls protocol, never SDK directly
 - Idempotency keys on mutations — client-generated UUID at `Param` call site for any retryable mutation
 - HTTP `409 ≠ 5xx` — concurrency conflicts and transient server errors must never share a code path
 - Infrastructure layer (`Gateway` suffix) — Gateway trigger is cross-layer span, not SDK imports; single-layer SDKs wrap in their natural layer (DataSource or Service); **this scenario has no Gateway** — WebSocket is networking-transport only (no Presentation footprint) and wraps as `WebSocketClient` in Data, not as a Gateway
@@ -34,13 +27,14 @@
 | Offline write queue | Not covered | `MessageSyncService` Domain Service — queues `isSent = false` messages, flushes on app foreground |
 | Three-tier API strategy | `FetchPolicy` covers read intent | Initial load / cursor pagination / delta sync by `sequenceId` — three distinct endpoints per list screen |
 | Local DB as SSOT | `LocalDataSource` for cache | Realm via `LocalDataSource` — renders immediately from cache, syncs in background; WebSocket frames upsert into same store |
-| File/attachment storage | Not in generic | `AttachmentFileDataSource` — stores media binaries; only URL stored in `MessageLocalDataSource` |
+| File/attachment storage | Not in generic | `AttachmentLocalFileDataSource` — stores media binaries; only URL stored in `MessageLocalDataSource` |
 | Message status lifecycle | Not covered | `sentTime` / `receivedTime` / `readTime` + `isSent: Bool` for local delivery tracking |
 
 ### Key decisions unique to this scenario
 
 - **`MessageStreamService` must be app-scoped.** If owned by `ChatThreadViewModel`, the WebSocket closes when the screen pops — incoming messages are silently missed.
 - **`MessageSyncService` triggers on app lifecycle, not a timer.** Fires on `sceneDidBecomeActive` / `applicationDidBecomeActive`, not on a polling interval.
+- **ViewModels map `Message` → `MessageUIModel`** (flat display struct); raw `Message` domain models are never passed to the View.
 - **Local DB is the single source of truth.** ViewModels never read from the network. Network writes flow into `MessageLocalDataSource` (upsert by `id`); the LocalDataSource stream drives the ViewModel.
 - **Three-tier REST is required alongside FetchPolicy.** FetchPolicy (`.fresh` / `.cached`) covers read intent but doesn't model delta sync — fetching only records changed since a known `sequenceId` is a separate concern.
 - **Upsert by `message.id`, never append.** A message can arrive via both WebSocket and a delta REST sync. Appending would duplicate it; upserting by `id` is idempotent.
@@ -149,7 +143,7 @@ struct Message {
 
 struct Attachment {
     let type: AttachmentType    // .image | .video | .pdf
-    let url: URL                // URL only — binary stored in AttachmentFileDataSource
+    let url: URL                // URL only — binary stored in AttachmentLocalFileDataSource
 }
 
 enum AttachmentType { case image, video, pdf }
@@ -217,18 +211,22 @@ Data
     └─ connect(to:) / send(_:) / receive() → AsyncStream<Data> / disconnect()
     └─ persistent-connection peer to APIClient — networking transport only, no Presentation footprint
 
-  AttachmentFileDataSource — binary files on disk; only URL stored in MessageLocalDataSource
+  AttachmentLocalFileDataSource — binary files on disk; only URL stored in MessageLocalDataSource
 
 Infrastructure
-  None — no SDK in this scenario spans multiple layers; WebSocket is Data-only
+  None
 
 External
-  URLSessionWebSocketTask / Starscream  →  WebSocketClient (Data)
-  Realm                                 →  MessageLocalDataSource · ChatLocalDataSource (Data)
-  URLSession                            →  APIClient (Data)
+  URLSessionWebSocketTask / Starscream
+  Realm
+  URLSession
 
 Application
   AppCoordinator + ChatCoordinator (navigation only) + DI via manual init injection
+  App-scoped singletons registered in AppCoordinator (or AppDelegate):
+    - MessageStreamService — receives MessageStreamDataSource via init injection
+    - MessageSyncService   — receives Realm-backed DataSources via init injection
+  Neither service is owned by any ViewController or feature coordinator.
 ```
 
 ### Vocabulary Translation
@@ -244,7 +242,7 @@ Application
 | `StateManager` | `ViewState<T>` enum + `@Published var state` on ViewModel | Presentation |
 | `OfflineSyncManager` | `MessageSyncService` Domain Service | Domain |
 | `Local DB (Realm)` | `MessageLocalDataSource` (Realm as backend) | Data |
-| `File Storage` | `AttachmentFileDataSource` | Data |
+| `File Storage` | `AttachmentLocalFileDataSource` | Data |
 
 The interview used "Coordinator" for both navigation and data orchestration. In this architecture those are two separate concerns: `ChatCoordinator` handles navigation (Application layer); `FetchMessagesUseCase` handles data access (Domain); `MessageStreamService` owns the WebSocket (Domain Service, app-scoped).
 
@@ -265,7 +263,7 @@ AppCoordinator
                      └── MessageStreamDataSource → WebSocketClient (URLSessionWebSocketTask)
                  MessageSyncService (app-scoped — flushes isSent=false on foreground)
 
-AttachmentFileDataSource — stores attachment binaries, referenced by URL in Message model
+AttachmentLocalFileDataSource — stores attachment binaries, referenced by URL in Message model
 ```
 
 ---
@@ -274,7 +272,7 @@ AttachmentFileDataSource — stores attachment binaries, referenced by URL in Me
 
 ### Load Chat Thread (offline-first)
 
-Pattern A — two awaits in the ViewModel. `async/await` returns once; a single `execute()` cannot update state twice.
+Pattern A — two awaits in the ViewModel. `async/await` returns once; a single `execute()` cannot update state twice. Pattern B (AsyncStream) is an alternative when two-phase load logic is a cross-cutting concern — see philosophy doc. Pattern A used here.
 
 ```
 ChatThreadViewController.viewDidLoad()
@@ -305,7 +303,8 @@ ChatThreadViewController.viewDidLoad()
 ```
 User taps send
   → ChatThreadViewModel.send(text:)
-      → MessageLocalDataSource.upsert(MessageDTO(id: UUID(), text: text, isSent: false))
+      → MessageRepository.stageOptimistic(message: Message(id: UUID(), text: text, isSent: false))
+          → MessageLocalDataSource.upsert(...)            // ViewModel calls Repository (via protocol), not DataSource directly
       → state updated optimistically (message appears as "pending")
       → SendMessageUseCase.execute(param: SendMessageParam(chatId:, message:))
           → MessageRepository.send()
@@ -398,7 +397,8 @@ sceneDidBecomeActive / applicationDidBecomeActive
       1. MessageStreamService.connect()
          → WebSocket reopened
 
-      2. For each open / recently-visited chatId:
+      2. For each open / recently-visited chatId (use withThrowingTaskGroup for concurrent calls):
+         withThrowingTaskGroup: one FetchMessagesUseCase call per chatId, all concurrent
          FetchMessagesUseCase.execute(policy: .fresh,
              param: MessageParam(chatId:, after: lastKnownTimestamp))
          → GET /chat/{id}/all/after?timestamp=lastKnown
@@ -458,6 +458,7 @@ User opens ChatThread (or scrolls to bottom, viewing latest messages)
 ```swift
 class MessageStreamService {
     private let streamDataSource: MessageStreamDataSourceProtocol   // Data — injected via DI
+    private let messageRepository: MessageRepositoryProtocol        // Domain protocol — not the concrete MessageRepository
 
     func connect()
     func subscribe(to chatId: String) -> AnyPublisher<Message, Never>
@@ -479,7 +480,7 @@ The ViewModel subscribes to both `FetchMessagesUseCase` and `MessageStreamServic
 
 | Tier | Endpoint | FetchPolicy analog |
 |---|---|---|
-| Initial load | `GET /chat/{id}/all` | `.cached` → show local, then `.fresh` in background |
+| Initial load | `GET /chat/{id}/all` | `.strict` (phase 1, cache-only, throws on miss) + `.fresh` (phase 2, always network) |
 | Cursor pagination | `GET .../before?timestamp=` | `.fresh` — always hits network for older pages |
 | Delta sync | `GET .../delta/after?sequenceId=` | No analog — payload is change-proportional, not list-proportional |
 
@@ -557,7 +558,7 @@ Features scoped out of MVP, with the minimal delta needed to add each.
 ### Push Notifications
 
 - **New component:** `NotificationService` (app-scoped Domain Service) — registers APNS device token at login, stores token server-side
-- **On tap:** `AppCoordinator` receives `chatId` from notification payload → pushes `ChatThreadViewController` directly, bypassing the chat list
+- **On tap:** Push notification tap → `NotificationCenter.post(.handleDeepLink, object: chatId)` → `AppCoordinator.handle(link:)` → selects tab, delegates to `ChatCoordinator` → creates `ChatThreadViewModel + ChatThreadViewController` and pushes
 - **Gap fill on cold launch:** tapping a PN may cold-launch the app — `MessageSyncService.syncPending()` + delta fetch must run before the thread renders
 - **Scoping rule:** same as `MessageStreamService` — register at app startup, not inside a ViewController; if owned by a ViewModel it deallocates on screen pop and notifications go silent
 

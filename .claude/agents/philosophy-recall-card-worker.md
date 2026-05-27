@@ -86,6 +86,12 @@ If `## Data Flow` is absent or sparse, fall back to `<tr class="f*">` rows in th
 | Storage / DB | External | `.chip.st` | dashed, neutral |
 | Shared (spans multiple flows) | any | `.chip.shared` | neutral + flow dots |
 
+**Unique component rule:** Each named component must appear as a chip at most once per column in the card.
+- Consecutive flows sharing a component → rowspan (see below)
+- Non-consecutive flows where the component is the **primary** entry in the cell → first occurrence is the chip; later rows use `<span class="ref-badge">↑</span>` inline after the chip name
+- Non-consecutive flows where the component is **secondary** (cell already has another primary chip) → do not repeat the chip; fold the reuse into a `.sub` line under the primary chip (e.g. `FeedLocalDS — Like{successfullySent=false}`)
+- Per-flow sub-labels for a shared component are stacked as separate `.sub` lines under the single chip
+
 **Rowspan — use when:**
 - The chip is the sole or primary component in the cell
 - It appears in 2+ consecutive rows
@@ -165,7 +171,9 @@ Copy all unapproved scenario card blocks verbatim from the file read in Step 1.
 5. Hotel Booking
 6. Story Viewer
 
-**Never touch:** `<style>`, `<head>`, `<nav>`, `<header>`, `.legend`, `.chip-legend` sections.
+**Never touch:** `<head>`, `<nav>`, `<header>`, `.legend`, `.chip-legend` sections.
+
+**Row borders:** `.arch-table tbody tr` must NOT have `border-bottom`. Flow rows are visually separated by the left-border color on `.flow-name` only. If the `<style>` block still contains that rule, remove it (and its `tr:last-child` companion) during assembly.
 
 ### Step 3 — Write the updated file
 

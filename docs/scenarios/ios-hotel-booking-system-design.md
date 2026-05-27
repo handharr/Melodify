@@ -21,24 +21,22 @@
 - Coordinator-based navigation; app-scoped services registered at AppCoordinator level
 - Mock-the-layer-below testing strategy
 - `async/await` for I/O; Combine for reactive binding to `@Published` state
-- `ThirdPartyDataSource` (SDK facade) — wraps third-party SDKs as a `RemoteDataSource`; app calls protocol, never SDK directly
 - Idempotency keys on mutations — client-generated UUID at `Param` call site for any retryable mutation
 - HTTP 409 ≠ 5xx — concurrency conflicts and transient server errors must never share a code path
-- Infrastructure layer (`Gateway` suffix) — Gateway trigger is cross-layer span, not SDK imports; single-layer SDKs wrap in their natural layer (DataSource or Service); Domain defines protocol; concrete in Infrastructure; nothing depends on Gateway except DI wiring in Application
-- External layer (outermost ring) — actual SDKs and OS frameworks; UIKit / SwiftUI / Combine need no wrapper (reactive/UI primitives used directly); all other SDKs always wrapped; wrapper placement scope-based: single-layer SDK → DataSource or Service, cross-layer SDK → Gateway in Infrastructure
+- Infrastructure and External layers follow the philosophy doc exactly — see there for Gateway/wrapper rules.
 
 ### What this scenario adds
 
 | Concept | Generic | This Scenario |
 |---|---|---|
-| Image storage | Not in generic | Two-tier cache: `ImageFileDataSource` (disk) + CoreData metadata index (`url → filePath + savedAt` for TTL) |
+| Image storage | Not in generic | Two-tier cache: `ImageDiskDataSource` (disk) + CoreData metadata index (`url → filePath + savedAt` for TTL) |
 | Offline storage | Not in generic | `ReservationLocalDataSource` (CoreData) — read-only offline reservation history |
 | Domain Services | `Service` suffix — stateful/long-lived, no UIKit/third-party SDK imports; Foundation + stable Apple frameworks via protocol OK | `ReservationService` (hold timer + live state) · `ImageService` (two-tier image cache) · `PaymentService` (orchestrates payment flow: injects `PaymentGatewayProtocol`, delegates to `ProcessPaymentUseCase`) |
 | Infrastructure | Cross-layer SDKs → `Gateway` in Infrastructure; single-layer SDKs wrap in their natural layer (DataSource or Service) | `StripePaymentGateway: PaymentGatewayProtocol` — the only class that imports the Stripe SDK; wired by Application, never imported by Domain |
 | Hold timer | Not in generic | Server-authoritative 15-min lock; client counts down using server's `expiration_time` |
 | Idempotency key | Documented in generic — UUID at `Param` call site for retryable mutations | Client-generated `local_id` UUID on every mutation — prevents duplicate reservations/charges on network retry |
 | Pagination | Not in generic | Offset-limit — simpler; BE controls sort order; data doesn't move mid-scroll (no cross-device sync) |
-| Third-party SDK facade | `ThirdPartyDataSource` pattern documented in generic (wraps SDK as `RemoteDataSource`) | `PaymentService` wraps Stripe SDK — rest of app never calls SDK directly |
+| Third-party SDK facade | Single-layer SDKs wrap as DataSource; cross-layer SDKs use Gateway in Infrastructure. | `StripePaymentGateway` (Infrastructure) wraps Stripe's cross-layer footprint; `PaymentService` (Domain Service) injects `PaymentGatewayProtocol` — never imports SDK. |
 | Autocomplete strategy | Not in generic | Local prefetch on launch + debounced HTTP GET fallback — WebSockets explicitly rejected |
 | Amenity library | Not in generic | Batch-fetched on launch via `FetchAmenitiesUseCase`; `amenity_id` matched locally — no per-hotel icon network calls |
 | UI framework split | SwiftUI default for new apps; UIKit when scroll lifecycle, AVPlayer, or custom transitions needed; hybrid valid screen-by-screen | UIKit `UITableView` for Hotel List (scroll + pagination lifecycle control); SwiftUI for Search, Detail, Reservation, Payment |
@@ -51,7 +49,7 @@
 - **Server owns the clock.** `expiration_time` is always server-generated. Client never calculates a hold window — it only displays a countdown.
 - **Offset-limit over cursor pagination.** BE controls sort order; results don't change mid-scroll (no cross-device sync like music library). Offset is simpler and sufficient.
 - **WebSockets rejected twice.** For autocomplete and for the hold timer — HTTP + client countdown achieves the same UX at a fraction of the cost at 10M DAU.
-- **Image cache and offline reservation storage are separate.** Cache pressure must not evict user reservation data. `ImageFileDataSource` for images and `ReservationLocalDataSource` for reservations never share storage.
+- **Image cache and offline reservation storage are separate.** Cache pressure must not evict user reservation data. `ImageDiskDataSource` for images and `ReservationLocalDataSource` for reservations never share storage.
 - **`local_id` is always client-generated.** Standard industry idempotency key. Prevents duplicate charges on network retry. Server dedup would add server complexity; client UUID is cheap and reliable.
 
 ---
@@ -257,16 +255,18 @@ struct Reservation {
 |---|---|
 | Presentation | `SearchViewController` + `SearchViewModel` (SwiftUI) · `HotelListViewController` + `HotelListViewModel` (UIKit `UITableView`) · `HotelDetailViewController` + `HotelDetailViewModel` (SwiftUI) · `ReservationViewController` + `ReservationViewModel` (SwiftUI) · `PaymentViewController` + `PaymentViewModel` (SwiftUI) — all `@MainActor`, `@Published` |
 | Domain — UseCase | `SearchHotelsUseCase` · `FetchHotelDetailUseCase` · `FetchAmenitiesUseCase` · `CreateReservationUseCase` · `ProcessPaymentUseCase` |
-| Domain — Service | `ReservationService` (hold timer + live state) · `ImageService` (two-tier cache — calls `ImageRepositoryProtocol`) · `PaymentService` (orchestrates payment via `PaymentGatewayProtocol` → `ProcessPaymentUseCase`) |
+| Domain — Service | `ReservationService` (hold timer + live state) · `ImageService` (two-tier cache — calls `ImageRepositoryProtocol`) · `PaymentService` (orchestrates payment via `PaymentGatewayProtocol` → `ProcessPaymentUseCase`) — `ImageService` and `PaymentService` import nothing from External SDKs; both depend on domain protocols only (`ImageRepositoryProtocol`, `PaymentGatewayProtocol`) |
 | Domain — Model | `HotelListing` · `Hotel` · `Amenity` · `Room` · `Reservation` |
 | Domain — Param | `SearchHotelsParam` · `FetchHotelDetailParam(hotelId:)` · `FetchAmenitiesParam` · `CreateReservationParam(localId: UUID, hotelId:, roomIds:, guestCount:)` · `ProcessPaymentParam(token:)` |
 | Infrastructure | `StripePaymentGateway: PaymentGatewayProtocol` — only class that imports Stripe SDK; wired by Application |
 | Data — Repository | `HotelRepository` · `ReservationRepository` · `AmenityRepository` · `ImageRepository` · `PaymentRepository` |
-| Data — DataSource | `HotelRemoteDataSource` · `HotelLocalDataSource` · `ReservationRemoteDataSource` · `ReservationLocalDataSource` · `AmenityLocalDataSource` · `MediaRemoteDataSource` · `ImageLocalDataSource` · `ImageFileDataSource` · `PaymentRemoteDataSource` |
+| Data — DataSource | `HotelRemoteDataSource` · `HotelLocalDataSource` · `ReservationRemoteDataSource` · `ReservationLocalDataSource` · `AmenityLocalDataSource` · `MediaRemoteDataSource` · `ImageLocalDataSource` · `ImageDiskDataSource` · `PaymentRemoteDataSource` |
 | Data — DTO | `HotelListingsDTO` · `HotelListingDTO` · `HotelDTO` · `MediaUrlsDTO` · `AmenityDTO` · `RoomDTO` · `ReservationDTO` · `OfflineReservationDTO` |
 | Data — Mapper | `HotelListingMapper` · `HotelMapper` · `AmenityMapper` · `RoomMapper` · `ReservationMapper` |
-| External | `Stripe` → `StripePaymentGateway` (Infrastructure) · `CoreData` → `ReservationLocalDataSource` · `ImageLocalDataSource` (Data) · `URLSession` → `APIClient` (Data) |
+| External | `Stripe` · `CoreData` · `Foundation (FileManager)` · `URLSession` |
 | Application | `AppDelegate` · `Coordinator` (per flow) · Swinject DI container |
+
+> **UIModel rule:** All ViewModels map Domain → UIModel before publishing state. Views never receive `HotelListing`, `Hotel`, or `Reservation` directly.
 
 ### Swinject Scoping
 
@@ -278,6 +278,8 @@ struct Reservation {
 | Transient | UseCases | Stateless — no mutable state to share |
 
 **Rule of thumb:** if a service owns mutable state that must stay consistent across ViewModels, it must be a singleton.
+
+> **Registration site:** `ReservationService`, `ImageService`, and `PaymentService` are registered as singletons in `AppCoordinator.setupDependencies()` (or equivalent Swinject assembly) — not in any ViewModel or feature coordinator.
 
 ### Combine + async/await Split
 
@@ -326,6 +328,8 @@ SearchViewModel.search(param:)
     → defer: isLoading = false
 ```
 
+> **Pattern A vs Pattern B:** Pattern B (AsyncStream) was considered; Pattern A retained — the two-phase load is not shared enough across ViewModels to justify stream mocking complexity.
+
 ### Hotel Detail
 
 Pattern A — two awaits in the ViewModel.
@@ -347,6 +351,7 @@ HotelDetailViewModel.load(hotelId:)
         → HotelDTO → Mapper → Hotel
         → HotelLocalDataSource.save(dto)
         → ImageService.loadImage(url:) for updated gallery
+          // Thumbnail images loaded concurrently via `withThrowingTaskGroup` inside `ImageService` — dynamic count of image URLs.
         → ViewModel maps Hotel + resolved images → UIModel
         → @Published update → view refreshes
 
@@ -396,17 +401,19 @@ Image Request (via ImageService)
 ImageRepository.loadImage(url:)   // ImageRepositoryProtocol — Domain Service never calls DataSources directly
      │
      ▼
-ImageFileDataSource (disk)
+ImageDiskDataSource (disk)
      │ hit? → serve immediately
      │ miss?
      ▼
 MediaRemoteDataSource (S3 fetch)
      │
      ▼
-Write binary file to disk (ImageFileDataSource)
+Write binary file to disk (ImageDiskDataSource)
 Write metadata record to CoreData (ImageLocalDataSource):
   { url: String, filePath: String, savedAt: Date }
 ```
+
+> **FetchPolicy exception:** FetchPolicy does not apply to `ImageRepository` — the two-tier cache decision (disk-hit vs remote fetch) is encapsulated inside `ImageRepository` itself and is not ViewModel-driven.
 
 **TTL eviction:** Runs on `DispatchQueue.global(qos: .background)` — triggered on app launch or on a periodic interval while the app is active. Queries CoreData for `savedAt < now - TTL`, deletes matching files and records. Never touches the main thread.
 
@@ -514,6 +521,8 @@ BE charges card server-side via Stripe API
 
 `PaymentService` (Domain Service) orchestrates the payment flow: it calls `PaymentGatewayProtocol.collectToken()` (implemented by `StripePaymentGateway` in Infrastructure — the only class that imports the Stripe SDK), then delegates to `ProcessPaymentUseCase` → `PaymentRepository: PaymentRepositoryProtocol` → `PaymentRemoteDataSource` → API. `PaymentViewModel` calls `PaymentService` via `PaymentServiceProtocol` — never the Stripe SDK directly. Swapping payment providers = one file in Infrastructure (`StripePaymentGateway`), nothing else.
 
+> **Why `PaymentService` delegates to `ProcessPaymentUseCase`:** `PaymentService` orchestrates the two-step payment flow — it acquires the Stripe token via `PaymentGatewayProtocol`, then delegates the network call to `ProcessPaymentUseCase` to keep Repository/DataSource independently testable from token acquisition.
+
 ---
 
 ## Trade-off Summary
@@ -522,7 +531,7 @@ BE charges card server-side via Stripe API
 |----------|--------|---------|-----|
 | Autocomplete | Prefetch + debounced HTTP GET | WebSocket streaming | Too expensive at 10M DAU |
 | Reservation hold timer | Server timestamp + client countdown | WebSockets / long-poll | Simpler; server stays authoritative |
-| Image caching | Manual `ImageFileDataSource` + CoreData TTL/LRU | URLSession default cache | Granular eviction control |
+| Image caching | Manual `ImageDiskDataSource` + CoreData TTL/LRU | URLSession default cache | Granular eviction control |
 | Payment | Stripe SDK token | DIY card collection | PCI compliance; no raw card data on client |
 | Pagination | Offset-limit | Cursor-based | Simpler; BE owns sort order; data doesn't move mid-scroll |
 | Idempotency | Client-generated `local_id` UUID | Server dedup | Handles network retry duplicates cheaply |

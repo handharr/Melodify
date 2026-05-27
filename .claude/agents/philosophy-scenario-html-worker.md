@@ -62,7 +62,7 @@ Copy the `<style>` block **verbatim** from `docs/deck/scenarios/music-streaming-
 
 | Class | Use for |
 |---|---|
-| `.stack` + `.stack-row` | Layer breakdowns, ordered steps |
+| `.stack` + `.stack-row` | Layer breakdowns, ordered steps — **see Layer Breakdown rule below** |
 | `.callout` | Blue — "why" decisions, trade-off explanations |
 | `.rule` | Green — rules, principles, confirmed patterns |
 | `.warn` | Orange — gotchas, common mistakes |
@@ -82,6 +82,21 @@ Copy the `<style>` block **verbatim** from `docs/deck/scenarios/music-streaming-
 | `.cm` | Comments |
 | `.nm` | Method and property names |
 | `.gr` | HTTP verbs: `GET`, `POST`, `PUT` |
+
+### Layer Breakdown — always exactly 6 rows
+
+The Architecture layer breakdown **must always render as exactly 6 `.stack-row` items** — one per main layer, in this order:
+
+1. **Presentation** — ViewControllers + ViewModels
+2. **Domain** — UseCases, Services, Models, Params all in one row, grouped with `<strong>` labels (`<strong>UseCases:</strong>`, `<strong>Services:</strong>`, etc.)
+3. **Infrastructure** — Gateways (or "None" if this scenario has none)
+4. **Data** — Repositories, DataSources, DTOs, Mappers all in one row, grouped with `<strong>` labels
+5. **External** — SDK names only, no wrapper class names, no arrows (e.g. `CoreData · URLSession · SDWebImage`)
+6. **Application** — AppDelegate, Coordinator, DI
+
+Never split Domain or Data into separate sub-rows (`Domain — UseCase`, `Domain — Service`, `Data — Repository`, etc.). Always one row per layer.
+
+---
 
 ### Section mapping (.md → HTML)
 

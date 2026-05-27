@@ -13,17 +13,16 @@
 
 - Clean Architecture + MVVM + UIKit
 - DTO → Mapper → Domain Model
-- `FetchPolicy` (.fresh / .cached / .strict) on all Repository reads
 - Typed `Param` structs on every UseCase
 - `@MainActor` on ViewModel — all state mutations on main thread
 - `defer { isLoading = false }` — guaranteed cleanup on success and failure
 - `[weak self]` in all closures
 - Coordinator-based navigation, manual init injection (no DI framework)
 - Mock-the-layer-below testing strategy
-- `ThirdPartyDataSource` pattern — wraps third-party SDKs; app never calls SDK directly
 - `async/await` for I/O; Combine for reactive binding to `@Published` state
-- Infrastructure layer (`Gateway` suffix) — Gateway trigger is cross-layer span, not SDK imports; single-layer SDKs wrap in their natural layer (DataSource or Service); Domain defines protocol; concrete in Infrastructure; nothing depends on Gateway except DI wiring in Application
-- External layer (outermost ring) — actual SDKs and OS frameworks; UIKit / SwiftUI / Combine need no wrapper (reactive/UI primitives used directly); all other SDKs always wrapped; wrapper placement scope-based: single-layer SDK → DataSource or Service, cross-layer SDK → Gateway in Infrastructure
+- Infrastructure: no Gateway needed — `StoryImageDataSource` (SDWebImage) is a single-layer Data concern.
+- External: `SDWebImage` · `CoreData / JSON` · `URLSession` — all wrapped per philosophy doc rules.
+- UIModel — `StoryViewModel` maps `Story` → `StoryUIModel`; View never receives raw `Story` domain models.
 - Idempotency keys on mutations — client-generated UUID at `Param` call site for any retryable mutation
 - HTTP `409 ≠ 5xx` — concurrency conflicts and transient server errors must never share a code path
 
@@ -33,20 +32,22 @@
 |---|---|---|
 | API strategy | Cursor or offset pagination | Single endpoint `getStoriesAfter(cursor:)` — full load + delta in one call |
 | Domain Service | `SessionService` / `PlayerService` examples | `StoryOrderService` — stateful ranking (unseen-first) + `markAsSeen` tracking |
-| Image loading | Not covered | `ImageSDKDataSource` (ThirdPartyDataSource wrapping SDWebImage) — caches decoded `UIImage`, background download |
+| Image loading | Not covered | `StoryImageDataSource` (wraps SDWebImage) — caches decoded `UIImage`, background download |
 | Image pre-fetching | Not covered | ViewModel triggers prefetch for `nextStory` on every display cycle |
 | UI carousel pattern | Not covered | Three recycled `UIImageView` instances with swipe gesture — seamless infinite loop |
 | Auto-advance | Not covered | 10-second timer in ViewController, **started after image download completes** (not on transition) |
 | Story expiry | Not covered | Repository filters `expireAt < now` before returning Domain models |
 | Throttle guard | FetchPolicy handles cache/network split | `FetchPolicy.cached` at Repository — skips network if local data is < 10 min old |
+| FetchPolicy interpretation | Generic: return cache if available, else network | `.cached` augmented: `StoryRepository` enforces 10-minute freshness window; Repository is the only interpreter; ViewModel never decides the time threshold. |
+| Concurrency | Generic: `async let` (2–3), `withThrowingTaskGroup` (N) | Loads are sequential — no parallel awaits; Pattern A (two-await cache-then-network) not applied because the 10-minute throttle guard eliminates the two-phase need. |
 
 ### Key decisions unique to this scenario
 
 - **No pagination.** Stories are 24-hour bounded. The full metadata response is ~50 KB. A single `getStoriesAfter(cursor:)` endpoint handles both initial load (cursor = nil) and delta updates (cursor = latest known ID).
-- **`StoryOrderService` is a Domain Service, not a UseCase.** It is stateful (holds the viewed `Set<Story.ID>`) and lives beyond a single user action — it must survive a foreground/background cycle and be consulted on every swipe. A stateless UseCase cannot hold that state.
+- **`StoryOrderService` is a Domain Service, not a UseCase.** It is stateful (holds `seenStoryIDs: Set<String>`) and lives beyond a single user action — it must survive a foreground/background cycle and be consulted on every swipe. Fails both UseCase criteria (stateless, triggered per user action).
 - **Three-UIImageView recycling, not UICollectionView or UIPageViewController.** Both standard containers struggle with seamless wrap-around (last → first story). Manual view recycling gives precise frame-level control over the loop animation.
 - **Timer tied to download, not to transition.** Starting the 10-second auto-advance timer before the image loads burns the user's viewing window on a spinner. The timer starts only after SDWebImage signals download completion.
-- **SDWebImage as a `ThirdPartyDataSource`.** The rest of the app calls `ImageDataSourceProtocol` — never SDWebImage directly. Swapping the library = one file change.
+- **SDWebImage wrapped as `StoryImageDataSource`.** The rest of the app calls `ImageDataSourceProtocol` — never SDWebImage directly. Swapping the library = one file change.
 
 ---
 
@@ -95,7 +96,7 @@ Classic pagination (`initialLoad(pageSize)` / `headLoad(pageSize, cursor)` / `ta
 100 bytes/field × 500 stories × ~0.25 compression ratio × 4 string fields ≈ 50,000 bytes ≈ 50 KB
 ```
 
-Images are **not** in the metadata response. They are served from Amazon S3. The API returns a URL string; the client fetches image binary lazily via `ImageSDKDataSource`.
+Images are **not** in the metadata response. They are served from Amazon S3. The API returns a URL string; the client fetches image binary lazily via `StoryImageDataSource`.
 
 ---
 
@@ -185,7 +186,7 @@ Domain
     └── execute(policy: FetchPolicy, param: FetchStoriesParam) async throws -> [Story]
 
   PrefetchStoryImageUseCase
-    └── execute(url: URL) → StoryRepositoryProtocol.prefetchImage(url:) → ImageSDKDataSource
+    └── execute(url: URL) → StoryRepositoryProtocol.prefetchImage(url:) → StoryImageDataSource
 
   StoryOrderService  ← Domain Service (stateful)
     ├── func ordered(stories: [Story]) -> [Story]  // unseen-first, then recency
@@ -201,7 +202,7 @@ Data
     ├── FetchPolicy.cached → local if < 10 min old, else remote
     ├── filters expired stories (expireAt < now) before returning
     ├── maps StoryDTO → Story via StoryMapper
-    └── prefetchImage(url:) → ImageSDKDataSource.prefetch(url:)
+    └── prefetchImage(url:) → StoryImageDataSource.prefetch(url:)
 
   StoryRemoteDataSource
     └── GET /stories?after={cursor} → [StoryDTO]
@@ -209,7 +210,7 @@ Data
   StoryLocalDataSource
     └── read/write [StoryDTO] to disk (CoreData or Codable JSON)
 
-  ImageSDKDataSource  ← ThirdPartyDataSource (wraps SDWebImage)
+  StoryImageDataSource  ← DataSource (wraps SDWebImage)
     ├── func load(url: URL, into: UIImageView, completion: @escaping () -> Void)
     └── func prefetch(url: URL)
 
@@ -217,19 +218,20 @@ Data
   StoryMapper ← Mapper
 
 Infrastructure
-  None — ImageSDKDataSource wraps SDWebImage as a single-layer Data concern; no cross-layer wrappers needed
+  None
 
 External
-  SDWebImage    →  ImageSDKDataSource (Data)
-  CoreData/JSON →  StoryLocalDataSource (Data)
-  URLSession    →  APIClient (Data, via StoryRemoteDataSource)
+  SDWebImage
+  CoreData / JSON
+  URLSession
 
 Application
   StoryCoordinator
-    └── composition root — builds full dependency graph via manual init injection
+    ├── composition root — builds full dependency graph via manual init injection
+    └── No default concrete args on `StoryRepository` init — `StoryRemoteDataSource`, `StoryLocalDataSource`, and `StoryImageDataSource` are all injected explicitly by `StoryCoordinator`.
 ```
 
-**Dependency rule:** `StoryViewController` → `StoryViewModel` → `FetchStoriesUseCase` / `PrefetchStoryImageUseCase` → `StoryRepositoryProtocol` ← `StoryRepository` → `StoryRemoteDataSource` + `StoryLocalDataSource` + `ImageSDKDataSource`. Domain depends on nothing.
+**Dependency rule:** `StoryViewController` → `StoryViewModel` → `FetchStoriesUseCase` / `PrefetchStoryImageUseCase` → `StoryRepositoryProtocol` ← `StoryRepository` → `StoryRemoteDataSource` + `StoryLocalDataSource` + `StoryImageDataSource`. Domain depends on nothing.
 
 ---
 
@@ -252,7 +254,7 @@ StoryViewController.viewDidLoad()
       → StoryOrderService.ordered(stories:) → sorted [Story] (unseen-first, recency)
       → ViewModel maps Story → StoryUIModel
       → @Published currentStory updated → ViewController renders
-      → PrefetchStoryImageUseCase.execute(url: nextStory.photoURL)  // ViewModel → UseCase → StoryRepository → ImageSDKDataSource
+      → PrefetchStoryImageUseCase.execute(url: nextStory.photoURL)  // ViewModel → UseCase → StoryRepository → StoryImageDataSource
       → defer: isLoading = false
 ```
 
@@ -290,15 +292,17 @@ Foreground re-entry (12:00):
 
 ```
 User swipes right
-  → StoryViewController rearranges UIImageViews (3 → pos 2, 1 → pos 3)
-  → ViewModel.advanceToNext() called
-      → StoryOrderService.markAsSeen(id: currentStory.id)
-      → currentStory = StoryOrderService.next(in: stories)
-      → @Published update → ViewController loads new image into now-visible UIImageView
-  → ImageSDKDataSource.load(url:, into: centreImageView) { [weak self] in
-        self?.startAutoAdvanceTimer()   // timer starts AFTER download completes
-    }
-  → ImageSDKDataSource.prefetch(url: nextStory.photoURL)
+  → StoryViewController.didSwipe()
+      → rearranges UIImageViews (3 → pos 2, 1 → pos 3)
+      → ViewModel.advanceToNext()
+          → StoryOrderService.markAsSeen(id: currentStory.id)
+          → currentStory = StoryOrderService.next(in: stories)
+          → UseCase → StoryRepository → StoryImageDataSource.load(url:, into: centreImageView) {
+                completion signals download done
+            }
+          → @Published currentStory updated
+      → ViewController reads currentStory.photoURL, triggers timer start after download completes
+  → PrefetchStoryImageUseCase → StoryRepository → StoryImageDataSource.prefetch(url: nextStory.photoURL)
 ```
 
 ---
@@ -320,7 +324,7 @@ The leftmost view is moved to the rightmost position (or vice versa), and its im
 
 **Why not UIPageViewController?** Same wrap-around problem, plus `UIPageViewController` instantiates new child view controllers per page — higher memory overhead for an infinite loop.
 
-### SDWebImage as `ImageSDKDataSource`
+### SDWebImage as `StoryImageDataSource`
 
 ```
 NSURLCache stores: raw HTTP response bytes
@@ -331,7 +335,7 @@ SDWebImage stores: decoded UIImage object directly
   → download: background thread, calls back on main thread
 ```
 
-`ImageSDKDataSource` wraps all SDWebImage calls behind `ImageDataSourceProtocol`. The ViewModel and ViewController never import SDWebImage.
+`StoryImageDataSource` wraps all SDWebImage calls behind `ImageDataSourceProtocol`. The ViewModel and ViewController never import SDWebImage.
 
 ### Auto-Advance Timer
 
@@ -344,7 +348,7 @@ func showNext() {
 
 // ✓ Correct — timer starts only after image is ready
 func showNext() {
-    imageSDKDataSource.load(url: url, into: imageView) { [weak self] in
+    storyImageDataSource.load(url: url, into: imageView) { [weak self] in
         self?.startAutoAdvanceTimer()
     }
 }
@@ -362,9 +366,11 @@ func showNext() {
 
 This is implemented entirely at the Repository level. The ViewModel always uses `FetchPolicy.cached` on foreground re-entry — it never makes the time decision itself.
 
+**FetchPolicy travel rule:** `FetchPolicy` travels ViewModel → UseCase → Repository. Repository is the only interpreter. The 10-minute check is a custom interpretation of `.cached` at the Repository level — the ViewModel passes `.cached` and the Repository decides whether the threshold is met.
+
 ### Pre-fetching
 
-`StoryViewModel` calls `PrefetchStoryImageUseCase.execute(url: nextStory.photoURL)` immediately after rendering the current story. The UseCase delegates to `StoryRepository.prefetchImage(url:)` → `ImageSDKDataSource.prefetch(url:)`. By the time the user swipes, the next image is already decoded in SDWebImage's memory cache — zero visible latency. ViewModel never calls the DataSource directly (no Presentation → Data bypass).
+`StoryViewModel` calls `PrefetchStoryImageUseCase.execute(url: nextStory.photoURL)` immediately after rendering the current story. The UseCase delegates to `StoryRepository.prefetchImage(url:)` → `StoryImageDataSource.prefetch(url:)`. By the time the user swipes, the next image is already decoded in SDWebImage's memory cache — zero visible latency. ViewModel never calls the DataSource directly (no Presentation → Data bypass).
 
 ### Viewed-State and Delta Merge
 
@@ -392,4 +398,4 @@ This is implemented entirely at the Repository level. The ViewModel always uses 
 
 ## Key Takeaways
 
-I'd design a Story Viewer with a single `getStoriesAfter(cursor:)` endpoint — stories are 24-hour bounded, the full metadata response is ~50 KB, and a single cursor covers both initial load and delta updates. The 10-minute throttle guard lives entirely in `StoryRepository` via `FetchPolicy.cached` — the ViewModel never makes that decision. For the UI, three recycled `UIImageView` instances with a swipe gesture recognizer give seamless infinite loop that UICollectionView and UIPageViewController can't easily provide. Image performance comes from `ImageSDKDataSource` (SDWebImage — stores decoded `UIImage`, background download) and pre-fetching the next image on every display cycle. `StoryOrderService` is a stateful Domain Service — not a UseCase — because it holds the viewed-state `Set<ID>` across swipes and foreground re-entries. The auto-advance timer starts only after SDWebImage signals download completion, guaranteeing a full 10 seconds of visible content.
+I'd design a Story Viewer with a single `getStoriesAfter(cursor:)` endpoint — stories are 24-hour bounded, the full metadata response is ~50 KB, and a single cursor covers both initial load and delta updates. The 10-minute throttle guard lives entirely in `StoryRepository` via `FetchPolicy.cached` — the ViewModel never makes that decision. For the UI, three recycled `UIImageView` instances with a swipe gesture recognizer give seamless infinite loop that UICollectionView and UIPageViewController can't easily provide. Image performance comes from `StoryImageDataSource` (SDWebImage — stores decoded `UIImage`, background download) and pre-fetching the next image on every display cycle. `StoryOrderService` is a stateful Domain Service — not a UseCase — because it holds the viewed-state `Set<ID>` across swipes and foreground re-entries. The auto-advance timer starts only after SDWebImage signals download completion, guaranteeing a full 10 seconds of visible content.

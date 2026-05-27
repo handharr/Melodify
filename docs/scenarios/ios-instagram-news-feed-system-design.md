@@ -11,21 +11,7 @@
 
 ### Same as generic architecture
 
-- Clean Architecture + MVVM + UIKit
-- DTO → Mapper → Domain Model
-- `FetchPolicy` (.fresh / .cached / .strict) on all Repository reads
-- Typed `Param` structs on every UseCase
-- `@MainActor` on ViewModel — all state mutations on main thread
-- `defer { isLoading = false }` — guaranteed cleanup on success and failure
-- `[weak self]` in all closures
-- Coordinator-based navigation, manual init injection (no DI framework)
-- Mock-the-layer-below testing strategy
-- `ThirdPartyDataSource` pattern — wraps third-party SDKs; app never calls SDK directly
-- `async/await` for I/O; Combine for reactive binding to `@Published` state
-- Idempotency keys on mutations — client-generated UUID at `Param` call site for any retryable mutation
-- HTTP `409 ≠ 5xx` — concurrency conflicts and transient server errors must never share a code path
-- Infrastructure layer (`Gateway` suffix) — Gateway trigger is cross-layer span, not SDK imports; single-layer SDKs wrap in their natural layer (DataSource or Service); Domain defines protocol; concrete in Infrastructure; nothing depends on Gateway except DI wiring in Application
-- External layer (outermost ring) — actual SDKs and OS frameworks; UIKit / SwiftUI / Combine need no wrapper (reactive/UI primitives used directly); all other SDKs always wrapped; wrapper placement scope-based: single-layer SDK → DataSource or Service, cross-layer SDK → Gateway in Infrastructure
+All patterns not listed above are unchanged — see [ios-app-system-design-philosophy.md](../ios-app-system-design-philosophy.md).
 
 ### What this scenario adds
 
@@ -33,12 +19,13 @@
 |---|---|---|
 | Optimistic UI | Mutation flow awaits server response | Immediate UI update on like; `LikeService` retries in background until confirmed |
 | Like queue persistence | Not in generic | Core Data stores `Like { userID, postID, successfullySent }` — durable across app kills |
-| Image loading | Not covered | `ImageSDKDataSource` (ThirdPartyDataSource wrapping SDWebImage) — caches decoded `UIImage` on disk |
+| Image loading | Not covered | `FeedImageDataSource` (ThirdPartyDataSource wrapping SDWebImage) — caches decoded `UIImage` on disk |
 | Feed freshness | `FetchPolicy.cached` | 2-minute timestamp check before firing network (extends .cached semantics at Repository level) |
 | Scroll prefetching | Not covered | `UICollectionViewDataSourcePrefetching` — start data tasks ahead of scroll, cancel for off-screen cells |
 | Starvation mitigation | Not covered | Three-pronged: cancel prefetch tasks, cancel image load on cell reuse, defer new requests until scroll ends |
 | Pagination | Not covered | Cursor-based with `postID` anchor, `limit=20`, `page: prev\|next` |
 | Polymorphic cell UIModels | `UIModel` (flat struct per screen) | `FeedCellUIModel` enum — `.photo(PhotoCellUIModel)` / `.album(AlbumCellUIModel)` |
+| UIModel mapping | ViewModel maps domain → UIModel | `FeedViewModel` maps `[Post] → [FeedCellUIModel]`; cells never receive a raw `Post` domain model |
 | ViewModel as data source | ViewModel owns UIModel array | ViewModel also implements `UICollectionViewDataSource` / `UICollectionViewDelegate` directly |
 | UI framework | SwiftUI default for new apps; UIKit when scroll lifecycle, AVPlayer, or custom transitions needed; hybrid valid screen-by-screen | UIKit — `UICollectionView` for prefetch lifecycle control and complex cell layout |
 
@@ -47,7 +34,7 @@
 - **Cursor-based pagination over offset.** New posts arrive continuously. Offset pagination drifts — page 2 after an insertion returns one item you already saw. Cursor (`postID`) anchors to a fixed point in the feed regardless of insertions above it.
 - **`LikeService` is a Domain Service, not a UseCase.** It is stateful (holds a durable retry queue), app-scoped, and long-lived — must survive foreground/background cycles. A stateless UseCase cannot hold or retry queued actions.
 - **Optimistic UI with Core Data-backed queue.** The like queue (`successfullySent: false`) is persisted — not in-memory. An app kill mid-retry does not lose the user's intent. On relaunch, `LikeService` reads pending `Like` records and resumes retrying.
-- **SDWebImage as `ImageSDKDataSource` (ThirdPartyDataSource).** `URLCache` stores raw `Data` bytes — every display requires `UIImage(data:)`, a CPU decode hit. SDWebImage caches the already-decoded `UIImage` in memory + disk. Repeat displays are zero-cost.
+- **SDWebImage as `FeedImageDataSource` (ThirdPartyDataSource).** `URLCache` stores raw `Data` bytes — every display requires `UIImage(data:)`, a CPU decode hit. SDWebImage caches the already-decoded `UIImage` in memory + disk. Repeat displays are zero-cost.
 - **ViewModel implements `UICollectionViewDataSource` and `UICollectionViewDelegate`.** The ViewModel already owns `items: [FeedCellUIModel]` — it is the natural place to answer "how many cells?" and "which model at index N?". Avoids a separate data source object with shared mutable state.
 - **Feed freshness at the Repository, not FetchPolicy alone.** `FetchPolicy.cached` says "use local if available". This scenario adds a time constraint: local is only valid if `fetchedAt` is < 2 minutes ago. The Repository checks the timestamp before deciding whether `.cached` qualifies.
 
@@ -95,7 +82,7 @@ POST /users/<userID>/likes
 
 **Why batch likes (array body)?** A user who likes several posts while offline sends one request on restore instead of N. Reduces reconnect burst.
 
-**Image URLs in response, not binary data.** `PostDTO.photoURLs` contains S3 URLs. The API stays lightweight; SDWebImage resolves images independently via `ImageSDKDataSource`.
+**Image URLs in response, not binary data.** `PostDTO.photoURLs` contains S3 URLs. The API stays lightweight; SDWebImage resolves images independently via `FeedImageDataSource`.
 
 ---
 
@@ -180,9 +167,9 @@ Presentation    →  ViewController + FeedViewModel (@MainActor)
 Domain          →  FetchFeedUseCase · LikePostUseCase · LikeService (app-scoped)
 Data            →  NewsFeedRepository · LikeRepository
                    FeedRemoteDataSource · FeedLocalDataSource (Core Data)
-                   ImageSDKDataSource (wraps SDWebImage — single-layer Data concern)
+                   FeedImageDataSource (wraps SDWebImage — single-layer Data concern)
 Infrastructure  →  None
-External        →  SDWebImage (via ImageSDKDataSource · Data) · CoreData (via FeedLocalDataSource · Data) · URLSession (via APIClient · Data)
+External        →  SDWebImage · CoreData · URLSession · Network.framework
 Application     →  AppDelegate · AppCoordinator · manual init injection
 ```
 
@@ -194,9 +181,9 @@ Application     →  AppDelegate · AppCoordinator · manual init injection
 |---|---|
 | Presentation | `FeedViewController`, `FeedViewModel`, `FeedCellUIModel` (enum), `PhotoCell`, `AlbumCell` |
 | Domain | `FetchFeedUseCase`, `LikePostUseCase`, `LikeService`, `Post`, `User`, `Like`, `FeedParam` |
-| Data | `NewsFeedRepository`, `LikeRepository`, `FeedRemoteDataSource`, `LikeRemoteDataSource`, `FeedLocalDataSource`, `PostDTO`, `PostMapper` |
-| Infrastructure | None — SDWebImage is a single-layer SDK; no cross-layer wrappers in this scenario |
-| External | `SDWebImage` → `ImageSDKDataSource` (Data) · `CoreData` → `FeedLocalDataSource` (Data) · `URLSession` → `APIClient` (Data) |
+| Data | `NewsFeedRepository`, `LikeRepository`, `FeedRemoteDataSource`, `LikeRemoteDataSource`, `FeedLocalDataSource`, `FeedImageDataSource`, `PostDTO`, `PostMapper` |
+| Infrastructure | None |
+| External | `SDWebImage` · `CoreData` · `URLSession` · `Network.framework` |
 | Application | `AppCoordinator`, `AppDelegate` |
 
 ### Architecture Diagram
@@ -219,7 +206,9 @@ FeedViewModel (@MainActor)
                      ├─► LikeRemoteDataSource ── POST /users/<id>/likes ──► REST API
                      └─► FeedLocalDataSource (Core Data — Like queue, successfullySent flag)
 
-Cells ──► ImageSDKDataSource (SDWebImage) ──► S3 URLs (photoURLs from PostDTO)
+FeedViewModel ──► FeedImageDataSource (SDWebImage) ──► S3 URLs (photoURLs from PostDTO)
+
+> Note: Cells receive pre-resolved image URLs via `FeedCellUIModel`; `FeedImageDataSource` is called by `FeedRepository` (or the ViewModel via a dedicated use case), not by cells directly.
 ```
 
 ### Dependency Injection (Composition Root)
@@ -266,6 +255,9 @@ FeedViewController.viewDidLoad()
     → FeedViewModel.load()
         → isLoading = true
         → FetchFeedUseCase.execute(policy: .cached, param: FeedParam(userID:))
+            // Single .cached call used here — the 2-minute timestamp in NewsFeedRepository replaces
+            // Pattern A's two-phase split (.strict then .fresh). The Repository returns cached data
+            // while the network update happens internally when the cache is stale.
             → NewsFeedRepository.fetch(policy: .cached, param:)
                 → FeedLocalDataSource.fetchedAt → if < 2 min → return cached DTOs
                 → else: FeedRemoteDataSource.fetch() → GET /users/<id>/feed?postID=<cursor>&limit=20
@@ -286,9 +278,11 @@ User taps like on post at index i
         → LikeService.enqueue(Like { userID, postID, successfullySent: false })
             → FeedLocalDataSource.save(Like)  ← persisted to Core Data
             → LikeRemoteDataSource.post([{ postID, value }])
+                // (userID, postID) is a natural idempotency key — the server treats duplicate
+                // like requests as no-ops. No explicit client UUID needed.
                 → success: FeedLocalDataSource.update(Like, successfullySent: true)
                 → failure: leave successfullySent = false
-                    → background retry loop on connectivity restore
+                    → background retry loop on connectivity restore (NetworkPathDataSource monitors NWPathMonitor)
 ```
 
 ### Scroll Prefetch Flow
@@ -296,7 +290,8 @@ User taps like on post at index i
 ```
 UICollectionView triggers prefetchItemsAt(indexPaths:)
     → FeedViewModel.prefetch(at: indexPaths)
-        → for each indexPath: start background data task (if not already fetched)
+        → withThrowingTaskGroup: one concurrent prefetch task per IndexPath
+            // Dynamic N cells → withThrowingTaskGroup for concurrent prefetch; async let is for a fixed small N
 
 UICollectionView triggers cancelPrefetchingForItemsAt(indexPaths:)
     → FeedViewModel.cancelPrefetch(at: indexPaths)
@@ -336,7 +331,7 @@ The cursor is an opaque value — `postID` here, but the client treats it as a b
 | Disk | Yes | Yes (separate disk cache) |
 | Memory | NSURLCache LRU | NSCache (auto-evict under pressure) |
 
-SDWebImage is wrapped as `ImageSDKDataSource: ImageDataSourceProtocol`. The rest of the app calls the protocol — never SDWebImage directly. Swapping the library = one file change.
+SDWebImage is wrapped as `FeedImageDataSource: ImageDataSourceProtocol`. The rest of the app calls the protocol — never SDWebImage directly. Swapping the library = one file change.
 
 ### Resource Starvation Mitigation
 
@@ -380,7 +375,7 @@ Open question: retry policy (exponential back-off vs fixed interval, retry cap) 
 
 ## Pitfalls / Gotchas
 
-- **Using `URLCache` for images.** It stores raw bytes — you decode on every display. Use SDWebImage via `ImageSDKDataSource`.
+- **Using `URLCache` for images.** It stores raw bytes — you decode on every display. Use SDWebImage via `FeedImageDataSource`.
 - **Offset pagination on a live feed.** Insertions at the top shift offsets — duplicates appear. Use cursor-based pagination.
 - **Not implementing `cancelPrefetchingForItemsAt`.** Stale requests pile up and starve visible cells. Always pair `prefetchItemsAt` with its cancel counterpart.
 - **Forgetting `sd_cancelCurrentImageLoad()` in `prepareForReuse`.** Fast scrollers see wrong images briefly — the recycled cell shows the previous request's result.
@@ -394,7 +389,7 @@ Open question: retry policy (exponential back-off vs fixed interval, retry cap) 
 
 - "I'd use cursor-based pagination — it's stable when new posts arrive, unlike offset which drifts and causes duplicates or skips."
 - "The `Like` domain model carries a `successfullySent` flag. `LikeService` updates the UI optimistically and retries in the background until the flag flips to true."
-- "For image caching I'd wrap SDWebImage in an `ImageSDKDataSource` — it caches the decoded `UIImage`, so repeat displays are zero-cost. `URLCache` stores raw bytes and you pay the decode hit every time."
+- "For image caching I'd wrap SDWebImage in a `FeedImageDataSource` — it caches the decoded `UIImage`, so repeat displays are zero-cost. `URLCache` stores raw bytes and you pay the decode hit every time."
 - "I'd use `UICollectionView` with `UICollectionViewDataSourcePrefetching`. That protocol gives me `cancelPrefetchingForItemsAt` — without it, rapid scrolling queues hundreds of stale requests and starves visible cells."
 - "The ViewModel maps `Post` domain objects into typed `FeedCellUIModel` variants before the collection view sees them. Cells are dumb renderers — they never touch the domain layer."
 - "The like queue is persisted to Core Data with `successfullySent: false`. An app kill mid-retry doesn't lose the user's intent — `LikeService` reads pending records on relaunch and resumes."
@@ -408,4 +403,4 @@ Open question: retry policy (exponential back-off vs fixed interval, retry cap) 
 - **Exact prefetch trigger threshold:** How many cells from the bottom to fire the next cursor page request — `UICollectionViewDataSourcePrefetching` provides the hook but the threshold is a product decision (e.g., last 5 cells = ~25% of one page).
 - **Feed refresh UI transition:** Full reload vs `NSDiffableDataSourceSnapshot` diff on cache expiry. Diff avoids flash; full reload is simpler.
 - **Cache timestamp storage:** `fetchedAt` can live as a Core Data entity field on a `FeedMetadata` record, or in `UserDefaults` keyed by `userID`. Either works; UserDefaults is simpler.
-- **Network restoration trigger for `LikeService`:** `NWPathMonitor` (modern, built-in, no third-party) vs Reachability (legacy). Prefer `NWPathMonitor`.
+- **Network restoration trigger for `LikeService`:** Resolved — `NWPathMonitor` (Network.framework). Per philosophy rules, non-UIKit/SwiftUI/Combine frameworks must always be wrapped. `NWPathMonitor` is Presentation-free (connectivity state only) → wraps as `NetworkPathDataSource` in the Data layer. Added to External layer table: `Network.framework → NetworkPathDataSource (Data)`.

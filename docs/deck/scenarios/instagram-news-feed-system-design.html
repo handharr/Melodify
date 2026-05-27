@@ -61,6 +61,7 @@
   header h1 { font-size: 26px; font-weight: 700; }
   header p { color: var(--muted); font-size: 14px; margin-top: 6px; }
 
+  /* TOC */
   .toc {
     margin: 20px 20px 0;
     background: var(--surface);
@@ -133,7 +134,7 @@
   }
   .stack-row:last-child { border-bottom: none; }
   .arrow { color: var(--border); font-size: 16px; margin-top: 1px; flex-shrink: 0; }
-  .stack-name { font-weight: 600; font-size: 14px; color: var(--text); min-width: 180px; flex-shrink: 0; }
+  .stack-name { font-weight: 600; font-size: 14px; color: var(--text); min-width: 140px; flex-shrink: 0; }
   .stack-desc { font-size: 13px; color: var(--muted); line-height: 1.4; }
 
   code {
@@ -253,7 +254,7 @@
 <header>
   <div class="tag">System Design</div>
   <h1>iOS Instagram News Feed</h1>
-  <p>Cursor pagination · optimistic UI · image caching · scroll starvation · offline like queue</p>
+  <p>API design · data model · Clean Architecture · optimistic UI · cursor pagination · image caching · scroll prefetching</p>
 </header>
 
 <!-- TOC -->
@@ -264,70 +265,51 @@
   <a href="#api">API Design</a>
   <a href="#model">Data Model</a>
   <a href="#architecture">Architecture</a>
-  <a href="#di">Dependency Injection</a>
-  <a href="#flow">Data Flow</a>
+  <a href="#dataflow">Data Flow</a>
   <a class="toc-sub" href="#flow-feed">1. Feed Load Flow</a>
-  <a class="toc-sub" href="#flow-like">2. Like Flow (Optimistic)</a>
+  <a class="toc-sub" href="#flow-like">2. Like Flow (Optimistic, Offline-Safe)</a>
   <a class="toc-sub" href="#flow-prefetch">3. Scroll Prefetch Flow</a>
   <a href="#deepdive">Deep Dives</a>
-  <a class="toc-sub" href="#cursor">1. Cursor-Based Pagination</a>
-  <a class="toc-sub" href="#imagecache">2. SDWebImage vs URLCache</a>
-  <a class="toc-sub" href="#starvation">3. Resource Starvation</a>
-  <a class="toc-sub" href="#freshness">4. Feed Freshness Policy</a>
-  <a class="toc-sub" href="#likequeue">5. Optimistic UI + Durable Like Queue</a>
+  <a class="toc-sub" href="#pagination">1. Cursor-Based Pagination</a>
+  <a class="toc-sub" href="#imagecache">2. Image Cache: SDWebImage vs URLCache</a>
+  <a class="toc-sub" href="#starvation">3. Resource Starvation Mitigation</a>
+  <a class="toc-sub" href="#freshness">4. Feed Freshness — Extending FetchPolicy.cached</a>
+  <a class="toc-sub" href="#optimistic">5. Optimistic UI + Durable Like Queue</a>
   <a href="#pitfalls">Pitfalls / Gotchas</a>
-  <a href="#talking">Interviewer Talking Points</a>
-  <a href="#openquestions">Open Questions</a>
+  <a href="#talking-points">Interviewer Talking Points</a>
+  <a href="#open-questions">Open Questions</a>
 </div>
 
 <!-- DELTA -->
 <section id="delta">
   <h2>Delta — What This Scenario Adds</h2>
-  <p>Scenario extension of the generic iOS architecture. Read this first — it describes what's the same and what this problem adds on top.</p>
-
-  <h3>Same as generic architecture</h3>
-  <ul>
-    <li>Clean Architecture + MVVM + UIKit</li>
-    <li>DTO → Mapper → Domain Model</li>
-    <li><code>FetchPolicy</code> (.fresh / .cached / .strict) on all Repository reads</li>
-    <li>Typed <code>Param</code> structs on every UseCase</li>
-    <li><code>@MainActor</code> on ViewModel — all state mutations on main thread</li>
-    <li><code>defer { isLoading = false }</code> — guaranteed cleanup on success and failure</li>
-    <li><code>[weak self]</code> in all closures</li>
-    <li>Coordinator-based navigation, manual init injection (no DI framework)</li>
-    <li>Mock-the-layer-below testing strategy</li>
-    <li><code>ThirdPartyDataSource</code> pattern — wraps third-party SDKs; app never calls SDK directly</li>
-    <li><code>async/await</code> for I/O; Combine for reactive binding to <code>@Published</code> state</li>
-    <li>Idempotency keys on mutations — client-generated UUID at <code>Param</code> call site for any retryable mutation</li>
-    <li>HTTP <code>409 ≠ 5xx</code> — concurrency conflicts and transient server errors must never share a code path</li>
-    <li>Infrastructure layer (<code>Gateway</code> suffix) — Gateway trigger is cross-layer span, not SDK imports; single-layer SDKs wrap in their natural layer (DataSource or Service); Domain defines protocol; concrete in Infrastructure; nothing depends on Gateway except DI wiring in Application</li>
-    <li>External layer (outermost ring) — actual SDKs and OS frameworks; UIKit / SwiftUI / Combine need no wrapper (reactive/UI primitives used directly); all other SDKs always wrapped; wrapper placement scope-based: single-layer SDK → DataSource or Service, cross-layer SDK → Gateway in Infrastructure</li>
-  </ul>
+  <p>Scenario extension of the generic iOS architecture. Read this first — it describes what is the same and what this problem adds on top.</p>
 
   <h3>What this scenario adds</h3>
   <div class="table-wrap">
     <table>
-      <tr><th>Concept</th><th>Generic</th><th>Instagram News Feed</th></tr>
+      <tr><th>Concept</th><th>Generic</th><th>This Scenario</th></tr>
       <tr><td>Optimistic UI</td><td>Mutation flow awaits server response</td><td>Immediate UI update on like; <code>LikeService</code> retries in background until confirmed</td></tr>
       <tr><td>Like queue persistence</td><td>Not in generic</td><td>Core Data stores <code>Like { userID, postID, successfullySent }</code> — durable across app kills</td></tr>
-      <tr><td>Image loading</td><td>Not covered</td><td><code>ImageSDKDataSource</code> (ThirdPartyDataSource wrapping SDWebImage) — caches decoded <code>UIImage</code> on disk</td></tr>
-      <tr><td>Feed freshness</td><td><code>FetchPolicy.cached</code></td><td>2-minute timestamp check at Repository level before allowing .cached to qualify</td></tr>
+      <tr><td>Image loading</td><td>Not covered</td><td><code>FeedImageDataSource</code> (ThirdPartyDataSource wrapping SDWebImage) — caches decoded <code>UIImage</code> on disk</td></tr>
+      <tr><td>Feed freshness</td><td><code>FetchPolicy.cached</code></td><td>2-minute timestamp check before firing network (extends .cached semantics at Repository level)</td></tr>
       <tr><td>Scroll prefetching</td><td>Not covered</td><td><code>UICollectionViewDataSourcePrefetching</code> — start data tasks ahead of scroll, cancel for off-screen cells</td></tr>
       <tr><td>Starvation mitigation</td><td>Not covered</td><td>Three-pronged: cancel prefetch tasks, cancel image load on cell reuse, defer new requests until scroll ends</td></tr>
       <tr><td>Pagination</td><td>Not covered</td><td>Cursor-based with <code>postID</code> anchor, <code>limit=20</code>, <code>page: prev|next</code></td></tr>
       <tr><td>Polymorphic cell UIModels</td><td><code>UIModel</code> (flat struct per screen)</td><td><code>FeedCellUIModel</code> enum — <code>.photo(PhotoCellUIModel)</code> / <code>.album(AlbumCellUIModel)</code></td></tr>
+      <tr><td>UIModel mapping</td><td>ViewModel maps domain → UIModel</td><td><code>FeedViewModel</code> maps <code>[Post] → [FeedCellUIModel]</code>; cells never receive a raw <code>Post</code> domain model</td></tr>
       <tr><td>ViewModel as data source</td><td>ViewModel owns UIModel array</td><td>ViewModel also implements <code>UICollectionViewDataSource</code> / <code>UICollectionViewDelegate</code> directly</td></tr>
-      <tr><td>UI framework</td><td>SwiftUI default for new apps; UIKit when scroll lifecycle, AVPlayer, or custom transitions needed; hybrid valid screen-by-screen</td><td>UIKit — <code>UICollectionView</code> for prefetch lifecycle and complex cell layout</td></tr>
+      <tr><td>UI framework</td><td>SwiftUI default for new apps; UIKit when scroll lifecycle, AVPlayer, or custom transitions needed; hybrid valid screen-by-screen</td><td>UIKit — <code>UICollectionView</code> for prefetch lifecycle control and complex cell layout</td></tr>
     </table>
   </div>
 
   <h3>Key decisions unique to this scenario</h3>
-  <div class="rule"><strong>Cursor-based pagination over offset.</strong> New posts arrive continuously. Offset pagination drifts — page 2 after an insertion returns one item you already saw. Cursor anchors to <code>postID</code>, immune to insertions above it.</div>
-  <div class="rule"><strong><code>LikeService</code> must be app-scoped.</strong> It is stateful (holds a durable retry queue) and long-lived — must survive foreground/background cycles. A stateless UseCase cannot hold or retry queued actions. Register at AppCoordinator, same as <code>PlayerService</code>.</div>
+  <div class="rule"><strong>Cursor-based pagination over offset.</strong> New posts arrive continuously. Offset pagination drifts — page 2 after an insertion returns one item you already saw. Cursor (<code>postID</code>) anchors to a fixed point in the feed regardless of insertions above it.</div>
+  <div class="rule"><strong><code>LikeService</code> is a Domain Service, not a UseCase.</strong> It is stateful (holds a durable retry queue), app-scoped, and long-lived — must survive foreground/background cycles. A stateless UseCase cannot hold or retry queued actions.</div>
   <div class="callout"><strong>Optimistic UI with Core Data-backed queue.</strong> The like queue (<code>successfullySent: false</code>) is persisted — not in-memory. An app kill mid-retry does not lose the user's intent. On relaunch, <code>LikeService</code> reads pending <code>Like</code> records and resumes retrying.</div>
-  <div class="callout"><strong>SDWebImage as <code>ImageSDKDataSource</code>.</strong> <code>URLCache</code> stores raw <code>Data</code> bytes — every display requires <code>UIImage(data:)</code>, a CPU decode hit. SDWebImage caches the already-decoded <code>UIImage</code> in memory + disk. Repeat displays are zero-cost.</div>
-  <div class="callout"><strong>ViewModel implements <code>UICollectionViewDataSource</code>.</strong> The ViewModel already owns <code>items: [FeedCellUIModel]</code>. It is the natural place to answer "how many cells?" and "which model at index N?". Avoids a separate data source object with shared mutable state.</div>
-  <div class="callout"><strong>Feed freshness extends <code>FetchPolicy.cached</code>.</strong> <code>FetchPolicy.cached</code> says "use local if available". This scenario adds a time constraint — local is only valid if <code>fetchedAt &lt; 2 minutes ago</code>. The Repository checks the timestamp before deciding whether <code>.cached</code> qualifies.</div>
+  <div class="callout"><strong>SDWebImage as <code>FeedImageDataSource</code> (ThirdPartyDataSource).</strong> <code>URLCache</code> stores raw <code>Data</code> bytes — every display requires <code>UIImage(data:)</code>, a CPU decode hit. SDWebImage caches the already-decoded <code>UIImage</code> in memory + disk. Repeat displays are zero-cost.</div>
+  <div class="callout"><strong>ViewModel implements <code>UICollectionViewDataSource</code> and <code>UICollectionViewDelegate</code>.</strong> The ViewModel already owns <code>items: [FeedCellUIModel]</code> — it is the natural place to answer "how many cells?" and "which model at index N?". Avoids a separate data source object with shared mutable state.</div>
+  <div class="callout"><strong>Feed freshness at the Repository, not FetchPolicy alone.</strong> <code>FetchPolicy.cached</code> says "use local if available". This scenario adds a time constraint: local is only valid if <code>fetchedAt</code> is &lt; 2 minutes ago. The Repository checks the timestamp before deciding whether <code>.cached</code> qualifies.</div>
 </section>
 
 <!-- REQUIREMENTS -->
@@ -335,11 +317,11 @@
   <h2>Requirements</h2>
   <h3>Functional</h3>
   <div class="stack">
-    <div class="stack-row"><div class="stack-name">News Feed</div><div class="stack-desc">Vertical list of posts — photos and photo albums</div></div>
+    <div class="stack-row"><div class="stack-name">News Feed</div><div class="stack-desc">Vertical feed of posts: photos and photo albums</div></div>
     <div class="stack-row"><div class="stack-name">Post Content</div><div class="stack-desc">Author avatar, author name, caption, like count per post</div></div>
-    <div class="stack-row"><div class="stack-name">Like / Unlike</div><div class="stack-desc">Must work offline — optimistic UI, retried on connectivity restore</div></div>
-    <div class="stack-row"><div class="stack-name">Infinite Scroll</div><div class="stack-desc">Fast, seamless — no visible loading gaps during normal scroll</div></div>
-    <div class="stack-row"><div class="stack-name">Offline Mode</div><div class="stack-desc">Feed browsable after first load — metadata cached in Core Data</div></div>
+    <div class="stack-row"><div class="stack-name">Like / Unlike</div><div class="stack-desc">Must work offline — optimistic UI, retried on network restore</div></div>
+    <div class="stack-row"><div class="stack-name">Infinite Scroll</div><div class="stack-desc">Fast scroll with no visible loading gaps</div></div>
+    <div class="stack-row"><div class="stack-name">Offline Mode</div><div class="stack-desc">Feed browsable after first load</div></div>
   </div>
 
   <h3>Non-Functional</h3>
@@ -347,8 +329,8 @@
     <table>
       <tr><th>Requirement</th><th>Detail</th></tr>
       <tr><td>Scale baseline</td><td>~10,000 posts in feed</td></tr>
-      <tr><td>Scroll performance</td><td>No frame drops during fast scroll; visible cells always win bandwidth</td></tr>
-      <tr><td>Network resilience</td><td>Graceful degradation; no starvation of visible cells on slow networks</td></tr>
+      <tr><td>Scroll performance</td><td>No frame drops during fast scroll</td></tr>
+      <tr><td>Network resilience</td><td>Graceful degradation; no starvation of visible cells</td></tr>
     </table>
   </div>
 </section>
@@ -358,16 +340,11 @@
   <h2>API Design</h2>
   <p><strong>Strategy:</strong> REST + cursor-based pagination. Authentication assumed.</p>
 
-  <div class="callout"><strong>Why cursor over offset?</strong> New posts arrive continuously. If 5 posts are inserted while the user is on page 2, offset page 3 now overlaps with page 2 — the user sees duplicates. Cursor anchors to <code>postID</code>, immune to insertions above the anchor.</div>
-  <div class="callout"><strong>Why batch likes?</strong> A user who likes several posts while offline sends one request on connectivity restore instead of N. Reduces reconnect burst load.</div>
-  <div class="callout"><strong>Image URLs, not binary data.</strong> <code>PostDTO.photoURLs</code> contains S3 URLs. The API stays lightweight; <code>ImageSDKDataSource</code> resolves images independently.</div>
-
-  <h3>Endpoints</h3>
 <pre><code><span class="gr">GET</span> /users/&lt;userID&gt;/feed
   Params:
-    postID  — cursor (ID of last seen post; omit for first page)
-    limit   — Int (<span class="nm">20</span>)
-    page    — <span class="st">"prev"</span> | <span class="st">"next"</span>
+    postID  — cursor (ID of last seen post)
+    limit   — Int (20)
+    page    — "prev" | "next"
   Response:
     posts: [<span class="ty">PostDTO</span>]
     nextCursor: <span class="ty">String</span>?
@@ -375,13 +352,16 @@
 <span class="gr">POST</span> /users/&lt;userID&gt;/likes
   Body:
     [{ postID: <span class="ty">Int</span>, value: <span class="ty">Bool</span> }]
-  Response: <span class="nm">204</span> No Content</code></pre>
+  Response: 204 No Content</code></pre>
+
+  <div class="callout"><strong>Why cursor over offset?</strong> If 5 posts arrive while the user is on page 2, offset page 3 overlaps with what was page 2 — the user sees duplicates. Cursor anchors to <code>postID</code>, immune to insertions above the anchor.</div>
+  <div class="callout"><strong>Why batch likes (array body)?</strong> A user who likes several posts while offline sends one request on restore instead of N. Reduces reconnect burst.</div>
+  <div class="callout"><strong>Image URLs in response, not binary data.</strong> <code>PostDTO.photoURLs</code> contains S3 URLs. The API stays lightweight; SDWebImage resolves images independently via <code>FeedImageDataSource</code>.</div>
 </section>
 
 <!-- DATA MODEL -->
 <section id="model">
   <h2>Data Model</h2>
-
   <h3>Domain Models</h3>
 <pre><code><span class="kw">struct</span> <span class="ty">Post</span> {
     <span class="kw">let</span> postID: <span class="ty">Int</span>
@@ -404,7 +384,7 @@
 <span class="kw">struct</span> <span class="ty">Like</span> {
     <span class="kw">let</span> userID: <span class="ty">Int</span>
     <span class="kw">let</span> postID: <span class="ty">Int</span>
-    <span class="kw">var</span> successfullySent: <span class="ty">Bool</span>   <span class="cm">// false = pending retry</span>
+    <span class="kw">var</span> successfullySent: <span class="ty">Bool</span>  <span class="cm">// false = pending retry</span>
 }</code></pre>
 
   <h3>DTO (mirrors API shape)</h3>
@@ -420,14 +400,14 @@
 
   <h3>UIModels (Presentation layer only)</h3>
 <pre><code><span class="kw">enum</span> <span class="ty">FeedCellUIModel</span> {
-    <span class="kw">case</span> <span class="nm">photo</span>(<span class="ty">PhotoCellUIModel</span>)
-    <span class="kw">case</span> <span class="nm">album</span>(<span class="ty">AlbumCellUIModel</span>)
+    <span class="kw">case</span> photo(<span class="ty">PhotoCellUIModel</span>)
+    <span class="kw">case</span> album(<span class="ty">AlbumCellUIModel</span>)
 }
 
 <span class="kw">struct</span> <span class="ty">PhotoCellUIModel</span> {
     <span class="kw">let</span> title: <span class="ty">String</span>
     <span class="kw">let</span> avatarURL: <span class="ty">URL</span>
-    <span class="kw">let</span> imageURL: <span class="ty">URL</span>           <span class="cm">// single photo</span>
+    <span class="kw">let</span> imageURL: <span class="ty">URL</span>
     <span class="kw">let</span> likeCount: <span class="ty">Int</span>
     <span class="kw">var</span> isLiked: <span class="ty">Bool</span>
 }
@@ -435,12 +415,11 @@
 <span class="kw">struct</span> <span class="ty">AlbumCellUIModel</span> {
     <span class="kw">let</span> title: <span class="ty">String</span>
     <span class="kw">let</span> avatarURL: <span class="ty">URL</span>
-    <span class="kw">let</span> imageURLs: [<span class="ty">URL</span>]        <span class="cm">// carousel</span>
+    <span class="kw">let</span> imageURLs: [<span class="ty">URL</span>]
     <span class="kw">let</span> likeCount: <span class="ty">Int</span>
     <span class="kw">var</span> isLiked: <span class="ty">Bool</span>
 }</code></pre>
-
-  <div class="callout"><strong>Why <code>FeedCellUIModel</code> is an enum.</strong> A single <code>Post</code>-like struct with optional fields forces cells to defensive-unwrap. An enum encodes the variant at the type level — the compiler enforces exhaustive handling. Cells never touch the domain layer.</div>
+  <div class="callout"><strong><code>FeedCellUIModel</code> is an enum</strong> — the compiler enforces exhaustive handling. Cells never inspect <code>Post</code> directly.</div>
 </section>
 
 <!-- ARCHITECTURE -->
@@ -450,39 +429,38 @@
 
   <h3>Layer Breakdown</h3>
   <div class="stack">
-    <div class="stack-row"><div class="stack-name">Presentation</div><div class="stack-desc"><code>FeedViewController</code> · <code>FeedViewModel</code> (@MainActor, UICollectionViewDataSource/Delegate) · <code>FeedCellUIModel</code> · <code>PhotoCell</code> · <code>AlbumCell</code></div></div>
-    <div class="stack-row"><div class="arrow">↓</div><div class="stack-name">Domain</div><div class="stack-desc"><code>FetchFeedUseCase</code> · <code>LikePostUseCase</code> · <code>LikeService</code> (app-scoped) · <code>Post</code> · <code>User</code> · <code>Like</code> · <code>FeedParam</code></div></div>
-    <div class="stack-row"><div class="arrow">↓</div><div class="stack-name">Data</div><div class="stack-desc"><code>NewsFeedRepository</code> · <code>LikeRepository</code> · <code>FeedRemoteDataSource</code> · <code>FeedLocalDataSource</code> (Core Data) · <code>PostDTO</code> · <code>PostMapper</code></div></div>
-    <div class="stack-row"><div class="stack-name">Infrastructure</div><div class="stack-desc">None — <code>ImageSDKDataSource</code> wraps SDWebImage as a single-layer Data concern; no cross-layer wrappers in this scenario</div></div>
-    <div class="stack-row"><div class="stack-name">External</div><div class="stack-desc"><code>SDWebImage</code> → <code>ImageSDKDataSource</code> (Data) · <code>CoreData</code> → <code>FeedLocalDataSource</code> (Data) · <code>URLSession</code> → <code>APIClient</code> (Data)</div></div>
-    <div class="stack-row"><div class="arrow">↓</div><div class="stack-name">Application</div><div class="stack-desc"><code>AppCoordinator</code> · <code>AppDelegate</code> · manual init injection (composition root)</div></div>
+    <div class="stack-row"><div class="stack-name">Presentation</div><div class="stack-desc"><code>FeedViewController</code>, <code>FeedViewModel</code> (@MainActor), <code>FeedCellUIModel</code> (enum), <code>PhotoCell</code>, <code>AlbumCell</code><br>FeedViewModel implements <code>UICollectionViewDataSource</code> + <code>UICollectionViewDelegate</code></div></div>
+    <div class="stack-row"><div class="arrow">↓</div><div class="stack-name">Domain</div><div class="stack-desc">UseCases: <code>FetchFeedUseCase</code>, <code>LikePostUseCase</code><br>Domain Services: <code>LikeService</code> (stateful, app-scoped — holds durable retry queue)<br>Models: <code>Post</code>, <code>User</code>, <code>Like</code>, <code>FeedParam</code></div></div>
+    <div class="stack-row"><div class="arrow">↓</div><div class="stack-name">Data</div><div class="stack-desc"><code>NewsFeedRepository</code>: <code>FeedRemoteDataSource</code> + <code>FeedLocalDataSource</code> (Core Data — metadata cache)<br><code>LikeRepository</code>: <code>LikeRemoteDataSource</code> + <code>FeedLocalDataSource</code> (Core Data — Like queue, <code>successfullySent</code> flag)<br><code>FeedImageDataSource</code> (ThirdPartyDataSource wrapping SDWebImage)<br>DTOs: <code>PostDTO</code> · Mappers: <code>PostMapper</code></div></div>
+    <div class="stack-row"><div class="stack-name">Infrastructure</div><div class="stack-desc">None</div></div>
+    <div class="stack-row"><div class="stack-name">External</div><div class="stack-desc"><code>SDWebImage</code> · <code>CoreData</code> · <code>URLSession</code> · <code>Network.framework</code></div></div>
+    <div class="stack-row"><div class="stack-name">Application</div><div class="stack-desc"><code>AppCoordinator</code> (composition root — builds full dependency graph, holds app-scoped services as strong properties) · <code>AppDelegate</code> (entry point) · Manual init injection — no DI framework</div></div>
   </div>
 
   <h3>Architecture Diagram</h3>
-<pre><code><span class="ty">FeedViewController</span>
+<pre><code><span class="nm">FeedViewController</span>
     │
     ▼
-<span class="ty">FeedViewModel</span> (@MainActor)
+<span class="nm">FeedViewModel</span> (@<span class="ty">MainActor</span>)
     │  items: [<span class="ty">FeedCellUIModel</span>]
     │  implements <span class="ty">UICollectionViewDataSource</span> + <span class="ty">UICollectionViewDelegate</span>
     │
-    ├──► <span class="ty">FetchFeedUseCase</span>
-    │       └─► <span class="ty">NewsFeedRepository</span>
-    │               ├─► <span class="ty">FeedRemoteDataSource</span> ── <span class="gr">GET</span> /users/&lt;id&gt;/feed ──► REST API
-    │               └─► <span class="ty">FeedLocalDataSource</span>   (Core Data — metadata cache)
+    ├──► <span class="nm">FetchFeedUseCase</span>
+    │       └─► <span class="nm">NewsFeedRepository</span>
+    │               ├─► <span class="nm">FeedRemoteDataSource</span> ─── GET /users/&lt;id&gt;/feed ──► REST API
+    │               └─► <span class="nm">FeedLocalDataSource</span> (Core Data — metadata cache)
     │
-    └──► <span class="ty">LikeService</span> (app-scoped singleton)
-             └─► <span class="ty">LikeRepository</span>
-                     ├─► <span class="ty">LikeRemoteDataSource</span>  ── <span class="gr">POST</span> /users/&lt;id&gt;/likes ──► REST API
-                     └─► <span class="ty">FeedLocalDataSource</span>   (Core Data — Like queue, successfullySent)
+    └──► <span class="nm">LikeService</span> (app-scoped)
+             └─► <span class="nm">LikeRepository</span>
+                     ├─► <span class="nm">LikeRemoteDataSource</span> ── POST /users/&lt;id&gt;/likes ──► REST API
+                     └─► <span class="nm">FeedLocalDataSource</span> (Core Data — Like queue, successfullySent flag)
 
-Cells ──► <span class="ty">ImageSDKDataSource</span> (SDWebImage) ──► S3 image URLs (from <span class="ty">PostDTO</span>.photoURLs)</code></pre>
+<span class="nm">FeedViewModel</span> ──► <span class="nm">FeedImageDataSource</span> (SDWebImage) ──► S3 URLs (photoURLs from PostDTO)</code></pre>
 
-
-  <h3 id="di">Dependency Injection (Composition Root)</h3>
-  <p>No DI framework. Dependencies flow inward via init. <code>AppCoordinator</code> owns the composition root and holds app-scoped objects as strong properties.</p>
+  <h3>Dependency Injection (Composition Root)</h3>
+  <p>No DI framework. Dependencies flow inward via init. <code>AppCoordinator</code> owns the composition root — it builds the full graph and holds app-scoped objects as strong properties.</p>
 <pre><code><span class="cm">// AppCoordinator — composition root</span>
-<span class="kw">let</span> client       = <span class="ty">APIClient</span>()
+<span class="kw">let</span> client = <span class="ty">APIClient</span>()
 
 <span class="cm">// Data layer</span>
 <span class="kw">let</span> feedRemoteDS = <span class="ty">FeedRemoteDataSource</span>(client: client)
@@ -493,135 +471,123 @@ Cells ──► <span class="ty">ImageSDKDataSource</span> (SDWebImage) ──�
 <span class="kw">let</span> newsFeedRepo = <span class="ty">NewsFeedRepository</span>(remote: feedRemoteDS, local: feedLocalDS)
 <span class="kw">let</span> likeRepo     = <span class="ty">LikeRepository</span>(remote: likeRemoteDS, local: feedLocalDS)
 
-<span class="cm">// Domain Service — strong property on AppCoordinator; survives screen transitions</span>
+<span class="cm">// Domain Services — strong property on AppCoordinator; survives screen transitions</span>
 <span class="kw">let</span> likeService  = <span class="ty">LikeService</span>(repository: likeRepo)
-likeService.<span class="nm">resumePendingRetries</span>()  <span class="cm">// re-queue successfullySent=false on launch</span>
+likeService.resumePendingRetries()                    <span class="cm">// re-queue successfullySent=false on launch</span>
 
 <span class="cm">// UseCases — stateless; created per-navigation</span>
 <span class="kw">let</span> fetchFeedUseCase = <span class="ty">FetchFeedUseCase</span>(repository: newsFeedRepo)
 
-<span class="cm">// Presentation — Coordinator creates this when pushing the feed screen</span>
+<span class="cm">// Presentation — created by Coordinator when pushing feed screen</span>
 <span class="kw">let</span> viewModel = <span class="ty">FeedViewModel</span>(
     fetchFeed: fetchFeedUseCase,
     likeService: likeService
 )</code></pre>
-  <div class="rule"><strong><code>LikeService</code> is a stored property on <code>AppCoordinator</code></strong> — not created inside <code>FeedViewController</code>. This is what keeps it alive across screen transitions and app lifecycle events. If owned by the ViewController it deallocates on pop and the retry queue is lost.</div>
+  <div class="warn"><strong><code>LikeService</code> is a stored property on <code>AppCoordinator</code></strong>, not created inside <code>FeedViewController</code>. This is what keeps it alive across screen transitions and app lifecycle events. If it were owned by the ViewController, it would deallocate on pop and lose the retry queue.</div>
 </section>
 
 <!-- DATA FLOW -->
-<section id="flow">
+<section id="dataflow">
   <h2>Data Flow</h2>
 
   <h3 id="flow-feed">1. Feed Load Flow</h3>
 <pre><code><span class="nm">FeedViewController</span>.viewDidLoad()
     → <span class="nm">FeedViewModel</span>.load()
         → isLoading = <span class="kw">true</span>
-        → <span class="ty">FetchFeedUseCase</span>.execute(policy: .cached, param: <span class="ty">FeedParam</span>(userID:))
-            → <span class="ty">NewsFeedRepository</span>.fetch(policy: .cached, param:)
-                → <span class="ty">FeedLocalDataSource</span>.fetchedAt → if &lt; 2 min → return cached DTOs  <span class="cm">// instant</span>
-                → else: <span class="ty">FeedRemoteDataSource</span>.fetch()
-                         → <span class="gr">GET</span> /users/&lt;id&gt;/feed?postID=&lt;cursor&gt;&amp;limit=20
-                         → [<span class="ty">PostDTO</span>]
-                         → <span class="ty">PostMapper</span>.toDomain(dto) → [<span class="ty">Post</span>]
-                         → <span class="ty">FeedLocalDataSource</span>.save(dtos)  <span class="cm">// write-through cache</span>
+        → <span class="nm">FetchFeedUseCase</span>.execute(policy: .cached, param: <span class="ty">FeedParam</span>(userID:))
+            <span class="cm">// Single .cached call — 2-minute timestamp in NewsFeedRepository replaces</span>
+            <span class="cm">// Pattern A's two-phase split. Repository returns cached data</span>
+            <span class="cm">// while network update happens internally when cache is stale.</span>
+            → <span class="nm">NewsFeedRepository</span>.fetch(policy: .cached, param:)
+                → <span class="nm">FeedLocalDataSource</span>.fetchedAt → <span class="kw">if</span> &lt; 2 min → return cached DTOs
+                → <span class="kw">else</span>: <span class="nm">FeedRemoteDataSource</span>.fetch() → GET /users/&lt;id&gt;/feed?postID=&lt;cursor&gt;&amp;limit=20
+                    → response → <span class="ty">PostDTO</span> array
+                    → <span class="nm">PostMapper</span>.toDomain(dto) → [<span class="ty">Post</span>]
+                    → <span class="nm">FeedLocalDataSource</span>.save(dtos)  <span class="cm">← write-through cache</span>
         → <span class="nm">FeedViewModel</span> maps [<span class="ty">Post</span>] → [<span class="ty">FeedCellUIModel</span>]
-        → @Published items updated → <span class="ty">UICollectionView</span> reloads
-        → defer: isLoading = <span class="kw">false</span></code></pre>
+        → @Published items updated → UICollectionView reloads
+        → <span class="kw">defer</span>: isLoading = <span class="kw">false</span></code></pre>
 
   <h3 id="flow-like">2. Like Flow (Optimistic, Offline-Safe)</h3>
-<pre><code>User taps like at index i
+<pre><code>User taps like on post at index i
     → <span class="nm">FeedViewModel</span>.toggleLike(at: i)
-        → items[i] optimistically mutated (toggle isLiked, ±1 likeCount)  <span class="cm">// instant UI</span>
-        → <span class="ty">LikeService</span>.enqueue(<span class="ty">Like</span> { userID, postID, successfullySent: <span class="kw">false</span> })
-            → <span class="ty">FeedLocalDataSource</span>.save(Like)  <span class="cm">// persisted to Core Data</span>
-            → <span class="ty">LikeRemoteDataSource</span>.post([{ postID, value }])
-                → success:  <span class="ty">FeedLocalDataSource</span>.update(Like, successfullySent: <span class="kw">true</span>)
-                → failure:  leave successfullySent = <span class="kw">false</span>
-                    → background retry loop on connectivity restore</code></pre>
+        → items[i] optimistically mutated (toggle isLiked, ±1 likeCount)  <span class="cm">← instant UI</span>
+        → <span class="nm">LikeService</span>.enqueue(<span class="ty">Like</span> { userID, postID, successfullySent: <span class="kw">false</span> })
+            → <span class="nm">FeedLocalDataSource</span>.save(<span class="ty">Like</span>)  <span class="cm">← persisted to Core Data</span>
+            → <span class="nm">LikeRemoteDataSource</span>.post([{ postID, value }])
+                <span class="cm">// (userID, postID) is a natural idempotency key — server treats duplicate</span>
+                <span class="cm">// like requests as no-ops. No explicit client UUID needed.</span>
+                → success: <span class="nm">FeedLocalDataSource</span>.update(<span class="ty">Like</span>, successfullySent: <span class="kw">true</span>)
+                → failure: leave successfullySent = <span class="kw">false</span>
+                    → background retry loop on connectivity restore
+                      (<span class="nm">NetworkPathDataSource</span> monitors <span class="ty">NWPathMonitor</span>)</code></pre>
 
   <h3 id="flow-prefetch">3. Scroll Prefetch Flow</h3>
 <pre><code><span class="ty">UICollectionView</span> triggers prefetchItemsAt(indexPaths:)
     → <span class="nm">FeedViewModel</span>.prefetch(at: indexPaths)
-        → start background data task per IndexPath (if not already fetching)
+        → withThrowingTaskGroup: one concurrent prefetch task per IndexPath
+            <span class="cm">// Dynamic N cells → withThrowingTaskGroup for concurrent prefetch;</span>
+            <span class="cm">// async let is for a fixed small N</span>
 
 <span class="ty">UICollectionView</span> triggers cancelPrefetchingForItemsAt(indexPaths:)
     → <span class="nm">FeedViewModel</span>.cancelPrefetch(at: indexPaths)
-        → cancel pending tasks — free bandwidth for visible cells
+        → cancel pending data tasks for those indexPaths
 
-<span class="ty">Cell</span>.prepareForReuse()
-    → imageView.sd_cancelCurrentImageLoad()   <span class="cm">// cancel stale SDWebImage request</span></code></pre>
+Cell.prepareForReuse()
+    → imageView.sd_cancelCurrentImageLoad()   <span class="cm">← cancel stale SDWebImage request</span></code></pre>
 </section>
 
 <!-- DEEP DIVES -->
 <section id="deepdive">
   <h2>Deep Dives</h2>
 
-  <!-- 1. CURSOR PAGINATION -->
-  <h3 id="cursor">1. Cursor-Based Pagination</h3>
-  <h4>Offset (breaks on live feed)</h4>
-<pre><code>Page 1:  [A B C D E F G H I J]  → request page 2 (offset=10)
-                   ↑
-         New post "X" inserted here
+  <!-- 1. PAGINATION -->
+  <h3 id="pagination">1. Cursor-Based Pagination</h3>
+<pre><code>Offset (breaks on live feed):
+  Page 1: [A B C D E F G H I J]  → page 2 offset=10
+  New post "X" inserted at top
+  Page 2: [F G H I J K ...]       ← F already seen — duplicate!
 
-Page 2 (offset=10):  [F G H I J K ...]  ← F already seen — duplicate!</code></pre>
-
-  <h4>Cursor (stable)</h4>
-<pre><code>Page 1:  [A B C D E F G H I J]  → nextCursor = <span class="st">"J"</span>
-                   ↑
-         New post "X" inserted here
-
-Page 2 (cursor=<span class="st">"J"</span>):  [K L M ...]  ← starts after J, unaffected</code></pre>
-
-  <div class="callout"><strong>The cursor is opaque.</strong> The client echoes it back verbatim — never parses or constructs it. The server decides what's inside (ID, timestamp, composite key). Decouples client from server internals — same principle as treating an HTTP <code>ETag</code> as opaque.</div>
-
-  <div class="table-wrap">
-    <table>
-      <tr><th></th><th>Cursor</th><th>Offset</th></tr>
-      <tr><td>Live-updating feed</td><td>✅ stable</td><td>❌ skips / duplicates</td></tr>
-      <tr><td>Static data</td><td>Overkill</td><td>✅ simpler</td></tr>
-      <tr><td>Jump to arbitrary page</td><td>❌</td><td>✅</td></tr>
-      <tr><td>Server complexity</td><td>Higher</td><td>Simple</td></tr>
-    </table>
-  </div>
-  <div class="rule"><strong>Rule:</strong> cursor when data moves (live feed, synced library), offset when it doesn't (search results, static lists).</div>
+Cursor (stable):
+  Page 1: [A B C D E F G H I J]  → nextCursor = "J"
+  New post "X" inserted at top
+  Page 2 (cursor=J): [K L M ...]  ← starts after J, unaffected</code></pre>
+  <p>The cursor is an <strong>opaque value</strong> — <code>postID</code> here, but the client treats it as a black box. Never parse or construct it on the client.</p>
 
   <hr class="divider">
 
   <!-- 2. IMAGE CACHE -->
-  <h3 id="imagecache">2. SDWebImage vs URLCache</h3>
+  <h3 id="imagecache">2. Image Cache: SDWebImage vs URLCache</h3>
   <div class="table-wrap">
     <table>
       <tr><th></th><th>URLCache</th><th>SDWebImage</th></tr>
       <tr><td>Stores</td><td>Raw <code>Data</code> (HTTP bytes)</td><td>Decoded <code>UIImage</code> object</td></tr>
-      <tr><td>Display cost</td><td><code>UIImage(data:)</code> every display</td><td>Zero — object already decoded</td></tr>
-      <tr><td>Thread</td><td>Decode on main thread (risk)</td><td>Background decode, main thread display</td></tr>
-      <tr><td>Disk cache</td><td>Yes (HTTP response)</td><td>Yes (decoded image file)</td></tr>
-      <tr><td>Memory cache</td><td>NSURLCache LRU</td><td>NSCache (auto-evict under memory pressure)</td></tr>
+      <tr><td>Display cost</td><td><code>UIImage(data:)</code> every time</td><td>Zero — object already decoded</td></tr>
+      <tr><td>Thread</td><td>Main thread decode risk</td><td>Background decode, main thread display</td></tr>
+      <tr><td>Disk</td><td>Yes</td><td>Yes (separate disk cache)</td></tr>
+      <tr><td>Memory</td><td>NSURLCache LRU</td><td>NSCache (auto-evict under pressure)</td></tr>
     </table>
   </div>
-  <div class="callout"><strong>SDWebImage as <code>ImageSDKDataSource: ImageDataSourceProtocol</code>.</strong> The rest of the app calls the protocol — never SDWebImage directly. Swapping the library = one file change in one DataSource.</div>
-  <div class="warn"><strong>Common mistake:</strong> using <code>URLCache</code> for images because it's "built-in". It caches raw bytes — you pay <code>UIImage(data:)</code> decode on every cell display. On a fast-scrolling feed with large photos this is a measurable CPU hit.</div>
+  <div class="callout"><strong>SDWebImage is wrapped as <code>FeedImageDataSource: ImageDataSourceProtocol</code>.</strong> The rest of the app calls the protocol — never SDWebImage directly. Swapping the library = one file change.</div>
 
   <hr class="divider">
 
   <!-- 3. STARVATION -->
   <h3 id="starvation">3. Resource Starvation Mitigation</h3>
-  <p>When a user flicks through the feed rapidly, hundreds of image requests queue for cells that are no longer visible. Visible cells starve for bandwidth.</p>
-
-  <div class="stack">
-    <div class="stack-row"><div class="stack-name">1. Cancel prefetch tasks</div><div class="stack-desc">Implement <code>cancelPrefetchingForItemsAt</code>. Stop data tasks for IndexPaths no longer approaching the viewport. Without this, stale requests pile up.</div></div>
-    <div class="stack-row"><div class="stack-name">2. Cancel on cell reuse</div><div class="stack-desc"><code>prepareForReuse</code> calls <code>sd_cancelCurrentImageLoad()</code>. Prevents a recycled cell from showing the previous post's image briefly while the new request loads.</div></div>
-    <div class="stack-row"><div class="stack-name">3. Defer until scroll ends</div><div class="stack-desc">Optionally, only fire new data tasks in <code>scrollViewDidEndDecelerating</code>. Bandwidth goes entirely to what the user is actually reading during rapid scroll.</div></div>
-  </div>
-
-  <div class="rule"><strong>Always pair <code>prefetchItemsAt</code> with <code>cancelPrefetchingForItemsAt</code>.</strong> Implementing only the prefetch half is worse than implementing neither — you get all the queuing with none of the cleanup.</div>
+  <p>When a user flicks through the feed rapidly, hundreds of image requests queue up for cells that are no longer visible. Visible cells starve.</p>
+  <p><strong>Three-pronged fix:</strong></p>
+  <ol>
+    <li><strong>Cancel prefetch tasks</strong> — implement <code>cancelPrefetchingForItemsAt</code>. Stop data tasks for IndexPaths no longer approaching the viewport.</li>
+    <li><strong>Cancel on cell reuse</strong> — <code>prepareForReuse</code> calls <code>sd_cancelCurrentImageLoad()</code>. Prevents a recycled cell from showing the wrong post's image.</li>
+    <li><strong>Defer new requests until scroll settles</strong> — optionally, only fire new data tasks in <code>scrollViewDidEndDecelerating</code>. Bandwidth goes to what the user is actually reading.</li>
+  </ol>
 
   <hr class="divider">
 
   <!-- 4. FRESHNESS -->
-  <h3 id="freshness">4. Feed Freshness Policy</h3>
-  <p>The generic architecture's <code>FetchPolicy.cached</code> returns local data if any exists. This scenario adds a time constraint.</p>
-
+  <h3 id="freshness">4. Feed Freshness — Extending FetchPolicy.cached</h3>
+  <p>The generic architecture's <code>FetchPolicy.cached</code> returns local data if any exists. This scenario adds a time constraint: local data is only valid if <code>fetchedAt &lt; 2 minutes ago</code>.</p>
+  <p><strong>Implementation:</strong> <code>FeedLocalDataSource</code> stores a <code>fetchedAt: Date</code> alongside the cached DTOs (Core Data entity field or UserDefaults). <code>NewsFeedRepository</code> reads <code>fetchedAt</code> before deciding whether <code>.cached</code> qualifies.</p>
 <pre><code><span class="cm">// Inside NewsFeedRepository.fetch(policy:param:)</span>
 <span class="kw">if</span> policy == .cached {
     <span class="kw">let</span> age = <span class="ty">Date</span>().timeIntervalSince(localDataSource.fetchedAt ?? .distantPast)
@@ -629,68 +595,64 @@ Page 2 (cursor=<span class="st">"J"</span>):  [K L M ...]  ← starts after J, u
 }
 <span class="cm">// else: fall through to network</span></code></pre>
 
-  <div class="callout"><strong>Where to store <code>fetchedAt</code>:</strong> a <code>fetchedAt: Date</code> field on a <code>FeedMetadata</code> Core Data entity (co-located with the cached posts), or a <code>UserDefaults</code> key. Either works. UserDefaults is simpler; Core Data keeps it transactional with the cached data.</div>
-  <div class="callout"><strong>2 minutes is a product decision.</strong> Too short → redundant API calls on quick re-navigations. Too long → stale feed. Expose as a configurable constant; don't hardcode deep in the Repository.</div>
-
   <hr class="divider">
 
-  <!-- 5. LIKE QUEUE -->
-  <h3 id="likequeue">5. Optimistic UI + Durable Like Queue</h3>
-  <p>The generic mutation flow: ViewModel → UseCase → Repository → server, then update UI on response. This scenario inverts the order for likes: <strong>UI updates first, server is eventual.</strong></p>
-
-<pre><code><span class="cm">// Generic mutation flow (awaits server)</span>
-ViewModel → <span class="ty">UseCase</span> → <span class="ty">Repository</span> → server → ✅ → update @Published state
-
-<span class="cm">// Optimistic flow (UI first)</span>
-ViewModel → mutate items[i] immediately  <span class="cm">// user sees change instantly</span>
-          → <span class="ty">LikeService</span>.enqueue(Like { ..., successfullySent: <span class="kw">false</span> })
-              → persist to Core Data
-              → attempt network  →  success: successfullySent = <span class="kw">true</span>, delete record
-                                 →  failure: retry on connectivity restore</code></pre>
-
-  <div class="rule"><strong>The queue is durable — not session-scoped.</strong> On app relaunch, <code>LikeService</code> reads all <code>Like</code> records with <code>successfullySent = false</code> from Core Data and resumes retrying. An app kill mid-retry does not lose the user's intent.</div>
-  <div class="warn"><strong>Records must be cleaned up.</strong> The retry loop must set <code>successfullySent = true</code> and eventually delete the record on confirmed success — otherwise the Core Data queue grows unbounded over time.</div>
-  <div class="warn"><strong><code>LikeService</code> must not be owned by a ViewController.</strong> If scoped to a screen, it deallocates when the user navigates away — the retry queue disappears. Register at AppCoordinator level.</div>
+  <!-- 5. OPTIMISTIC UI -->
+  <h3 id="optimistic">5. Optimistic UI + Durable Like Queue</h3>
+  <p>The generic mutation flow: ViewModel → UseCase → Repository → server, then update UI on response.</p>
+  <p>This scenario <strong>inverts the order</strong> for likes: UI updates first, server is eventual.</p>
+  <p>The <code>Like.successfullySent</code> flag bridges the two worlds:</p>
+  <ul>
+    <li><code>false</code> = pending, persist to Core Data, enqueue retry</li>
+    <li><code>true</code> = confirmed, clean up record</li>
+  </ul>
+  <p>On app relaunch, <code>LikeService</code> reads all <code>Like</code> records with <code>successfullySent = false</code> from <code>FeedLocalDataSource</code> and resumes retrying. The queue is durable — not session-scoped.</p>
+  <div class="warn"><strong>Open question:</strong> retry policy (exponential back-off vs fixed interval, retry cap) is not specified. Suggested position: exponential back-off with a 3-attempt cap, then surface a non-blocking error banner to the user.</div>
 </section>
 
 <!-- PITFALLS -->
 <section id="pitfalls">
   <h2>Pitfalls / Gotchas</h2>
-  <div class="warn"><strong>Using <code>URLCache</code> for images.</strong> It stores raw bytes — you decode on every display. Wrap SDWebImage in <code>ImageSDKDataSource</code> instead.</div>
-  <div class="warn"><strong>Offset pagination on a live feed.</strong> Insertions at the top shift offsets — duplicates appear. Use cursor-based pagination.</div>
-  <div class="warn"><strong>Not implementing <code>cancelPrefetchingForItemsAt</code>.</strong> Stale requests pile up and starve visible cells. Always pair prefetch with its cancel counterpart.</div>
-  <div class="warn"><strong>Forgetting <code>sd_cancelCurrentImageLoad()</code> in <code>prepareForReuse</code>.</strong> Fast scrollers see wrong images briefly — the recycled cell shows the previous request's result.</div>
-  <div class="warn"><strong><code>successfullySent</code> records never cleaned up.</strong> The retry loop must delete the record on confirmed success, or the Core Data queue grows unbounded.</div>
-  <div class="warn"><strong><code>LikeService</code> scoped to a ViewController.</strong> It deallocates on pop — the retry queue disappears. Register at AppCoordinator level, same as <code>PlayerService</code>.</div>
-  <div class="warn"><strong>Creating <code>LikeService</code> inside a ViewController instead of the composition root.</strong> If <code>FeedViewController</code> owns it, the service deallocates on pop — the retry queue is lost. It must be a stored property on <code>AppCoordinator</code>, passed down via init injection.</div>
+  <ul>
+    <li><strong>Using <code>URLCache</code> for images.</strong> It stores raw bytes — you decode on every display. Use SDWebImage via <code>FeedImageDataSource</code>.</li>
+    <li><strong>Offset pagination on a live feed.</strong> Insertions at the top shift offsets — duplicates appear. Use cursor-based pagination.</li>
+    <li><strong>Not implementing <code>cancelPrefetchingForItemsAt</code>.</strong> Stale requests pile up and starve visible cells. Always pair <code>prefetchItemsAt</code> with its cancel counterpart.</li>
+    <li><strong>Forgetting <code>sd_cancelCurrentImageLoad()</code> in <code>prepareForReuse</code>.</strong> Fast scrollers see wrong images briefly — the recycled cell shows the previous request's result.</li>
+    <li><strong>Creating <code>LikeService</code> inside a ViewController instead of the composition root.</strong> If <code>FeedViewController</code> owns it, the service deallocates on pop — the retry queue is lost. It must be a stored property on <code>AppCoordinator</code>, passed down via init injection.</li>
+    <li><strong><code>successfullySent</code> records never cleaned up.</strong> The retry loop must set <code>successfullySent = true</code> and eventually delete the record on success, or the Core Data queue grows unbounded.</li>
+    <li><strong><code>LikeService</code> owned by a ViewController.</strong> If scoped to a screen, it deallocates when the user navigates away — the retry queue disappears. Register at AppCoordinator level.</li>
+  </ul>
 </section>
 
-<!-- TALKING POINTS -->
-<section id="talking">
+<!-- INTERVIEWER TALKING POINTS -->
+<section id="talking-points">
   <h2>Interviewer Talking Points</h2>
-  <div class="rule"><strong>On pagination:</strong> "I'd use cursor-based pagination — it's stable when new posts arrive, unlike offset which drifts and causes duplicates or skips."</div>
-  <div class="rule"><strong>On optimistic UI:</strong> "The <code>Like</code> domain model carries a <code>successfullySent</code> flag. <code>LikeService</code> updates the UI optimistically and retries in the background until the flag flips to true. The queue is persisted in Core Data — an app kill doesn't lose the intent."</div>
-  <div class="rule"><strong>On image caching:</strong> "For images I'd wrap SDWebImage in an <code>ImageSDKDataSource</code>. <code>URLCache</code> stores raw bytes and you pay the decode hit every time. SDWebImage caches the decoded <code>UIImage</code>, so repeat displays are zero-cost."</div>
-  <div class="rule"><strong>On scroll performance:</strong> "I'd use <code>UICollectionView</code> with <code>UICollectionViewDataSourcePrefetching</code>. That protocol gives me <code>cancelPrefetchingForItemsAt</code> — without it, rapid scrolling queues hundreds of stale requests and starves visible cells."</div>
-  <div class="rule"><strong>On cell design:</strong> "The ViewModel maps <code>Post</code> domain objects into typed <code>FeedCellUIModel</code> variants before the collection view sees them. Cells are dumb renderers — they never touch the domain layer."</div>
-  <div class="rule"><strong>On offline:</strong> "Core Data for metadata, S3 URLs (not raw bytes) in the API response, SDWebImage for image disk cache — these three together mean the feed works fully offline after the first load."</div>
-  <div class="rule"><strong>On freshness:</strong> "Feed freshness extends <code>FetchPolicy.cached</code> with a 2-minute timestamp at the Repository level. If <code>fetchedAt</code> is recent, skip the network. The Repository is the only place that reads this timestamp."</div>
+  <ul>
+    <li>"I'd use cursor-based pagination — it's stable when new posts arrive, unlike offset which drifts and causes duplicates or skips."</li>
+    <li>"The <code>Like</code> domain model carries a <code>successfullySent</code> flag. <code>LikeService</code> updates the UI optimistically and retries in the background until the flag flips to true."</li>
+    <li>"For image caching I'd wrap SDWebImage in a <code>FeedImageDataSource</code> — it caches the decoded <code>UIImage</code>, so repeat displays are zero-cost. <code>URLCache</code> stores raw bytes and you pay the decode hit every time."</li>
+    <li>"I'd use <code>UICollectionView</code> with <code>UICollectionViewDataSourcePrefetching</code>. That protocol gives me <code>cancelPrefetchingForItemsAt</code> — without it, rapid scrolling queues hundreds of stale requests and starves visible cells."</li>
+    <li>"The ViewModel maps <code>Post</code> domain objects into typed <code>FeedCellUIModel</code> variants before the collection view sees them. Cells are dumb renderers — they never touch the domain layer."</li>
+    <li>"The like queue is persisted to Core Data with <code>successfullySent: false</code>. An app kill mid-retry doesn't lose the user's intent — <code>LikeService</code> reads pending records on relaunch and resumes."</li>
+    <li>"Feed freshness extends <code>FetchPolicy.cached</code> with a 2-minute timestamp. If <code>fetchedAt</code> is recent, skip the network. The Repository is the only place that reads this timestamp."</li>
+  </ul>
 </section>
 
 <!-- OPEN QUESTIONS -->
-<section id="openquestions">
+<section id="open-questions">
   <h2>Open Questions</h2>
   <ul>
-    <li><strong>Retry policy for failed likes:</strong> Back-off strategy, retry cap, and user-facing error after exhausting retries. Suggested position: 3 attempts with exponential back-off, then surface a non-blocking error banner.</li>
-    <li><strong>Exact prefetch trigger threshold:</strong> How many cells from the bottom triggers the next cursor page request. Product decision — e.g., last 5 cells ≈ 25% of one page.</li>
+    <li><strong>Retry policy for failed likes:</strong> Back-off strategy (fixed vs exponential), retry cap, and what to show the user after exhausting retries. Suggested position: 3 attempts with exponential back-off, then surface a non-blocking error banner.</li>
+    <li><strong>Exact prefetch trigger threshold:</strong> How many cells from the bottom to fire the next cursor page request — <code>UICollectionViewDataSourcePrefetching</code> provides the hook but the threshold is a product decision (e.g., last 5 cells = ~25% of one page).</li>
     <li><strong>Feed refresh UI transition:</strong> Full reload vs <code>NSDiffableDataSourceSnapshot</code> diff on cache expiry. Diff avoids flash; full reload is simpler.</li>
-    <li><strong>Cache timestamp storage:</strong> <code>fetchedAt</code> as a Core Data entity field vs <code>UserDefaults</code> keyed by <code>userID</code>. Either works; UserDefaults is simpler.</li>
-    <li><strong>Network restoration trigger:</strong> <code>NWPathMonitor</code> (modern, built-in) vs Reachability (third-party, legacy) for flushing the pending like queue. Prefer <code>NWPathMonitor</code>.</li>
+    <li><strong>Cache timestamp storage:</strong> <code>fetchedAt</code> can live as a Core Data entity field on a <code>FeedMetadata</code> record, or in <code>UserDefaults</code> keyed by <code>userID</code>. Either works; UserDefaults is simpler.</li>
+    <li><strong>Network restoration trigger for <code>LikeService</code>:</strong> Resolved — <code>NWPathMonitor</code> (Network.framework). Wrapped as <code>NetworkPathDataSource</code> in the Data layer — Presentation-free (connectivity state only).</li>
   </ul>
 </section>
 
 <div class="bottom-nav">
   <a href="../index.html">← Home</a>
+  <a class="right" href="music-streaming-system-design.html">Music Streaming →</a>
 </div>
 
 </body>
