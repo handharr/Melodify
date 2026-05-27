@@ -307,15 +307,17 @@
     <table>
       <tr><th>Concept</th><th>Generic</th><th>Story Viewer</th></tr>
       <tr><td>API strategy</td><td>Cursor or offset pagination</td><td>Single endpoint <code>getStoriesAfter(cursor:)</code> — full load + delta in one call</td></tr>
-      <tr><td>Domain Service</td><td>SessionService / PlayerService examples</td><td><code>StoryOrderService</code> — stateful ranking (unseen-first) + <code>markAsSeen</code> tracking</td></tr>
+      <tr><td>Domain Service</td><td><code>SessionService</code> / <code>PlayerService</code> examples</td><td><code>StoryOrderService</code> — stateful ranking (unseen-first) + <code>markAsSeen</code> tracking</td></tr>
       <tr><td>Image loading</td><td>Not covered</td><td><code>ImageSDKDataSource</code> (ThirdPartyDataSource wrapping SDWebImage) — caches decoded <code>UIImage</code>, background download</td></tr>
       <tr><td>Image pre-fetching</td><td>Not covered</td><td>ViewModel triggers prefetch for <code>nextStory</code> on every display cycle</td></tr>
       <tr><td>UI carousel pattern</td><td>Not covered</td><td>Three recycled <code>UIImageView</code> instances with swipe gesture — seamless infinite loop</td></tr>
-      <tr><td>Auto-advance</td><td>Not covered</td><td>10-second timer in ViewController, started after image download completes (not on transition)</td></tr>
+      <tr><td>Auto-advance</td><td>Not covered</td><td>10-second timer in ViewController, <strong>started after image download completes</strong> (not on transition)</td></tr>
       <tr><td>Story expiry</td><td>Not covered</td><td>Repository filters <code>expireAt &lt; now</code> before returning Domain models</td></tr>
       <tr><td>Throttle guard</td><td>FetchPolicy handles cache/network split</td><td><code>FetchPolicy.cached</code> at Repository — skips network if local data is &lt; 10 min old</td></tr>
     </table>
   </div>
+
+  <h3>Key decisions unique to this scenario</h3>
 
   <div class="rule">
     <strong>No pagination.</strong> Stories are 24-hour bounded. The full metadata response is ~50 KB. A single <code>getStoriesAfter(cursor:)</code> endpoint handles both initial load (cursor = nil) and delta updates (cursor = latest known ID). Three pagination endpoints for 50 KB of data adds complexity with no benefit.
@@ -323,6 +325,18 @@
 
   <div class="rule">
     <strong>StoryOrderService is a Domain Service, not a UseCase.</strong> It is stateful — it holds a <code>Set&lt;Story.ID&gt;</code> of seen IDs that must survive across swipes and foreground re-entries. A stateless UseCase cannot hold that state.
+  </div>
+
+  <div class="rule">
+    <strong>Three-UIImageView recycling, not UICollectionView or UIPageViewController.</strong> Both standard containers struggle with seamless wrap-around (last → first story). Manual view recycling gives precise frame-level control over the loop animation at O(1) layout work per swipe.
+  </div>
+
+  <div class="rule">
+    <strong>Timer tied to download, not to transition.</strong> Starting the 10-second auto-advance timer before the image loads burns the user's viewing window on a spinner. The timer starts only after <code>ImageSDKDataSource</code> signals download completion.
+  </div>
+
+  <div class="rule">
+    <strong>SDWebImage as a ThirdPartyDataSource.</strong> The rest of the app calls <code>ImageDataSourceProtocol</code> — never SDWebImage directly. Swapping the library = one file change.
   </div>
 
   <div class="callout">
@@ -348,8 +362,8 @@
   <ul>
     <li><strong>UI performance</strong> — no frame drops during swipe; no visible spinners mid-session</li>
     <li><strong>Network resilience</strong> — graceful degradation on slow or intermittent connections</li>
-    <li><strong>Storage efficiency</strong> — avoid redundant image data; decoded <code>UIImage</code> cache, not raw bytes</li>
-    <li><strong>Backend efficiency</strong> — 10-minute throttle guard; delta-only updates after initial load</li>
+    <li><strong>Storage efficiency</strong> — limited device storage; avoid redundant image caching</li>
+    <li><strong>Backend efficiency</strong> — no redundant API calls; throttled polling</li>
   </ul>
 </section>
 
@@ -389,7 +403,7 @@
 <span class="cm">// API returns a URL string; binary is fetched lazily from Amazon S3.</span></code></pre>
 
   <div class="callout">
-    <strong>Why not pagination?</strong> Classic cursor pagination (<code>initialLoad(pageSize)</code>, <code>headLoad</code>, <code>tailLoad</code>) is designed for feeds of arbitrary depth. Stories are time-bounded. 50 KB fits in a single response. Pagination adds 3 endpoints and client-side merging complexity for zero benefit.
+    <strong>Why not pagination?</strong> Classic cursor pagination (<code>initialLoad(pageSize)</code>, <code>headLoad(pageSize, cursor)</code>, <code>tailLoad(pageSize, cursor)</code>) is designed for feeds of arbitrary depth. Stories are time-bounded (24 h). The full dataset is ~50 KB — fits in a single response. Pagination adds three endpoints and client-side merging complexity for no benefit.
   </div>
 </section>
 
@@ -417,7 +431,7 @@
     <span class="kw">let</span> <span class="nm">expireAt</span>: <span class="ty">Int</span>     <span class="cm">// Unix timestamp</span>
 }</code></pre>
 
-  <h3>UIModel (ViewModel → View only)</h3>
+  <h3>UIModel (flat display struct, ViewModel → View)</h3>
   <pre><code><span class="kw">struct</span> <span class="ty">StoryUIModel</span> {
     <span class="kw">let</span> <span class="nm">id</span>: <span class="ty">Int</span>
     <span class="kw">let</span> <span class="nm">photoURL</span>: <span class="ty">URL</span>
@@ -457,7 +471,7 @@
     </div>
     <div class="stack-row">
       <div class="stack-name">StoryViewModel</div>
-      <div class="stack-desc"><code>@MainActor</code> · <code>@Published var currentStory: StoryUIModel?</code> · calls <code>FetchStoriesUseCase</code> · calls <code>StoryOrderService.markAsSeen(id:)</code> · calls <code>PrefetchStoryImageUseCase.execute(url:)</code> for next story</div>
+      <div class="stack-desc"><code>@MainActor</code> · <code>@Published var currentStory: StoryUIModel?</code> · <code>@Published var isLoading: Bool</code> · <code>@Published var errorMessage: String?</code> · calls <code>FetchStoriesUseCase</code> · calls <code>StoryOrderService.markAsSeen(id:)</code> · calls <code>PrefetchStoryImageUseCase.execute(url:)</code> for next story</div>
     </div>
   </div>
 
@@ -538,7 +552,7 @@
   </div>
 
   <div class="rule">
-    <strong>Dependency rule:</strong> <code>StoryViewController</code> → <code>StoryViewModel</code> → <code>FetchStoriesUseCase</code> → <code>StoryRepositoryProtocol</code> ← <code>StoryRepository</code> → DataSources. Domain depends on nothing.
+    <strong>Dependency rule:</strong> <code>StoryViewController</code> → <code>StoryViewModel</code> → <code>FetchStoriesUseCase</code> / <code>PrefetchStoryImageUseCase</code> → <code>StoryRepositoryProtocol</code> ← <code>StoryRepository</code> → <code>StoryRemoteDataSource</code> + <code>StoryLocalDataSource</code> + <code>ImageSDKDataSource</code>. Domain depends on nothing.
   </div>
 </section>
 
@@ -552,7 +566,7 @@
       → isLoading = <span class="kw">true</span>
       → FetchStoriesUseCase.<span class="nm">execute</span>(policy: .cached, param: <span class="ty">FetchStoriesParam</span>(cursor: <span class="kw">nil</span>))
           → StoryRepository.<span class="nm">fetch</span>(policy: .cached, param:)
-              → StoryLocalDataSource.<span class="nm">read</span>() → [<span class="ty">StoryDTO</span>]? → <span class="ty">StoryMapper</span> → [<span class="ty">Story</span>]  <span class="cm">// fast return if fresh</span>
+              → StoryLocalDataSource.<span class="nm">read</span>() → [<span class="ty">StoryDTO</span>]? → <span class="ty">StoryMapper</span> → [<span class="ty">Story</span>]  <span class="cm">// fast return if &lt; 10 min old</span>
               → <span class="cm">// if stale:</span>
               → StoryRemoteDataSource.<span class="nm">getStoriesAfter</span>(cursor: <span class="kw">nil</span>) → [<span class="ty">StoryDTO</span>]
               → filter expireAt &lt; now
@@ -566,13 +580,14 @@
       → <span class="kw">defer</span>: isLoading = <span class="kw">false</span></code></pre>
 
   <h3>Delta update (foreground re-entry)</h3>
-  <pre><code>applicationDidBecomeActive
+  <pre><code>App returns to foreground → applicationDidBecomeActive
   → StoryViewModel.<span class="nm">refresh</span>()
       → FetchStoriesUseCase.<span class="nm">execute</span>(policy: .cached, param: <span class="ty">FetchStoriesParam</span>(cursor: latestKnownID))
           → StoryRepository checks local timestamp
               → &lt; 10 min old: return cached [<span class="ty">Story</span>]   <span class="cm">// throttle guard</span>
               → ≥ 10 min old: remote <span class="nm">getStoriesAfter</span>(cursor: latestKnownID) → deltas only
-                              → merge with local store → StoryLocalDataSource.<span class="nm">write</span>(merged)
+                              → filter expired
+                              → merge with local store → StoryLocalDataSource.<span class="nm">write</span>(merged DTOs)
           → returns merged [<span class="ty">Story</span>]
       → StoryOrderService.<span class="nm">ordered</span>(stories:) → new unseen stories bubble to front
       → @Published currentStory updated</code></pre>
@@ -695,6 +710,9 @@ StoryOrderService places 7, 8, 9 at front (newest unseen first)</code></pre>
   </div>
   <div class="warn">
     <strong>Allocating new UIImageViews per swipe.</strong> Triggers layout passes on every navigation. Always reuse the three existing views — move and swap, never allocate.
+  </div>
+  <div class="warn">
+    <strong>Not cancelling in-flight prefetch on backward swipe.</strong> Prefetch for story N+1 should be cancelled if the user swipes to N-1. Stale requests waste bandwidth and pollute the cache.
   </div>
   <div class="warn">
     <strong>Not filtering expireAt on cache read.</strong> A story cached hours ago may have expired before display. Filter at the Repository level on every read, not just on fetch.
