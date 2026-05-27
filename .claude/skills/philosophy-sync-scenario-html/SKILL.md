@@ -1,5 +1,5 @@
 ---
-name: sync-scenario-html
+name: philosophy-sync-scenario-html
 description: Regenerates the HTML deck for a scenario doc from its .md source. Run after any manual edit to a docs/scenarios/*.md file.
 user-invocable: true
 ---
@@ -62,12 +62,13 @@ Rules and principles become `.rule` divs.
 Warnings and gotchas become `.warn` divs.
 The delta "Key decisions unique to this scenario" bullets become `.rule` or `.callout` divs depending on tone.
 
-**Do NOT render the following as callouts** — these are generic architecture rationale that belong only in `ios-app-system-design.html`, not in scenario decks:
+**Do NOT render the following as callouts** — these are generic architecture rationale that belong only in `ios-app-system-design-philosophy.html`, not in scenario decks:
 - "Why MVVM over MVP?"
 - "Why MVVM over VIPER?"
 - "Why Clean Architecture over MVC?"
 - "Why FetchPolicy over hardcoding network/cache logic per ViewModel?"
 - "UseCase vs Domain Service" comparison table
+- "Domain Service vs Gateway" comparison table
 
 If these appear in the source `.md`, skip them during HTML generation and flag them in your step 2 diff report as content to remove from the `.md`.
 

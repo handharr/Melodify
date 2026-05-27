@@ -1,6 +1,6 @@
 ---
-name: refactor-scenario-design
-description: Refactors a raw iOS system design notes file (from a YouTube video or mock interview) to align with the generic iOS architecture in docs/ios-app-system-design.md. Produces a clean scenario .md doc and a matching HTML deck file.
+name: philosophy-refactor-scenario-design
+description: Refactors a raw iOS system design notes file (from a YouTube video or mock interview) to align with the generic iOS architecture in docs/ios-app-system-design-philosophy.md. Produces a clean scenario .md doc and a matching HTML deck file.
 user-invocable: true
 ---
 
@@ -11,7 +11,7 @@ Your job is to refactor those notes into:
 2. A matching HTML deck file at `docs/deck/`
 
 Both outputs must:
-- Align with the user's generic iOS architecture (`docs/ios-app-system-design.md`)
+- Align with the user's generic iOS architecture (`docs/ios-app-system-design-philosophy.md`)
 - Open with an explicit delta section (what's the same, what this scenario adds)
 - Use the user's naming conventions throughout
 - Preserve all domain-specific knowledge and rationale from the original notes
@@ -27,10 +27,10 @@ If no path is provided, ask the user for the file path before proceeding.
 Read the raw notes file provided by the user.
 
 Also read these reference files:
-- `docs/ios-app-system-design.md` — generic architecture (source of truth for naming and patterns)
+- `docs/ios-app-system-design-philosophy.md` — generic architecture (source of truth for naming and patterns)
 - `docs/deck/music-streaming-system-design.html` — style reference for the HTML output (CSS, component classes, layout patterns)
 
-If `docs/ios-app-system-design.md` does not exist, check `../docs/ios-app-system-design.md` relative to the notes file, then ask the user for the correct path.
+If `docs/ios-app-system-design-philosophy.md` does not exist, check `../docs/ios-app-system-design-philosophy.md` relative to the notes file, then ask the user for the correct path.
 
 ## Step 2 — Vocabulary mapping
 
@@ -48,12 +48,13 @@ Use the generic architecture doc as the source of truth for the user's naming co
 - Conversion between DTO and Domain → `Mapper`
 - Navigation objects → `Coordinator`
 - Screen state objects → `ViewModel (@MainActor, @Published)`
+- Infrastructure SDK wrappers → `<Vendor><Domain>Gateway` (e.g. `StripePaymentGateway`) — conforms to a `<Domain>GatewayProtocol` defined in Domain
 
 Flag any component in the notes that has no clear equivalent in the generic architecture — these are likely scenario-specific additions (delta candidates).
 
 ## Step 3 — Layer audit
 
-Check every component in the notes against the dependency rule: **Presentation → Domain ← Data. Domain depends on nothing.**
+Check every component in the notes against the dependency rule: **Presentation → Domain ← Data. Infrastructure conforms to Domain protocols. Domain depends on nothing.**
 
 Flag violations:
 - A ViewModel calling a Repository directly (should go via UseCase)
@@ -90,7 +91,7 @@ Structure:
 
 **Source:** <source description from notes>
 
-> Scenario extension of [`docs/ios-app-system-design.md`](../../ios-app-system-design.md)
+> Scenario extension of [`docs/ios-app-system-design-philosophy.md`](../ios-app-system-design-philosophy.md)
 > Read the delta below first.
 
 ---
@@ -138,10 +139,11 @@ Before writing any file, verify:
 - All naming follows the generic architecture conventions; all DataSources are domain-prefixed
 - The delta table is complete — nothing scenario-specific leaked into "same as generic"
 - The generic architecture doc does not need updating (if the scenario revealed a gap in the generic doc, call it out explicitly to the user)
-- **No generic "Why" explanations are in the scenario output.** The following belong only in `ios-app-system-design.md` / `ios-app-system-design.html` and must NOT appear in a scenario doc:
+- **No generic "Why" explanations are in the scenario output.** The following belong only in `ios-app-system-design-philosophy.md` / `ios-app-system-design-philosophy.html` and must NOT appear in a scenario doc:
   - "Why MVVM over MVP?" / "Why MVVM over VIPER?" / "Why Clean Architecture over MVC?"
   - "Why FetchPolicy over hardcoding network/cache logic per ViewModel?"
   - "UseCase vs Domain Service" comparison table
+  - "Domain Service vs Gateway" comparison table
   - Keep only reasoning that is unique to this specific scenario — e.g. why UIKit vs SwiftUI for this screen type, why a specific storage backend, why SSE vs polling for this use case.
 
 ## Step 7 — Produce the HTML deck

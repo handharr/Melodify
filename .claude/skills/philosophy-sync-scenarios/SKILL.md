@@ -1,17 +1,17 @@
 ---
-name: sync-scenarios
-description: Propagates changes from docs/ios-app-system-design.md into all docs/scenarios/ files. Proposes updates per scenario before writing, then regenerates HTML for any changed scenario.
+name: philosophy-sync-scenarios
+description: Propagates changes from docs/ios-app-system-design-philosophy.md into all docs/scenarios/ files. Proposes updates per scenario before writing, then regenerates HTML for any changed scenario.
 user-invocable: true
 ---
 
-The generic architecture doc (`docs/ios-app-system-design.md`) was updated. Your job is to propagate those changes into every scenario doc in `docs/scenarios/`, then regenerate the HTML for any scenario that changed.
+The generic architecture doc (`docs/ios-app-system-design-philosophy.md`) was updated. Your job is to propagate those changes into every scenario doc in `docs/scenarios/`, then regenerate the HTML for any scenario that changed.
 
 This skill proposes changes per scenario before writing — it never silently overwrites.
 
 ## Step 1 — Read all files
 
 Read:
-1. `docs/ios-app-system-design.md` — the updated generic architecture
+1. `docs/ios-app-system-design-philosophy.md` — the updated generic architecture
 2. Every `.md` file in `docs/scenarios/`
 
 ## Step 2 — Identify what changed in the generic doc
@@ -63,9 +63,9 @@ Write the updated `.md` file.
 
 ## Step 5 — Regenerate HTML for the generic architecture doc
 
-The generic architecture HTML at `docs/deck/ios-app-system-design.html` must always stay in sync with `docs/ios-app-system-design.md`.
+The generic architecture HTML at `docs/deck/ios-app-system-design-philosophy.html` must always stay in sync with `docs/ios-app-system-design-philosophy.md`.
 
-Regenerate `docs/deck/ios-app-system-design.html` after every run of this skill, even if the changes seem minor. Use the same CSS and component class rules as `sync-scenario-html`:
+Regenerate `docs/deck/ios-app-system-design-philosophy.html` after every run of this skill, even if the changes seem minor. Use the same CSS and component class rules as `sync-scenario-html`:
 - Copy CSS verbatim from `docs/deck/music-streaming-system-design.html`
 - Map every `##` section to `<section id="...">` with a `.toc` entry
 - `.callout` (blue) for "why" decisions, `.rule` (green) for principles, `.warn` (orange) for gotchas
@@ -90,8 +90,8 @@ After all writes are complete:
 ## Sync Complete
 
 ### Files updated
-- `docs/ios-app-system-design.md` ← source
-- `docs/deck/ios-app-system-design.html` ✅ regenerated
+- `docs/ios-app-system-design-philosophy.md` ← source
+- `docs/deck/ios-app-system-design-philosophy.html` ✅ regenerated
 
 ### Generic doc changes
 <summary from step 2>
@@ -106,5 +106,5 @@ After all writes are complete:
 <list any that were skipped and why>
 
 ### Recommended follow-up
-- Run /audit-scenarios to verify full consistency
+- Run /philosophy-audit-scenarios to verify full consistency
 ```

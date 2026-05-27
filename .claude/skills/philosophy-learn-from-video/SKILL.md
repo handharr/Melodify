@@ -1,5 +1,5 @@
 ---
-name: learn-from-video
+name: philosophy-learn-from-video
 description: Refines raw YouTube video notes (from Gemini) into a structured learning doc for interview prep. Iterative loop: Phase 1 produces a refined draft + targeted Gemini questions; Phase 2+ incorporates answers, evaluates gaps, and generates follow-up questions until the doc is complete.
 user-invocable: true
 ---

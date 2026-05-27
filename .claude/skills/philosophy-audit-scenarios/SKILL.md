@@ -1,15 +1,15 @@
 ---
-name: audit-scenarios
-description: Read-only audit of all docs/scenarios/ files against docs/ios-app-system-design.md. Reports stale naming, missing delta coverage, layer violations, and HTML sync drift. Makes no changes.
+name: philosophy-audit-scenarios
+description: Read-only audit of all docs/scenarios/ files against docs/ios-app-system-design-philosophy.md. Reports stale naming, missing delta coverage, layer violations, and HTML sync drift. Makes no changes.
 user-invocable: true
 ---
 
-Audit all scenario docs in `docs/scenarios/` against the generic iOS architecture in `docs/ios-app-system-design.md`. This is a read-only skill — report findings only, make no changes.
+Audit all scenario docs in `docs/scenarios/` against the generic iOS architecture in `docs/ios-app-system-design-philosophy.md`. This is a read-only skill — report findings only, make no changes.
 
 ## Step 1 — Read all files
 
 Read:
-1. `docs/ios-app-system-design.md` — the source of truth for naming, patterns, and layer rules
+1. `docs/ios-app-system-design-philosophy.md` — the source of truth for naming, patterns, and layer rules
 2. Every `.md` file in `docs/scenarios/`
 3. Every corresponding HTML at `docs/deck/<scenario-name>.html` — to check HTML sync
 
@@ -32,6 +32,7 @@ Check every component name against the generic architecture doc's conventions:
 - Data transfer objects named `*DTO`
 - Conversion types named `*Mapper`
 - Navigation named `*Coordinator`
+- Infrastructure wrappers named `*Gateway` (never `*Manager`, `*Service`, or `*DataSource` for SDK facades) — always vendor-prefixed (e.g. `StripePaymentGateway`, not bare `Gateway`)
 
 Flag any deviation with the correct term.
 
@@ -46,13 +47,14 @@ Check both the `.md` and its HTML for explanations that belong only in `ios-app-
 - "Why Clean Architecture over MVC?" explanation
 - "Why FetchPolicy over hardcoding network/cache logic per ViewModel?" explanation
 - "UseCase vs Domain Service" comparison table (with columns: Triggered by / State / Has I/O? / Lifetime)
+- "Domain Service vs Gateway" comparison table
 
 **Scenario-specific reasoning is fine** — e.g. "Why UIKit over SwiftUI for THIS scenario" (AVPlayerViewController, scroll lifecycle), "Why GRDB for this app", "Why SSE over polling for this use case", "Why manual DI over Swinject (what the reference video uses)".
 
 The test: would this exact explanation appear unchanged in every other scenario? If yes, it's generic and must be removed from the scenario deck.
 
 ### 2c. Layer dependency rule
-Check that the dependency rule holds: **Presentation → Domain ← Data. Domain depends on nothing.**
+Check that the dependency rule holds: **Presentation → Domain ← Data. Infrastructure conforms to Domain protocols. Domain depends on nothing.**
 
 Flag:
 - ViewModels calling Repositories directly (should go via UseCase)
@@ -78,7 +80,7 @@ Output a structured report. Format:
 ```
 ## Audit Report — <date>
 
-### docs/ios-app-system-design.md
+### docs/ios-app-system-design-philosophy.md
 <version summary — what patterns/conventions are currently defined>
 
 ---
@@ -115,6 +117,6 @@ End the report with a summary table:
 ## Step 4 — Recommend next steps
 
 Based on findings, recommend which skill to run:
-- Naming or layer violations → `/refactor-scenario-design` to clean up the scenario
-- HTML out of sync → `/sync-scenario-html` on the affected file
-- Delta stale against generic doc → `/sync-scenarios` to propagate arch changes
+- Naming or layer violations → `/philosophy-refactor-scenario-design` to clean up the scenario
+- HTML out of sync → `/philosophy-sync-scenario-html` on the affected file
+- Delta stale against generic doc → `/philosophy-sync-scenarios` to propagate arch changes
