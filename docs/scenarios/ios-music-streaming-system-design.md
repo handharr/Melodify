@@ -3,7 +3,7 @@
 **Source:** Senior iOS Engineer Mock Interview (Andrey Tech with Liam Ronan)  
 **Progress:** ✅ Requirements · ✅ API & Data Model · ✅ High-Level Architecture · ✅ Streaming & Playback · ✅ Feedback
 
-> **Scenario extension of** [`docs/ios-app-system-design.md`](../ios-app-system-design.md)  
+> **Scenario extension of** [`docs/ios-app-system-design-philosophy.md`](../ios-app-system-design-philosophy.md)  
 > Read the delta below first — it describes what this scenario adds or changes on top of the generic architecture.
 
 ---
@@ -24,12 +24,13 @@
 - `ThirdPartyDataSource` (SDK facade) — wraps third-party SDKs as a `RemoteDataSource`; app calls protocol, never SDK directly
 - Idempotency keys on mutations — client-generated UUID at `Param` call site for any retryable mutation
 - HTTP `409 ≠ 5xx` — concurrency conflicts and transient server errors must never share a code path
+- Infrastructure layer (`Gateway` suffix) — Domain defines protocol; concrete in Infrastructure; nothing depends on Gateway except DI wiring in Application
 
 ### What this scenario adds
 | Concept | Generic | Music Streaming |
 |---|---|---|
 | Local storage | LocalDataSource (cache) | Two tiers: metadata cache (GRDB) + file storage (LRU disk cache) |
-| File storage | Not in generic | `LocalFileDataSource` — binary audio files on disk, LRU 5 GB |
+| File storage | Not in generic | `MediaFileDataSource` — binary audio files on disk, LRU 5 GB |
 | Offline saves | Not in generic | `DownloadLocalDataSource` — maps `itemId → localFilePath` |
 | Domain Services | Generic (SessionService example) | `PlayerService` (app-scoped, owns queue + playback state) · `StreamRefreshService` (manifest expiry logic) |
 | Streaming | Not in generic | HLS via `AVPlayer` — adaptive bitrate, chunk-based, short-lived signed URLs |
@@ -39,7 +40,7 @@
 
 ### Key decisions unique to this scenario
 - **`PlayerService` must be app-scoped** — if owned by a ViewController it deallocates when the screen pops and music stops
-- **Two separate `LocalFileDataSource` instances** — streaming LRU cache and explicit offline saves must never share storage (cache pressure must not evict user-saved tracks)
+- **Two separate `MediaFileDataSource` instances** — streaming LRU cache and explicit offline saves must never share storage (cache pressure must not evict user-saved tracks)
 - **`stream-info` is a separate endpoint** — manifest URL is short-lived; decoupled from item metadata so it can be refreshed without invalidating the rest of the model
 - **Queue is client-owned** — built via `PlayableItemRepository` (.strict policy, local-only) by `PlayerService`; no server round-trip on every playback action
 
@@ -241,7 +242,7 @@ Pattern: **MVVM + Clean Architecture** — Presentation → Domain ← Data. Sam
 | `PlayerService` | `PlayerService` — Domain Service, app-scoped |
 | *(not in video)* | `StreamRefreshService` — Domain Service, expiry check logic |
 | `DownloadStore` | `DownloadLocalDataSource` — maps `itemId → localFilePath` |
-| `DownloadService` | `DownloadTrackUseCase` + `MediaRemoteDataSource` + `LocalFileDataSource` |
+| `DownloadService` | `DownloadTrackUseCase` + `MediaRemoteDataSource` + `MediaFileDataSource` |
 
 ### Layer Breakdown
 
@@ -292,7 +293,7 @@ Data
   DownloadRepository
     ├─ remoteDataSource: MediaRemoteDataSource     (→ HLS CDN)
     ├─ localDataSource:  DownloadLocalDataSource   (itemId → localFilePath metadata)
-    └─ fileDataSource:   LocalFileDataSource       (actual binary on disk, LRU 5 GB)
+    └─ fileDataSource:   MediaFileDataSource       (actual binary on disk, LRU 5 GB)
 
   Mappers (only type that knows both DTO and Domain model):
     LibraryItemMapper.toDomain(_:)
@@ -334,15 +335,6 @@ Same reason you'd split `TrackRepository` from `PlaylistRepository` in Melodify:
 1. **Deep link / direct access** — a track URL can open without collection context
 2. **Granular cache invalidation** — refresh one episode's `resumeTimestamp` without busting the whole collection cache
 
-### Domain Service vs UseCase — When to Use Which
-
-| | UseCase | Domain Service |
-|---|---|---|
-| Triggered by | User action | Another component (UseCase, ViewModel, Service) |
-| State | Stateless | Can be stateful |
-| Lifetime | Created per call | Injected and lives as long as needed |
-| Example here | `FetchLibraryUseCase` | `PlayerService`, `StreamRefreshService` |
-
 ### PlayerService Scope
 `PlayerService` is a Domain Service — must live at **app-level** (registered in your DI container at startup), not inside any ViewController.
 
@@ -352,10 +344,10 @@ Same reason you'd split `TrackRepository` from `PlaylistRepository` in Melodify:
 | DataSource | Purpose | Eviction |
 |---|---|---|
 | `LibraryLocalDataSource` / `CollectionLocalDataSource` | Metadata (GRDB) | TTL / manual |
-| `LocalFileDataSource` (explicit download) | User-saved offline tracks | Never (user-controlled) |
-| `LocalFileDataSource` (LRU cache) | Recently streamed chunks | LRU, max 5 GB |
+| `MediaFileDataSource` (explicit download) | User-saved offline tracks | Never (user-controlled) |
+| `MediaFileDataSource` (LRU cache) | Recently streamed chunks | LRU, max 5 GB |
 
-Two separate `LocalFileDataSource` instances — offline saves can never be evicted by streaming cache pressure.
+Two separate `MediaFileDataSource` instances — offline saves can never be evicted by streaming cache pressure.
 
 > **Why LRU over FIFO or LFU eviction?**
 > FIFO (First In, First Out) evicts the oldest item regardless of how recently it was used — you might evict an album the user plays every day. LFU (Least Frequently Used) favours popular items but is expensive to track and punishes newly added content. LRU evicts what hasn't been touched recently — a good proxy for "user probably doesn't need this anymore." Simple to implement, good real-world performance for media caches.

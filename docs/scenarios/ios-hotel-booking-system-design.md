@@ -2,7 +2,7 @@
 
 **Source:** Mock interview study notes — Senior iOS Engineer level, ~10M DAU scale.
 
-> Scenario extension of [`docs/ios-app-system-design.md`](../ios-app-system-design.md)
+> Scenario extension of [`docs/ios-app-system-design-philosophy.md`](../ios-app-system-design-philosophy.md)
 > Read the delta below first.
 
 ---
@@ -24,14 +24,16 @@
 - `ThirdPartyDataSource` (SDK facade) — wraps third-party SDKs as a `RemoteDataSource`; app calls protocol, never SDK directly
 - Idempotency keys on mutations — client-generated UUID at `Param` call site for any retryable mutation
 - HTTP 409 ≠ 5xx — concurrency conflicts and transient server errors must never share a code path
+- Infrastructure layer (`Gateway` suffix) — Domain defines protocol; concrete in Infrastructure; nothing depends on Gateway except DI wiring in Application
 
 ### What this scenario adds
 
 | Concept | Generic | This Scenario |
 |---|---|---|
-| Image storage | Not in generic | Two-tier cache: `LocalFileDataSource` (disk) + CoreData metadata index (`url → filePath + savedAt` for TTL) |
+| Image storage | Not in generic | Two-tier cache: `ImageFileDataSource` (disk) + CoreData metadata index (`url → filePath + savedAt` for TTL) |
 | Offline storage | Not in generic | `ReservationLocalDataSource` (CoreData) — read-only offline reservation history |
-| Domain Services | Generic (SessionService example) | `ReservationService` (hold timer + live state) · `ImageService` (two-tier image cache) · `PaymentService` (Stripe SDK facade) |
+| Domain Services | `Service` suffix — stateful/long-lived, pure Swift, no SDK imports | `ReservationService` (hold timer + live state) · `ImageService` (two-tier image cache) · `PaymentService` (orchestrates payment flow: injects `PaymentGatewayProtocol`, delegates to `ProcessPaymentUseCase`) |
+| Infrastructure | Not typically in scope | `StripePaymentGateway: PaymentGatewayProtocol` — the only class that imports the Stripe SDK; wired by Application, never imported by Domain |
 | Hold timer | Not in generic | Server-authoritative 15-min lock; client counts down using server's `expiration_time` |
 | Idempotency key | Documented in generic — UUID at `Param` call site for retryable mutations | Client-generated `local_id` UUID on every mutation — prevents duplicate reservations/charges on network retry |
 | Pagination | Not in generic | Offset-limit — simpler; BE controls sort order; data doesn't move mid-scroll (no cross-device sync) |
@@ -48,7 +50,7 @@
 - **Server owns the clock.** `expiration_time` is always server-generated. Client never calculates a hold window — it only displays a countdown.
 - **Offset-limit over cursor pagination.** BE controls sort order; results don't change mid-scroll (no cross-device sync like music library). Offset is simpler and sufficient.
 - **WebSockets rejected twice.** For autocomplete and for the hold timer — HTTP + client countdown achieves the same UX at a fraction of the cost at 10M DAU.
-- **Image cache and offline reservation storage are separate.** Cache pressure must not evict user reservation data. `LocalFileDataSource` for images and `ReservationLocalDataSource` for reservations never share storage.
+- **Image cache and offline reservation storage are separate.** Cache pressure must not evict user reservation data. `ImageFileDataSource` for images and `ReservationLocalDataSource` for reservations never share storage.
 - **`local_id` is always client-generated.** Standard industry idempotency key. Prevents duplicate charges on network retry. Server dedup would add server complexity; client UUID is cheap and reliable.
 
 ---
@@ -254,9 +256,10 @@ struct Reservation {
 |---|---|
 | Presentation | `ViewController` + `ViewModel` (@MainActor, @Published) · SwiftUI Views |
 | Domain — UseCase | `SearchHotelsUseCase` · `FetchHotelDetailUseCase` · `FetchAmenitiesUseCase` · `CreateReservationUseCase` · `ProcessPaymentUseCase` |
-| Domain — Service | `ReservationService` (hold timer + live state) · `ImageService` (two-tier cache) · `PaymentService` (presents Stripe SDK UI, collects token, delegates to `ProcessPaymentUseCase`) |
+| Domain — Service | `ReservationService` (hold timer + live state) · `ImageService` (two-tier cache) · `PaymentService` (orchestrates payment via `PaymentGatewayProtocol` → `ProcessPaymentUseCase`) |
+| Infrastructure | `StripePaymentGateway: PaymentGatewayProtocol` — only class that imports Stripe SDK; wired by Application |
 | Data — Repository | `HotelRepository` · `ReservationRepository` · `AmenityRepository` · `ImageRepository` |
-| Data — DataSource | `HotelRemoteDataSource` · `HotelLocalDataSource` · `ReservationRemoteDataSource` · `ReservationLocalDataSource` · `AmenityLocalDataSource` · `MediaRemoteDataSource` · `ImageLocalDataSource` · `LocalFileDataSource` |
+| Data — DataSource | `HotelRemoteDataSource` · `HotelLocalDataSource` · `ReservationRemoteDataSource` · `ReservationLocalDataSource` · `AmenityLocalDataSource` · `MediaRemoteDataSource` · `ImageLocalDataSource` · `ImageFileDataSource` |
 | Application | `AppDelegate` · `Coordinator` (per flow) · Swinject DI container |
 
 ### Swinject Scoping
@@ -265,7 +268,7 @@ struct Reservation {
 |---|---|---|
 | Singleton | `ReservationService` | Owns live hold state + 15-min countdown timer across screens |
 | Singleton | `ImageService` | Owns two-tier image cache — must persist across screens |
-| Singleton | `PaymentService` | Presents Stripe SDK UI, collects token, orchestrates `ProcessPaymentUseCase` — one instance |
+| Singleton | `PaymentService` | Orchestrates payment flow via `PaymentGatewayProtocol` (Stripe SDK never imported in Domain) — one instance |
 | Transient | UseCases | Stateless — no mutable state to share |
 
 **Rule of thumb:** if a service owns mutable state that must stay consistent across ViewModels, it must be a singleton.
@@ -337,8 +340,8 @@ ReservationViewModel.reserve(param:)
 ```
 PaymentViewModel.pay()
   → PaymentService [Domain Service — app-scoped singleton]
-      1. presents Stripe SDK UI → receives payment_token
-      2. → ProcessPaymentUseCase.execute(param: PaymentParam(token: payment_token))
+      1. paymentGateway.collectToken()   // StripePaymentGateway (Infrastructure) — presents Stripe UI, returns token
+      2. → ProcessPaymentUseCase.execute(param: PaymentParam(token:))
              → PaymentRepository (PaymentRepositoryProtocol)
                  → PaymentRemoteDataSource.post("/reservations/payment", body: { payment_token })
       → returns success
@@ -359,14 +362,14 @@ PaymentViewModel.pay()
 Image Request (via ImageService)
      │
      ▼
-LocalFileDataSource (disk)
+ImageFileDataSource (disk)
      │ hit? → serve immediately
      │ miss?
      ▼
 MediaRemoteDataSource (S3 fetch)
      │
      ▼
-Write binary file to disk (LocalFileDataSource)
+Write binary file to disk (ImageFileDataSource)
 Write metadata record to CoreData (ImageLocalDataSource):
   { url: String, filePath: String, savedAt: Date }
 ```
@@ -475,7 +478,7 @@ PaymentService → ProcessPaymentUseCase
 BE charges card server-side via Stripe API
 ```
 
-`PaymentService` (Domain Service) handles the Stripe SDK UI interaction to collect a token, then delegates to `ProcessPaymentUseCase` → `PaymentRepository: PaymentRepositoryProtocol` → `PaymentRemoteDataSource` → API. `PaymentViewModel` calls `PaymentService` via `PaymentServiceProtocol` — never the Stripe SDK directly. Swapping payment providers = one change in `PaymentRemoteDataSource`, nothing else.
+`PaymentService` (Domain Service) orchestrates the payment flow: it calls `PaymentGatewayProtocol.collectToken()` (implemented by `StripePaymentGateway` in Infrastructure — the only class that imports the Stripe SDK), then delegates to `ProcessPaymentUseCase` → `PaymentRepository: PaymentRepositoryProtocol` → `PaymentRemoteDataSource` → API. `PaymentViewModel` calls `PaymentService` via `PaymentServiceProtocol` — never the Stripe SDK directly. Swapping payment providers = one file in Infrastructure (`StripePaymentGateway`), nothing else.
 
 ---
 
@@ -485,7 +488,7 @@ BE charges card server-side via Stripe API
 |----------|--------|---------|-----|
 | Autocomplete | Prefetch + debounced HTTP GET | WebSocket streaming | Too expensive at 10M DAU |
 | Reservation hold timer | Server timestamp + client countdown | WebSockets / long-poll | Simpler; server stays authoritative |
-| Image caching | Manual `LocalFileDataSource` + CoreData TTL/LRU | URLSession default cache | Granular eviction control |
+| Image caching | Manual `ImageFileDataSource` + CoreData TTL/LRU | URLSession default cache | Granular eviction control |
 | Payment | Stripe SDK token | DIY card collection | PCI compliance; no raw card data on client |
 | Pagination | Offset-limit | Cursor-based | Simpler; BE owns sort order; data doesn't move mid-scroll |
 | Idempotency | Client-generated `local_id` UUID | Server dedup | Handles network retry duplicates cheaply |
@@ -498,7 +501,7 @@ BE charges card server-side via Stripe API
 
 - **Idempotency key** — always client-generated for mutation requests that could be retried
 - **Server-authoritative timestamps** — never trust the client clock for business-critical windows (hold expiry)
-- **Facade over third-party SDKs** — `PaymentService` wraps Stripe; `ImageService` wraps caching logic; rest of app calls protocols
+- **Facade over third-party SDKs** — `StripePaymentGateway` (Infrastructure) wraps Stripe SDK behind `PaymentGatewayProtocol`; `PaymentService` (Domain Service) orchestrates without importing the SDK; `ImageService` wraps caching logic; rest of app calls protocols
 - **Prefetch on launch** — for data expensive to fetch per-keystroke but bounded in size (autocomplete, amenity icons)
 - **CoreData as metadata index, not blob store** — store file paths and TTL data; binary files live on disk
 - **Domain Services must be app-scoped** — `ReservationService` owns the hold timer; if owned by a ViewModel, it deallocates when the screen pops

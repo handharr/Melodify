@@ -308,6 +308,7 @@
     <li><code>ThirdPartyDataSource</code> (SDK facade) — wraps third-party SDKs as a <code>RemoteDataSource</code>; app calls protocol, never SDK directly</li>
     <li>Idempotency keys on mutations — client-generated UUID at <code>Param</code> call site for any retryable mutation</li>
     <li>HTTP <code>409 ≠ 5xx</code> — concurrency conflicts and transient server errors must never share a code path</li>
+    <li>Infrastructure layer (<code>Gateway</code> suffix) — Domain defines protocol; concrete in Infrastructure; nothing depends on Gateway except DI wiring in Application</li>
   </ul>
 
   <h3>What this scenario adds</h3>
@@ -315,7 +316,7 @@
     <table>
       <tr><th>Concept</th><th>Generic</th><th>Music Streaming</th></tr>
       <tr><td>Local storage</td><td>LocalDataSource (cache)</td><td>Two tiers: metadata cache (GRDB) + file storage (LRU disk cache)</td></tr>
-      <tr><td>File storage</td><td>Not in generic</td><td><code>LocalFileDataSource</code> — binary audio files on disk, LRU 5 GB cap</td></tr>
+      <tr><td>File storage</td><td>Not in generic</td><td><code>MediaFileDataSource</code> — binary audio files on disk, LRU 5 GB cap</td></tr>
       <tr><td>Offline saves</td><td>Not in generic</td><td><code>DownloadLocalDataSource</code> — maps <code>itemId → localFilePath</code></td></tr>
       <tr><td>Domain Services</td><td>Generic (SessionService example)</td><td><code>PlayerService</code> (app-scoped, owns queue + playback state) · <code>StreamRefreshService</code> (manifest expiry logic)</td></tr>
       <tr><td>Streaming</td><td>Not in generic</td><td>HLS via <code>AVPlayer</code> — adaptive bitrate, chunk-based, short-lived signed URLs</td></tr>
@@ -327,7 +328,7 @@
 
   <h3>Key decisions unique to this scenario</h3>
   <div class="rule"><strong><code>PlayerService</code> must be app-scoped.</strong> If owned by <code>PlayerViewModel</code>, it deallocates when the Player screen pops — music stops. Register at app startup in the DI composition root.</div>
-  <div class="rule"><strong>Two separate <code>LocalFileDataSource</code> instances.</strong> Streaming LRU cache and explicit offline saves must never share storage — cache pressure must not evict user-saved tracks.</div>
+  <div class="rule"><strong>Two separate <code>MediaFileDataSource</code> instances.</strong> Streaming LRU cache and explicit offline saves must never share storage — cache pressure must not evict user-saved tracks.</div>
   <div class="callout"><strong><code>stream-info</code> is a separate endpoint.</strong> Manifest URL is short-lived. Decoupled from item metadata so it can be refreshed without invalidating the rest of the model.</div>
   <div class="callout"><strong>Queue is client-owned.</strong> Built via <code>PlayableItemRepository</code> (.strict policy, local-only) by <code>PlayerService</code> — no server round-trip on every playback action.</div>
 </section>
@@ -484,7 +485,7 @@ Each quality bucket → chunks:
   <div class="stack">
     <div class="stack-row"><div class="stack-name">Presentation</div><div class="stack-desc"><code>LibraryViewController</code> → <code>LibraryViewModel</code> → <code>FetchLibraryUseCase</code><br><code>CollectionDetailViewController</code> → <code>CollectionDetailViewModel</code> → <code>FetchCollectionUseCase</code>, <code>FetchPlayableItemsUseCase</code><br><code>PlayerViewController</code> → <code>PlayerViewModel</code> → <code>PlayerService</code> (app-scoped), <code>ResolvePlaybackAssetUseCase</code></div></div>
     <div class="stack-row"><div class="arrow">↓</div><div class="stack-name">Domain</div><div class="stack-desc">UseCases: <code>FetchLibraryUseCase</code>, <code>FetchCollectionUseCase</code>, <code>FetchPlayableItemsUseCase</code>, <code>FetchStreamInfoUseCase</code>, <code>DownloadTrackUseCase</code><br>Domain Services: <code>PlayerService</code> (stateful, app-scoped), <code>StreamRefreshService</code> (pure logic, no I/O)</div></div>
-    <div class="stack-row"><div class="arrow">↓</div><div class="stack-name">Data</div><div class="stack-desc"><code>LibraryRepository</code>: <code>LibraryRemoteDataSource</code> + <code>LibraryLocalDataSource</code> (GRDB)<br><code>CollectionRepository</code>: <code>CollectionRemoteDataSource</code> + <code>CollectionLocalDataSource</code> (GRDB)<br><code>PlayableItemRepository</code>: <code>PlayableItemRemoteDataSource</code> + <code>PlayableItemLocalDataSource</code> (GRDB)<br><code>DownloadRepository</code>: <code>MediaRemoteDataSource</code> (HLS CDN) + <code>DownloadLocalDataSource</code> (itemId→path) + <code>LocalFileDataSource</code> (disk, LRU 5 GB)</div></div>
+    <div class="stack-row"><div class="arrow">↓</div><div class="stack-name">Data</div><div class="stack-desc"><code>LibraryRepository</code>: <code>LibraryRemoteDataSource</code> + <code>LibraryLocalDataSource</code> (GRDB)<br><code>CollectionRepository</code>: <code>CollectionRemoteDataSource</code> + <code>CollectionLocalDataSource</code> (GRDB)<br><code>PlayableItemRepository</code>: <code>PlayableItemRemoteDataSource</code> + <code>PlayableItemLocalDataSource</code> (GRDB)<br><code>DownloadRepository</code>: <code>MediaRemoteDataSource</code> (HLS CDN) + <code>DownloadLocalDataSource</code> (itemId→path) + <code>MediaFileDataSource</code> (disk, LRU 5 GB)</div></div>
   </div>
 
   <h3>Data Flow — Library Screen</h3>
@@ -520,7 +521,7 @@ Each quality bucket → chunks:
       <tr><td><code>LibraryStore</code> / <code>PlayableItemStore</code></td><td>Gone — this is just what <code>LibraryLocalDataSource</code>, <code>PlayableItemLocalDataSource</code>, etc. return</td></tr>
       <tr><td><code>PlaybackAssetResolver</code></td><td>Logic inside <code>PlayerService</code> (Domain Service)</td></tr>
       <tr><td><code>DownloadStore</code></td><td><code>DownloadLocalDataSource</code> — maps <code>itemId → localFilePath</code></td></tr>
-      <tr><td><code>DownloadService</code></td><td><code>DownloadTrackUseCase</code> + <code>MediaRemoteDataSource</code> + <code>LocalFileDataSource</code></td></tr>
+      <tr><td><code>DownloadService</code></td><td><code>DownloadTrackUseCase</code> + <code>MediaRemoteDataSource</code> + <code>MediaFileDataSource</code></td></tr>
     </table>
   </div>
 </section>
@@ -689,7 +690,7 @@ player.play()</code></pre>
     <div class="stack-row"><div class="stack-name">Tier 2 — LRU disk cache</div><div class="stack-desc">Recently streamed chunk files. Max 5 GB, evicts least-recently-used when full. If user replays a track, skip the network. You manage this via <code>DownloadService</code>.</div></div>
     <div class="stack-row"><div class="stack-name">Tier 3 — Explicit download</div><div class="stack-desc">User tapped "Save for offline." Full track stored permanently. Never evicted — only removed when user deletes. Separate from Tier 2.</div></div>
   </div>
-  <div class="warn"><strong>Why Tier 2 and Tier 3 must be separate stores:</strong> if they shared storage, streaming cache pressure could evict a track the user explicitly saved for offline. Separate <code>LocalFileDataSource</code> instances prevent this entirely.</div>
+  <div class="warn"><strong>Why Tier 2 and Tier 3 must be separate stores:</strong> if they shared storage, streaming cache pressure could evict a track the user explicitly saved for offline. Separate <code>MediaFileDataSource</code> instances prevent this entirely.</div>
   <div class="callout"><strong>Why LRU over FIFO or LFU eviction?</strong> FIFO evicts the oldest item regardless of recent use — you'd evict an album played daily. LFU favours popular items but punishes newly added content and is expensive to track. LRU evicts what hasn't been touched recently — a good proxy for "user probably doesn't need this." Simple to implement, good real-world performance for media caches.</div>
   <div class="callout"><strong>Why 5 GB?</strong> Roughly 40–60 full albums at 128kbps. Enough for meaningful background caching without dominating a typical iPhone's storage. Expose it as a user setting ("Storage limit") so users can tune it.</div>
 

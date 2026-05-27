@@ -10,15 +10,16 @@ Scenario-specific docs extend this — they describe the delta, not a replacemen
 **Clean Architecture + MVVM + UIKit**
 
 ```
-Presentation  →  ViewController + ViewModel (Combine @Published)
-Domain        →  UseCase + Protocol + Model + Param + FetchPolicy
-Data          →  Repository + DataSource + DTO + Mapper + APIClient
-Application   →  AppDelegate + Coordinator + DI (manual init injection)
+Presentation    →  ViewController + ViewModel (Combine @Published)
+Domain          →  UseCase + Service + Protocol + Model + Param + FetchPolicy
+Data            →  Repository + DataSource + DTO + Mapper + APIClient
+Infrastructure  →  Gateway (external SDK + OS framework facades)
+Application     →  AppDelegate + Coordinator + DI (manual init injection)
 ```
 
-**Layer dependency rule: Presentation → Domain ← Data. Domain depends on nothing.**
+**Layer dependency rule: Presentation → Domain ← Data. Infrastructure conforms to Domain protocols. Domain depends on nothing.**
 
-The Data layer knows Domain models (via Mapper). The Presentation layer knows Domain models (via UseCase). Neither knows the other exists.
+The Data layer knows Domain models (via Mapper). The Presentation layer knows Domain models (via UseCase). Infrastructure implements Domain protocols but is never imported by Domain, Data, or Presentation — only wired by Application.
 
 ---
 
@@ -32,6 +33,13 @@ In MVP the Presenter holds a reference back to the View via protocol — two-way
 
 ### MVVM over VIPER
 VIPER splits a screen into 5 objects. The overhead is justified for very large teams where each layer is owned by a different person. For a small team, MVVM + UseCase gives the same testability with half the files.
+
+### Infrastructure as the fourth layer
+The three-layer model (Presentation → Domain ← Data) is a simplification of Clean Architecture's four-ring model. It breaks down for third-party SDKs like Stripe, Firebase, APNs, or LocalAuthentication — they span concerns: UI presentation, OS-level callbacks, proprietary networking. Neither Data (the app's own storage and networking) nor Domain (pure Swift, no external imports) is the right home. Infrastructure is the explicit fourth layer for classes that wrap external systems the app doesn't control. Domain defines the protocol; Infrastructure provides the concrete. Swapping an SDK touches one file.
+
+**Why not `Manager`?** `Manager` became a dumping ground with no clear boundary — `NetworkManager`, `DataManager`, `AppManager`. Infrastructure is precise: every class there answers the question *which external system am I hiding?*
+
+**Why `Gateway` as the suffix?** `Service` is claimed by Domain Services. `DataSource` is claimed by the Data layer. `Gateway` is unclaimed and semantically accurate — it is the entry point to an external system the app doesn't own.
 
 ### UIKit vs SwiftUI — Which to Default To
 
@@ -84,6 +92,7 @@ UseCase
 Domain Service
   └─ stateful or long-lived logic not tied to a single user action
   └─ injected and lives as long as needed (often app-scoped)
+  └─ pure Swift — no UIKit imports, no SDK imports
   └─ examples: PlayerService, SessionService, AuthService
 
 Model
@@ -110,6 +119,7 @@ FetchPolicy
 | Triggered by | User action | Another component |
 | State | Stateless | Can be stateful |
 | Lifetime | Per call | Injected, lives as needed |
+| Imports | Nothing | Nothing (pure Swift) |
 
 ### Data
 
@@ -145,12 +155,6 @@ APIClient
   └─ generic HTTP client: get/post/put/delete
   └─ lives at Data/Network/ — not a separate layer
   └─ no domain knowledge
-
-ThirdPartyDataSource (SDK facade)
-  └─ wraps a third-party SDK (Stripe, Firebase, etc.) as a RemoteDataSource
-  └─ rest of the app calls a Repository protocol — never the SDK directly
-  └─ swapping the SDK = one change in one DataSource file
-  └─ examples: PaymentRemoteDataSource (Stripe), AnalyticsDataSource (Firebase)
 ```
 
 **DTO → Mapper → Domain Model flow:**
@@ -165,6 +169,56 @@ RemoteDataSource fetches JSON
 ```
 
 Mapper is the seam between external data and your business logic. Keep it the only crossing point.
+
+### Infrastructure
+
+```
+Gateway
+  └─ concrete implementation of a Domain protocol (XxxGatewayProtocol)
+  └─ wraps one external system — SDK, OS framework, or third-party service
+  └─ may import UIKit, SDKs, OS frameworks — Domain never does
+  └─ nothing depends on Gateway except DI wiring in Application
+  └─ examples:
+       StripePaymentGateway      → PaymentGatewayProtocol    (Stripe SDK)
+       APNsNotificationGateway   → NotificationGatewayProtocol (UNUserNotificationCenter + APNs)
+       FirebaseAnalyticsGateway  → AnalyticsGatewayProtocol  (Firebase SDK)
+       LocalAuthGateway          → BiometricAuthGatewayProtocol (LocalAuthentication)
+```
+
+**Domain Service vs Gateway — when to use which:**
+
+| | Domain Service | Gateway |
+|---|---|---|
+| Owns | Business logic + state | External system interaction |
+| Imports | Nothing (pure Swift) | UIKit, SDK, OS frameworks |
+| Layer | Domain | Infrastructure |
+| Protocol lives in | Domain | Domain |
+| Concrete lives in | Domain | Infrastructure |
+| Example | `PlayerService`, `ReservationService` | `StripePaymentGateway`, `APNsNotificationGateway` |
+
+**The rule:** if a class needs to import an external SDK or OS framework to do its job, it belongs in Infrastructure, not Domain. Domain defines what it needs via protocol; Infrastructure provides the concrete.
+
+```swift
+// Domain — no SDK imports, defines the contract
+protocol PaymentGatewayProtocol {
+    func collectToken() async throws -> String
+}
+
+// Infrastructure — imports Stripe SDK, fulfills the contract
+final class StripePaymentGateway: PaymentGatewayProtocol {
+    func collectToken() async throws -> String { ... }
+}
+```
+
+**Suffix clarity — one suffix per layer:**
+
+| Suffix | Layer | Example |
+|---|---|---|
+| `UseCase` | Domain | `SearchTracksUseCase` |
+| `Service` | Domain | `PlayerService`, `ReservationService` |
+| `Repository` | Data | `TrackRepository` |
+| `DataSource` | Data | `TrackRemoteDataSource` |
+| `Gateway` | Infrastructure | `StripePaymentGateway` |
 
 ### Application
 
@@ -351,6 +405,7 @@ defer { isLoading = false } — cleanup on any exit path
 | UseCase | MockRepository | Return value, thrown error |
 | Repository | MockRemoteDataSource + MockLocalDataSource | FetchPolicy logic, Mapper output |
 | DataSource | MockAPIClient / in-memory DB | Request shape, response decoding |
+| Gateway | MockGatewayProtocol (in Domain tests) | Protocol method called, correct input forwarded |
 
 ```
 MockUseCase
@@ -378,6 +433,7 @@ When given an interview problem, map it onto this architecture:
 4. **Identify Domain Services** — anything stateful, long-lived, or shared across screens
 5. **Apply FetchPolicy** — does this screen need fresh data? Can it show stale?
 6. **Identify the local storage need** — cache only, or offline-first with user-controlled saves?
-7. **Draw the data flow** — top to bottom, out loud, immediately after the diagram
+7. **Identify Infrastructure dependencies** — which third-party SDKs or OS frameworks does this scenario require? Each gets a Gateway. Define the protocol in Domain, the concrete in Infrastructure.
+8. **Draw the data flow** — top to bottom, out loud, immediately after the diagram
 
 The scenario doc fills in the specifics. This doc is the skeleton.

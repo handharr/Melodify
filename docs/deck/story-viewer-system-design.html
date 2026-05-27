@@ -295,6 +295,8 @@
     <li>Coordinator-based navigation, manual init injection (no DI framework)</li>
     <li>Mock-the-layer-below testing strategy</li>
     <li><code>ThirdPartyDataSource</code> pattern — wraps third-party SDKs; app never calls SDK directly</li>
+    <li><code>async/await</code> for I/O; Combine for reactive binding to <code>@Published</code> state</li>
+    <li>Infrastructure layer (<code>Gateway</code> suffix) — Domain defines protocol; concrete in Infrastructure; nothing depends on Gateway except DI wiring in Application</li>
   </ul>
 
   <h3>What this scenario adds</h3>

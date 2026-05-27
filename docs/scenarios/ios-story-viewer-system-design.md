@@ -2,7 +2,7 @@
 
 **Source:** YouTube — iOS System Design Interview: Story Viewer
 
-> Scenario extension of [`docs/ios-app-system-design.md`](../ios-app-system-design.md)
+> Scenario extension of [`docs/ios-app-system-design-philosophy.md`](../ios-app-system-design-philosophy.md)
 > Read the delta below first.
 
 ---
@@ -21,6 +21,8 @@
 - Coordinator-based navigation, manual init injection (no DI framework)
 - Mock-the-layer-below testing strategy
 - `ThirdPartyDataSource` pattern — wraps third-party SDKs; app never calls SDK directly
+- `async/await` for I/O; Combine for reactive binding to `@Published` state
+- Infrastructure layer (`Gateway` suffix) — Domain defines protocol; concrete in Infrastructure; nothing depends on Gateway except DI wiring in Application
 
 ### What this scenario adds
 

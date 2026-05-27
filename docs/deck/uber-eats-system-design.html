@@ -273,7 +273,7 @@
   <a class="toc-sub" href="#flow-sse">Order Status — SSE</a>
   <a href="#deepdive">Deep Dives</a>
   <a class="toc-sub" href="#sse-vs-polling">1. SSE vs Polling vs WebSockets</a>
-  <a class="toc-sub" href="#order-service-scope">2. OrderDomainService Scoping</a>
+  <a class="toc-sub" href="#order-service-scope">2. OrderService Scoping</a>
   <a class="toc-sub" href="#basket-cache">3. Basket Cache Strategy</a>
   <a href="#pitfalls">Common Pitfalls</a>
   <a href="#feedback">Key Takeaways</a>
@@ -297,17 +297,20 @@
     <li>Mock-the-layer-below testing strategy</li>
     <li><code>ThirdPartyDataSource</code> facade — app calls protocol, never SDK directly</li>
     <li>Idempotency keys on mutations — UUID generated at <code>Param</code> call site</li>
+    <li>HTTP <code>409 ≠ 5xx</code> — concurrency conflicts and transient server errors must never share a code path</li>
+    <li>Infrastructure layer (<code>Gateway</code> suffix) — Domain defines protocol; concrete in Infrastructure; nothing depends on Gateway except DI wiring in Application</li>
   </ul>
 
   <h3>What this scenario adds</h3>
   <div class="table-wrap">
     <table>
       <tr><th>Concept</th><th>Generic</th><th>Uber Eats</th></tr>
-      <tr><td>Real-time updates</td><td>Not in generic</td><td><code>OrderDomainService</code> opens a persistent SSE connection; publishes <code>AnyPublisher&lt;Order, AppError&gt;</code></td></tr>
+      <tr><td>Real-time updates</td><td>Not in generic</td><td><code>OrderService</code> opens a persistent SSE connection; publishes <code>AnyPublisher&lt;Order, AppError&gt;</code></td></tr>
       <tr><td>SSE stream pattern</td><td>Not in generic</td><td>Multi-fire publisher vs single-value UseCase; screen lifecycle scopes the connection</td></tr>
       <tr><td>Server-hosted basket</td><td>Not in generic</td><td>Basket lives on backend for cross-device continuity; <code>BasketRepository</code> always writes remote on mutation</td></tr>
       <tr><td>Image loading</td><td>Not in generic</td><td><code>UIImageView</code> extension wrapping SDWebImage/Kingfisher — same facade pattern as <code>ThirdPartyDataSource</code></td></tr>
       <tr><td>Cross-device session state</td><td>Not in generic</td><td><code>lastUsedAddress</code> on <code>User</code> drives restaurant list on launch without an extra fetch</td></tr>
+      <tr><td>UI framework</td><td>SwiftUI default for new apps; UIKit when scroll lifecycle, AVPlayer, or custom transitions needed; hybrid valid screen-by-screen</td><td>UIKit throughout — restaurant list and menu use <code>UITableView</code>/<code>UICollectionView</code> for scroll lifecycle and pagination hooks; Order Status embeds <code>MKMapView</code> (custom view integration)</td></tr>
     </table>
   </div>
 
@@ -315,7 +318,7 @@
   <div class="rule"><strong>SSE over polling.</strong> A 1-second poll for 10 minutes = 600 HTTP requests per order. SSE replaces all of that with one persistent connection. Polling is simpler but wastes battery and overloads the backend.</div>
   <div class="rule"><strong>SSE over WebSockets.</strong> Courier tracking is unidirectional (server → client only). WebSockets add bidirectional complexity this scenario doesn't need.</div>
   <div class="rule"><strong>Server-hosted basket.</strong> Cross-device continuity — start on iPhone, finish on web. Trade-off: every mutation requires a network round-trip.</div>
-  <div class="callout"><strong><code>OrderDomainService</code> must close SSE on screen exit.</strong> If the stream stays open after the Order Status screen is dismissed, it drains battery and holds a server connection. Close in <code>viewDidDisappear</code> equivalent.</div>
+  <div class="callout"><strong><code>OrderService</code> must close SSE on screen exit.</strong> If the stream stays open after the Order Status screen is dismissed, it drains battery and holds a server connection. Close in <code>viewDidDisappear</code> equivalent.</div>
   <div class="callout"><strong><code>UIImageView</code> extension isolates the image library.</strong> Same principle as <code>ThirdPartyDataSource</code> — call sites call <code>imageView.setImage(url:)</code>, never SDWebImage directly. Swapping libraries touches one file.</div>
 </section>
 
@@ -457,7 +460,7 @@
     <div class="stack-row">
       <div class="arrow">↓</div>
       <div class="stack-name">ViewModel</div>
-      <div class="stack-desc"><code>@MainActor @Published</code> · calls UseCases for one-shot actions · subscribes to <code>OrderDomainService.orderUpdates</code> for live tracking · maps Domain → UIModel</div>
+      <div class="stack-desc"><code>@MainActor @Published</code> · calls UseCases for one-shot actions · subscribes to <code>OrderService.orderUpdates</code> for live tracking · maps Domain → UIModel</div>
     </div>
     <div class="stack-row">
       <div class="arrow">↓</div>
@@ -466,7 +469,7 @@
     </div>
     <div class="stack-row">
       <div class="arrow">↓</div>
-      <div class="stack-name">OrderDomainService</div>
+      <div class="stack-name">OrderService</div>
       <div class="stack-desc">Domain Service (stateful) · opens/closes SSE connection · publishes <code>AnyPublisher&lt;Order, AppError&gt;</code> · scoped to <code>OrderCoordinator</code>, not app-level</div>
     </div>
     <div class="stack-row">
@@ -477,7 +480,12 @@
     <div class="stack-row">
       <div class="arrow">↓</div>
       <div class="stack-name">DataSources</div>
-      <div class="stack-desc">Remote: <code>RestaurantRemoteDataSource</code>, <code>DishRemoteDataSource</code>, <code>BasketRemoteDataSource</code>, <code>OrderRemoteDataSource</code> (all wrap <code>APIClient</code>) · Local: <code>RestaurantLocalDataSource</code>, <code>DishLocalDataSource</code>, <code>BasketLocalDataSource</code> (Core Data) · <code>OrderSSEDataSource</code> (<code>ThirdPartyDataSource</code> facade)</div>
+      <div class="stack-desc">Remote: <code>RestaurantRemoteDataSource</code>, <code>DishRemoteDataSource</code>, <code>BasketRemoteDataSource</code>, <code>OrderRemoteDataSource</code> (all wrap <code>APIClient</code>) · Local: <code>RestaurantLocalDataSource</code>, <code>DishLocalDataSource</code>, <code>BasketLocalDataSource</code> (Core Data)</div>
+    </div>
+    <div class="stack-row">
+      <div class="arrow">↓</div>
+      <div class="stack-name">Infrastructure</div>
+      <div class="stack-desc"><code>OrderSSEGateway: OrderSSEGatewayProtocol</code> — wraps SSE client library; Domain defines the protocol; only Application wires the concrete</div>
     </div>
     <div class="stack-row">
       <div class="arrow">↓</div>
@@ -494,11 +502,11 @@
       <tr><td><code>Router</code></td><td><code>Coordinator</code></td><td>Direct equivalent — one per flow.</td></tr>
       <tr><td><code>RestaurantService</code></td><td><code>FetchRestaurantsUseCase</code> + <code>RestaurantRepository</code></td><td>Stateless per-action → UseCase. Data access → Repository.</td></tr>
       <tr><td><code>BasketService</code></td><td><code>CreateBasketUseCase</code> / <code>UpdateBasketUseCase</code> + <code>BasketRepository</code></td><td>Same split.</td></tr>
-      <tr><td><code>OrderService</code> (stateful SSE)</td><td><code>OrderDomainService</code> + <code>OrderSSEDataSource</code></td><td>Stateful/long-lived → Domain Service. SSE client → ThirdPartyDataSource facade.</td></tr>
+      <tr><td><code>OrderService</code> (stateful SSE)</td><td><code>OrderService</code> + <code>OrderSSEGateway</code></td><td>Stateful/long-lived → Domain Service. SSE client → Infrastructure Gateway (<code>OrderSSEGateway: OrderSSEGatewayProtocol</code>).</td></tr>
       <tr><td><code>AuthService</code></td><td><code>SessionDomainService</code></td><td>Stateful session — app-scoped Domain Service.</td></tr>
       <tr><td>Network Client (Alamofire)</td><td><code>APIClient</code> (URLSession-based)</td><td>Alamofire is a valid implementation detail inside <code>RemoteDataSource</code>.</td></tr>
       <tr><td><code>Storage Facade</code></td><td><code>RestaurantLocalDataSource</code>, <code>DishLocalDataSource</code>, <code>BasketLocalDataSource</code></td><td>Each domain entity gets its own named <code>LocalDataSource</code>. Swapping Core Data for GRDB touches those files only.</td></tr>
-      <tr><td>SSE Client</td><td><code>OrderSSEDataSource</code></td><td>ThirdPartyDataSource facade. Returns <code>AsyncStream&lt;OrderSSEEventDTO&gt;</code>.</td></tr>
+      <tr><td>SSE Client</td><td><code>OrderSSEGateway: OrderSSEGatewayProtocol</code> (Infrastructure)</td><td>Wraps SSE library; Domain defines the protocol; rest of app never sees the library. Returns <code>AsyncStream&lt;OrderSSEEventDTO&gt;</code>.</td></tr>
       <tr><td>UIImageView Extension</td><td>ThirdPartyDataSource facade pattern</td><td>Same isolation principle. <code>imageView.setImage(url:)</code> — never SDWebImage directly.</td></tr>
       <tr><td>Swinject DI</td><td>Manual init injection via Coordinator</td><td>User's arch avoids DI frameworks. Coordinator IS the composition root.</td></tr>
     </table>
@@ -539,8 +547,8 @@
 <pre><code><span class="cm">// Screen appears</span>
 <span class="nm">OrderStatusViewController</span>.viewDidAppear()
   → <span class="nm">OrderStatusViewModel</span>.startTracking(orderID:)
-      → <span class="nm">OrderDomainService</span>.startTracking(orderID:)
-          → <span class="nm">OrderSSEDataSource</span>.stream(orderID:)     <span class="cm">// AsyncStream&lt;OrderSSEEventDTO&gt;</span>
+      → <span class="nm">OrderService</span>.startTracking(orderID:)
+          → <span class="nm">orderSSEGateway</span>.stream(orderID:)     <span class="cm">// OrderSSEGatewayProtocol (Infrastructure) → AsyncStream&lt;OrderSSEEventDTO&gt;</span>
           → <span class="kw">for await</span> event <span class="kw">in</span> stream
               → <span class="nm">OrderMapper</span>.toDomain(event) → <span class="ty">Order</span>
               → publishes via <span class="ty">AnyPublisher</span>&lt;<span class="ty">Order</span>, <span class="ty">AppError</span>&gt;
@@ -550,7 +558,7 @@
 <span class="cm">// Screen exits</span>
 <span class="nm">OrderStatusViewController</span>.viewDidDisappear()
   → <span class="nm">OrderStatusViewModel</span>.stopTracking()
-      → <span class="nm">OrderDomainService</span>.stopTracking()    <span class="cm">// SSE connection closed immediately</span></code></pre>
+      → <span class="nm">OrderService</span>.stopTracking()    <span class="cm">// SSE connection closed immediately</span></code></pre>
 
   <div class="warn"><strong>Always close SSE on screen exit.</strong> A stream left open after navigation drains battery and holds a server connection with no consumer. <code>stopTracking()</code> must be called in every exit path — pop, dismiss, and app background.</div>
 </section>
@@ -589,9 +597,9 @@ t=89s   ← server: {status: "in_transit", lat: 1.31, lng: 103.81}</code></pre>
 
   <hr class="divider">
 
-  <!-- 2. OrderDomainService Scoping -->
-  <h3 id="order-service-scope">2. OrderDomainService — Scoping</h3>
-  <p>Unlike <code>PlayerService</code> in a music app (app-scoped to keep audio alive across all screens), <code>OrderDomainService</code> should be scoped to <code>OrderCoordinator</code> — created when the order flow starts, destroyed when the coordinator deallocates.</p>
+  <!-- 2. OrderService Scoping -->
+  <h3 id="order-service-scope">2. OrderService — Scoping</h3>
+  <p>Unlike <code>PlayerService</code> in a music app (app-scoped to keep audio alive across all screens), <code>OrderService</code> should be scoped to <code>OrderCoordinator</code> — created when the order flow starts, destroyed when the coordinator deallocates.</p>
 
   <div class="table-wrap">
     <table>
@@ -647,7 +655,7 @@ t=89s   ← server: {status: "in_transit", lat: 1.31, lng: 103.81}</code></pre>
   <div class="warn"><strong>UseCases and Domain Services must not call networking directly.</strong> Networking belongs in <code>RemoteDataSource</code>. The correct chain is <code>UseCase → Repository → RemoteDataSource → APIClient</code>. A service that calls a network client directly bypasses the Repository abstraction and couples the Domain layer to Data.</div>
   <div class="warn"><strong>No idempotency key on order creation.</strong> A network timeout after the server succeeds causes a duplicate order on retry. Generate a <code>UUID</code> at the <code>CreateOrderParam</code> call site and include it in the POST body.</div>
   <div class="warn"><strong>Swinject missing registration crash.</strong> Registrations missing at startup crash at first use — hard to catch in tests. Manual init injection via Coordinator exposes all missing dependencies at compile time.</div>
-  <div class="warn"><strong><code>[weak self]</code> missing in Combine sink.</strong> <code>OrderStatusViewModel</code> subscribes to <code>OrderDomainService.orderUpdates</code>. Capturing <code>self</code> strongly creates a retain cycle. Store the <code>AnyCancellable</code> in a <code>Set&lt;AnyCancellable&gt;</code> and always capture <code>[weak self]</code>.</div>
+  <div class="warn"><strong><code>[weak self]</code> missing in Combine sink.</strong> <code>OrderStatusViewModel</code> subscribes to <code>OrderService.orderUpdates</code>. Capturing <code>self</code> strongly creates a retain cycle. Store the <code>AnyCancellable</code> in a <code>Set&lt;AnyCancellable&gt;</code> and always capture <code>[weak self]</code>.</div>
 </section>
 
 <!-- KEY TAKEAWAYS -->

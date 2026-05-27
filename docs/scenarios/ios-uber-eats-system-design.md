@@ -2,7 +2,7 @@
 
 **Source:** YouTube — Staff iOS Engineer mock interview at Uber
 
-> Scenario extension of [`docs/ios-app-system-design.md`](../ios-app-system-design.md)
+> Scenario extension of [`docs/ios-app-system-design-philosophy.md`](../ios-app-system-design-philosophy.md)
 > Read the delta below first.
 
 ---
@@ -21,22 +21,25 @@
 - Mock-the-layer-below testing strategy
 - `ThirdPartyDataSource` facade pattern — app calls protocol, never SDK directly
 - Idempotency keys on mutations — `POST /orders` is retryable; generate UUID at `Param` call site
+- HTTP `409 ≠ 5xx` — concurrency conflicts and transient server errors must never share a code path
+- Infrastructure layer (`Gateway` suffix) — Domain defines protocol; concrete in Infrastructure; nothing depends on Gateway except DI wiring in Application
 
 ### What this scenario adds
 
 | Concept | Generic | Uber Eats |
 |---|---|---|
-| Real-time updates | Not in generic | `OrderDomainService` opens a persistent SSE connection; publishes `AnyPublisher<Order, AppError>` |
+| Real-time updates | Not in generic | `OrderService` opens a persistent SSE connection; publishes `AnyPublisher<Order, AppError>` |
 | SSE stream pattern | Not in generic | Multi-fire publisher (vs single-value UseCase); screen lifecycle scopes the connection |
 | Server-hosted basket | Not in generic | Basket lives on backend for cross-device continuity; `BasketRepository` always writes remote on mutation |
 | Image loading | Not in generic | `UIImageView` extension wrapping SDWebImage/Kingfisher — same facade pattern as `ThirdPartyDataSource` |
 | Cross-device session state | Not in generic | `lastUsedAddress` on `User` drives restaurant list without an extra fetch |
+| UI framework | SwiftUI default for new apps; UIKit when scroll lifecycle, AVPlayer, or custom transitions needed; hybrid valid screen-by-screen | UIKit throughout — restaurant list and menu use `UITableView`/`UICollectionView` for scroll lifecycle and pagination hooks; Order Status screen embeds `MKMapView` (custom view integration) |
 
 ### Key decisions unique to this scenario
 - **SSE over polling.** Courier tracking sends updates every ~5 seconds. A 1-second poll for 10 minutes = 600 HTTP requests per order. SSE replaces all of that with one persistent connection. Polling is simpler to implement but wastes battery and overloads the backend.
 - **SSE over WebSockets.** Courier tracking is unidirectional (server → client only). WebSockets add bidirectional complexity that this scenario doesn't need.
 - **Server-hosted basket.** Basket state on the backend enables cross-device continuity (start on iPhone, finish on web). Trade-off: every basket mutation requires a network round-trip.
-- **`OrderDomainService` must close SSE on screen exit.** If the stream stays open after the Order Status screen is dismissed, it drains battery and holds a server connection. Close in `viewDidDisappear` equivalent.
+- **`OrderService` must close SSE on screen exit.** If the stream stays open after the Order Status screen is dismissed, it drains battery and holds a server connection. Close in `viewDidDisappear` equivalent.
 - **`UIImageView` extension.** Restaurant and dish images are loaded via SDWebImage or Kingfisher, but always through a `UIImageView` extension — same isolation principle as `ThirdPartyDataSource`. Swapping the image library touches one file.
 
 ---
@@ -166,11 +169,11 @@ Presentation
     └─ binds @Published state via Combine sink
     └─ calls ViewModel on user actions
     └─ calls Coordinator for navigation
-    └─ subscribes/cancels OrderDomainService publisher with screen lifecycle
+    └─ subscribes/cancels OrderService publisher with screen lifecycle
 
   ViewModel (@MainActor, @Published)
     └─ calls UseCases for all one-shot actions
-    └─ subscribes to OrderDomainService.orderUpdates for live tracking
+    └─ subscribes to OrderService.orderUpdates for live tracking
     └─ maps Domain → UIModel, never exposes Domain types to View
 
 Domain
@@ -184,8 +187,8 @@ Domain
     CreateOrderUseCase         → OrderRepositoryProtocol
 
   Domain Service (stateful / long-lived)
-    OrderDomainService
-      └─ opens SSE connection on startTracking(orderID:)
+    OrderService
+      └─ opens SSE connection via OrderSSEGatewayProtocol.stream(orderID:)
       └─ closes SSE connection on stopTracking()
       └─ publishes AnyPublisher<Order, AppError> for ViewModel to bind
       └─ must be scoped to the Order Status screen, not app-scoped
@@ -211,16 +214,17 @@ Data
     └─ OrderRemoteDataSource       → APIClient → POST/GET /orders
     └─ OrderMapper
 
-  OrderSSEDataSource    (ThirdPartyDataSource facade)
+Infrastructure
+  OrderSSEGateway: OrderSSEGatewayProtocol
     └─ wraps SSE client library
-    └─ returns AsyncStream<OrderSSEEventDTO> to OrderDomainService
-    └─ DomainService calls Mapper and emits Order downstream
+    └─ returns AsyncStream<OrderSSEEventDTO>
+    └─ Domain defines the protocol; only Application wires the concrete
 
 Application
   AppCoordinator
     └─ wires window → root tab bar
     └─ composes all dependencies via manual init injection
-    └─ creates OrderDomainService at coordinator level for the order flow
+    └─ creates OrderService at coordinator level for the order flow
   
   RestaurantCoordinator, BasketCoordinator, OrderCoordinator
     └─ each owns its UseCase composition
@@ -233,7 +237,7 @@ Application
 ViewController ──→ ViewModel ──→ UseCases ──→ Repository ──→ RemoteDataSource ──http──→ REST API
                         │                                  └─→ LocalDataSource ──→ Core Data
                         │
-                        └──→ OrderDomainService ──→ OrderSSEDataSource ──sse──→ SSE API
+                        └──→ OrderService ──→ OrderSSEGateway ──sse──→ SSE API
 
 ViewController ──→ UIImageView extension ──→ SDWebImage/Kingfisher ──http──→ Image CDN
 
@@ -250,12 +254,12 @@ DI: Coordinator composes all dependencies via manual init injection (no framewor
 | `Router` | `Coordinator` | Direct equivalent. One Coordinator per flow. |
 | `RestaurantService` | `FetchRestaurantsUseCase` + `RestaurantRepository` | Stateless per-action logic → UseCase. Data access → Repository. |
 | `BasketService` | `CreateBasketUseCase` / `UpdateBasketUseCase` + `BasketRepository` | Same split. |
-| `OrderService` (with SSE) | `OrderDomainService` + `OrderSSEDataSource` | Stateful/long-lived → Domain Service. SSE client → ThirdPartyDataSource facade. |
+| `OrderService` (with SSE) | `OrderService` + `OrderSSEGateway` | Stateful/long-lived → Domain Service. SSE client → Infrastructure Gateway (`OrderSSEGateway: OrderSSEGatewayProtocol`). |
 | `AuthService` | `Domain Service: SessionService` | Stateful session — app-scoped Domain Service. |
 | `Network Client (Alamofire)` | `APIClient` (URLSession-based) | Generic HTTP client. Alamofire is a valid implementation detail inside `RemoteDataSource`. |
 | `Mapper` | `Mapper` | Same name, same role. `static func toDomain(_ dto: DTO) -> Model?` |
 | `Storage Facade / Core Data` | `RestaurantLocalDataSource`, `DishLocalDataSource`, `BasketLocalDataSource` wrapping Core Data | Each domain entity gets its own named `LocalDataSource`. Swapping Core Data for GRDB touches those files only. |
-| `SSE Client` | `OrderSSEDataSource` (`ThirdPartyDataSource` facade) | Wraps SSE library; returns `AsyncStream<DTO>`; rest of app never sees the library. |
+| `SSE Client` | `OrderSSEGateway: OrderSSEGatewayProtocol` (Infrastructure) | Wraps SSE library; returns `AsyncStream<DTO>`; Domain defines the protocol; rest of app never sees the library. |
 | `UIImageView Extension` | `ThirdPartyDataSource` facade pattern | Same isolation principle — call site calls `imageView.setImage(url:)`, never the library directly. |
 | `Swinject DI container` | Manual init injection via `Coordinator` | User's arch avoids framework DI. Swinject adds a dependency and potential init-time crashes. |
 
@@ -293,8 +297,8 @@ BasketViewModel.placeOrder()
 ```
 OrderStatusViewController.viewDidAppear()
      → OrderStatusViewModel.startTracking(orderID:)
-         → OrderDomainService.startTracking(orderID:)
-             → OrderSSEDataSource.stream(orderID:) → AsyncStream<OrderSSEEventDTO>
+         → OrderService.startTracking(orderID:)
+             → orderSSEGateway.stream(orderID:) → AsyncStream<OrderSSEEventDTO>   // OrderSSEGatewayProtocol (Infrastructure)
              → for await event in stream → OrderMapper.toDomain(event) → Order
              → publishes Order via AnyPublisher<Order, AppError>
          → ViewModel.orderUpdates sink → maps Order → OrderUIModel
@@ -302,7 +306,7 @@ OrderStatusViewController.viewDidAppear()
 
 OrderStatusViewController.viewDidDisappear()
      → OrderStatusViewModel.stopTracking()
-         → OrderDomainService.stopTracking()  ← closes SSE connection immediately
+         → OrderService.stopTracking()  ← closes SSE connection immediately
 ```
 
 ---
@@ -339,9 +343,9 @@ SSE path (good):
 
 Courier tracking is read-only from the client's perspective — SSE is sufficient.
 
-### `OrderDomainService` — Scoping
+### `OrderService` — Scoping
 
-Unlike `PlayerService` in the music streaming scenario (which must be app-scoped to keep audio playing when screens change), `OrderDomainService` should be scoped to the order tracking flow — created by `OrderCoordinator` when the Order Status screen is pushed, destroyed when the coordinator is deallocated.
+Unlike `PlayerService` in the music streaming scenario (which must be app-scoped to keep audio playing when screens change), `OrderService` should be scoped to the order tracking flow — created by `OrderCoordinator` when the Order Status screen is pushed, destroyed when the coordinator is deallocated.
 
 **Why not app-scoped?** There is no reason to maintain an SSE connection when the user is not on the Order Status screen. Keeping it alive wastes battery and server resources.
 
@@ -360,12 +364,12 @@ The basket lives on the backend (primary source of truth) but is also cached in 
 
 ## Common Pitfalls / Gotchas
 
-- **Not closing SSE on screen exit.** Stream stays open, drains battery, holds a server connection. Always close in the ViewController's `viewDidDisappear` equivalent — call `stopTracking()` on the ViewModel, which calls `OrderDomainService.stopTracking()`.
+- **Not closing SSE on screen exit.** Stream stays open, drains battery, holds a server connection. Always close in the ViewController's `viewDidDisappear` equivalent — call `stopTracking()` on the ViewModel, which calls `OrderService.stopTracking()`.
 - **ViewModel must not hold a reference to its View.** This is the core MVVM contract — ViewController subscribes to `@Published` state via Combine, ViewModel has no back-reference to the View. The MVP pattern (`weak var view: ViewProtocol?`) creates two-way coupling that makes the ViewModel untestable without a mock View.
 - **UseCases and Domain Services must not call networking directly.** Networking belongs in `RemoteDataSource`. The correct chain is `UseCase → Repository → RemoteDataSource → APIClient`. A service that calls `NetworkClient` directly bypasses the Repository abstraction and couples the Domain layer to the Data layer.
 - **Swinject init-time crashes.** Registrations missing at app startup cause crashes only at first use, not at boot — making them hard to detect in testing. Manual init injection via Coordinator exposes all dependencies at compile time.
 - **No idempotency key on order creation.** POST /orders is the highest-risk mutation — a network timeout on the client while the server succeeded creates a duplicate order. Always generate a UUID at the `CreateOrderParam` call site.
-- **`[weak self]` missing in Combine sinks.** `OrderStatusViewModel` subscribes to `OrderDomainService.orderUpdates`. If `AnyCancellable` is stored correctly and `self` is captured weakly, this is fine. Forgetting `[weak self]` creates a retain cycle that prevents the ViewModel from deallocating.
+- **`[weak self]` missing in Combine sinks.** `OrderStatusViewModel` subscribes to `OrderService.orderUpdates`. If `AnyCancellable` is stored correctly and `self` is captured weakly, this is fine. Forgetting `[weak self]` creates a retain cycle that prevents the ViewModel from deallocating.
 
 ---
 

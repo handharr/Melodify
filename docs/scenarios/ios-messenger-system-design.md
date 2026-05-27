@@ -2,7 +2,7 @@
 
 **Source:** Mock Mobile System Design Interview — Andrey Tech (ex-Meta)
 
-> Scenario extension of [`docs/ios-app-system-design.md`](../ios-app-system-design.md).
+> Scenario extension of [`docs/ios-app-system-design-philosophy.md`](../ios-app-system-design-philosophy.md).
 > Read the delta below first.
 
 ---
@@ -20,6 +20,9 @@
 - Coordinator-based navigation, DI via manual init injection
 - Mock-the-layer-below testing strategy
 - `async/await` for I/O; Combine for reactive binding to `@Published` state
+- `ThirdPartyDataSource` facade pattern — wraps third-party SDKs; app calls protocol, never SDK directly
+- Idempotency keys on mutations — client-generated UUID at `Param` call site for any retryable mutation
+- Infrastructure layer (`Gateway` suffix) — Domain defines protocol; concrete in Infrastructure; nothing depends on Gateway except DI wiring in Application
 
 ### What this scenario adds
 
@@ -29,7 +32,7 @@
 | Offline write queue | Not covered | `MessageSyncService` Domain Service — queues `isSent = false` messages, flushes on app foreground |
 | Three-tier API strategy | `FetchPolicy` covers read intent | Initial load / cursor pagination / delta sync by `sequenceId` — three distinct endpoints per list screen |
 | Local DB as SSOT | `LocalDataSource` for cache | Realm via `LocalDataSource` — renders immediately from cache, syncs in background; WebSocket frames upsert into same store |
-| File/attachment storage | Not in generic | `LocalFileDataSource` — stores media binaries; only URL stored in `MessageLocalDataSource` |
+| File/attachment storage | Not in generic | `AttachmentFileDataSource` — stores media binaries; only URL stored in `MessageLocalDataSource` |
 | Message status lifecycle | Not covered | `sentTime` / `receivedTime` / `readTime` + `isSent: Bool` for local delivery tracking |
 
 ### Key decisions unique to this scenario
@@ -67,13 +70,13 @@ Every list screen has three endpoint tiers, each with a distinct job:
 
 ```
 Chat List
-  GET  /chat/all                              → 15 most recent chats (initial load)
-  GET  /chat/all/after?timestamp=<ts>         → next 15 chats (scroll pagination)
-  GET  /chat/all/delta/after?sequenceId=<id>  → only chats changed since sequenceId (background sync)
+  GET  /chat/all                         → { chats: [Chat], nextCursor: String? } — initial 15
+  GET  /chat/all?cursor=<cursor>         → { chats: [Chat], nextCursor: String? } — next 15 (scroll)
+  GET  /chat/all/delta?sequenceId=<id>  → only chats changed since sequenceId (background sync)
 
 Chat Thread
   GET  /chat/{chat_id}/all                    → 50 most recent messages (initial load)
-  GET  /chat/{chat_id}/all/before?timestamp=  → next 50 older messages (scroll up)
+  GET  /chat/{chat_id}/all/before?timestamp=  → next 50 older messages (scroll up — append-only, timestamp is stable)
   GET  /chat/{chat_id}/all/after?timestamp=   → messages since timestamp (foreground sync)
 
 Send (REST fallback — prefer WebSocket when socket is live)
@@ -144,7 +147,7 @@ struct Message {
 
 struct Attachment {
     let type: AttachmentType    // .image | .video | .pdf
-    let url: URL                // URL only — binary stored in LocalFileDataSource
+    let url: URL                // URL only — binary stored in AttachmentFileDataSource
 }
 
 enum AttachmentType { case image, video, pdf }
@@ -187,7 +190,7 @@ Application    AppCoordinator + ChatCoordinator (navigation only) + DI
 | `StateManager` | `ViewState<T>` enum + `@Published var state` on ViewModel | Presentation |
 | `OfflineSyncManager` | `MessageSyncService` Domain Service | Domain |
 | `Local DB (Realm)` | `MessageLocalDataSource` (Realm as backend) | Data |
-| `File Storage` | `LocalFileDataSource` | Data |
+| `File Storage` | `AttachmentFileDataSource` | Data |
 
 The interview used "Coordinator" for both navigation and data orchestration. In this architecture those are two separate concerns: `ChatCoordinator` handles navigation (Application layer); `FetchMessagesUseCase` handles data access (Domain); `MessageStreamService` owns the WebSocket (Domain Service, app-scoped).
 
@@ -207,7 +210,7 @@ AppCoordinator
                  MessageStreamService (same app-scoped instance)
                  MessageSyncService (app-scoped — flushes isSent=false on foreground)
 
-LocalFileDataSource — stores attachment binaries, referenced by URL in Message model
+AttachmentFileDataSource — stores attachment binaries, referenced by URL in Message model
 ```
 
 ---
@@ -258,6 +261,121 @@ sceneDidBecomeActive / applicationDidBecomeActive
       → for each: SendMessageUseCase.execute(param:)
           → on success: MessageLocalDataSource.update(id:, isSent: true)
           → on failure: leave for next foreground event
+```
+
+### Load Chat List (offline-first)
+
+```
+ChatListViewController.viewDidLoad()
+  → ChatListViewModel.load()
+      state = .loading
+      → FetchChatsUseCase.execute(policy: .cached, param: ChatListParam())
+          → ChatRepository
+              1. ChatLocalDataSource.fetch()
+                 → [ChatDTO] → ChatMapper.toDomain() → [Chat]
+                 → state = .success(chats)            // renders immediately from cache
+
+              2. ChatRemoteDataSource.fetch()          // GET /chat/all
+                 → PagedChatsResponse { chats: [ChatDTO], nextCursor: String? }
+                 → ChatLocalDataSource.upsert(dtos)   // upsert by chatId
+                 → nextCursor stored in ChatListViewModel
+                 → state updated with merged chats, sorted by lastActivity
+      defer: isLoading = false
+```
+
+### Chat List Scroll Pagination (cursor-based)
+
+```
+User scrolls to bottom of chat list
+  → ChatListViewModel.loadNextPage()
+      guard let cursor = nextCursor else { return }   // nil = no more pages
+      → FetchChatsUseCase.execute(policy: .fresh, param: ChatListParam(cursor: cursor))
+          → ChatRemoteDataSource.fetch()               // GET /chat/all?cursor=<cursor>
+          → PagedChatsResponse { chats: [ChatDTO], nextCursor: String? }
+          → ChatLocalDataSource.upsert(dtos)
+          → nextCursor updated (nil = end of list reached)
+          → state appended with next page of chats
+```
+
+### Receive Message via WebSocket (foreground, cross-screen)
+
+```
+WebSocket receives WSEvent { type: .messageReceived, payload: MessageDTO }
+  → MessageStreamService publishes Message to AnyPublisher<Message, Never>
+  → MessageRepository handles incoming event:
+
+      1. MessageLocalDataSource.upsert(dto)
+         → Realm live query fires
+         → ChatThreadViewModel.state updated          // if this thread is open — new message appears
+
+      2. ChatLocalDataSource.upsert(ChatDTO(
+             chatId: message.chatId,
+             preview: message.text,
+             lastActivity: message.sentTime))
+         → Realm live query fires
+         → ChatListViewModel.state re-sorted          // chat bubbles to top, preview updated
+
+Key: ViewModels are decoupled — neither knows about the other.
+     Both observe their own Realm DataSource. The Repository is responsible
+     for keeping both stores in sync when a message arrives.
+```
+
+### App Foreground — Gap Recovery
+
+```
+sceneDidBecomeActive / applicationDidBecomeActive
+  → AppCoordinator.handleForeground():
+
+      1. MessageStreamService.connect()
+         → WebSocket reopened
+
+      2. For each open / recently-visited chatId:
+         FetchMessagesUseCase.execute(policy: .fresh,
+             param: MessageParam(chatId:, after: lastKnownTimestamp))
+         → GET /chat/{id}/all/after?timestamp=lastKnown
+         → MessageLocalDataSource.upsert(dtos)        // fill gap from background period
+         → state updated with missed messages
+
+      3. MessageSyncService.syncPending()
+         → fetch isSent == false → retry sends
+
+Order matters: fill the REST gap before relying on WebSocket.
+Messages that arrived during the background period are fetched by REST.
+WebSocket handles only new messages from reconnect forward.
+```
+
+### Chat Thread Scroll Pagination (scroll up for older messages)
+
+```
+User scrolls to top of message thread
+  → ChatThreadViewModel.loadOlderMessages()
+      guard let oldestTimestamp = messages.first?.sentTime else { return }
+      → FetchMessagesUseCase.execute(policy: .fresh,
+             param: MessageParam(chatId:, before: oldestTimestamp))
+          → MessageRemoteDataSource.fetch()            // GET /chat/{id}/all/before?timestamp=
+          → [MessageDTO] → MessageMapper.toDomain() → [Message]
+          → MessageLocalDataSource.upsert(dtos)        // persist for future offline access
+          → state prepended with older messages
+
+Note: timestamp is stable here — message threads are append-only at the tail.
+      New messages arrive at the bottom; older messages never reorder.
+```
+
+### Mark as Read
+
+```
+User opens ChatThread (or scrolls to bottom, viewing latest messages)
+  → ChatThreadViewModel.markAsRead(visibleMessageIds: [...])
+      → MessageLocalDataSource.update(ids:, readTime: Date())   // optimistic update
+      → state updated immediately (read tick appears)
+      → MarkReadUseCase.execute(param: MarkReadParam(chatId:, messageIds:))
+          → MessageRemoteDataSource.post(PATCH /chat/{chat_id}/read)
+          → on success: server confirmed — local state already correct
+          → on failure: readTime remains set locally; reconcile on next delta sync
+
+      → ChatLocalDataSource.update(chatId:, status: .read)
+         → Realm live query fires
+         → ChatListViewModel.state updated             // unread indicator clears on chat list
 ```
 
 ---
@@ -311,7 +429,27 @@ Page 2 request: after?timestamp=80
 Server returns:  [Chat_E (t=70), ...]  ← Chat_D (t=95) was missed
 ```
 
-Fix: server-issued opaque cursor (sequenceId) instead of client-supplied timestamp. The server anchors the page to a stable position regardless of inserts. The client treats the cursor as opaque — never parses it, just echoes it back.
+Fix (applied in API design above): server-issued opaque cursor instead of client-supplied timestamp. The server anchors the page boundary at query time — new inserts don't shift the anchor. The client stores the cursor and echoes it; never parses it.
+
+```swift
+struct PagedChatsResponse: Decodable {
+    let chats: [ChatDTO]
+    let nextCursor: String?   // nil = no more pages
+}
+
+// ViewModel stores cursor between scroll events
+@MainActor
+class ChatListViewModel: ObservableObject {
+    private var nextCursor: String? = nil
+
+    func loadNextPage() {
+        guard let cursor = nextCursor else { return }
+        // FetchChatsUseCase.execute(policy: .fresh, param: ChatListParam(cursor: cursor))
+    }
+}
+```
+
+**Why thread scroll-up keeps `before?timestamp=`:** Message threads are append-only at the tail — new messages arrive at the bottom, not interspersed with older ones. Scrolling up to see older messages visits positions that never reorder, so timestamp is stable here. The inconsistency risk only applies to live-sorting lists (chat list, social feed).
 
 ### ViewState Machine
 
@@ -340,6 +478,33 @@ class ChatThreadViewModel: ObservableObject {
 ```
 
 The transition sequence: set `.loading` before calling UseCase → set `.success(data)` or `.error` after. All views in the app enforce this same lifecycle — no ad-hoc `isLoading: Bool` scattered per-screen.
+
+---
+
+## MVP Exclusions — Extension Notes
+
+Features scoped out of MVP, with the minimal delta needed to add each.
+
+### Push Notifications
+
+- **New component:** `NotificationService` (app-scoped Domain Service) — registers APNS device token at login, stores token server-side
+- **On tap:** `AppCoordinator` receives `chatId` from notification payload → pushes `ChatThreadViewController` directly, bypassing the chat list
+- **Gap fill on cold launch:** tapping a PN may cold-launch the app — `MessageSyncService.syncPending()` + delta fetch must run before the thread renders
+- **Scoping rule:** same as `MessageStreamService` — register at app startup, not inside a ViewController; if owned by a ViewModel it deallocates on screen pop and notifications go silent
+
+### Typing Indicators
+
+- **No data model change:** ephemeral — never persisted to `MessageLocalDataSource` or `ChatLocalDataSource`
+- **Already reserved:** `WSEventType.typingIndicator` is commented out in the WebSocket event model — adding it is additive, no breaking change to existing clients
+- **ViewModel state:** `@Published var isTypingVisible: Bool` — set `true` on incoming event, auto-clear after ~3 s via a cancellable `Task.sleep`
+- **Sending:** debounce keypress in `ChatThreadViewModel` — fire WS event at most once per ~1 s to avoid flooding the socket with every keystroke
+
+### Group Chats
+
+- **Data model:** `Chat.users: [User]` already supports it — the array was intentional. No field change needed on `Chat`.
+- **Read receipts:** `Message.readTime: Date?` becomes `Message.readReceipts: [ReadReceipt]` where `ReadReceipt = { userId, readTime }` — one entry per participant instead of a single timestamp
+- **Send path:** unchanged on the client — `SendMessageUseCase` posts to the same endpoint; server handles fan-out to all group members
+- **Pagination:** same three-tier strategy; endpoints gain a `groupId` param alongside (or replacing) `chatId`
 
 ---
 

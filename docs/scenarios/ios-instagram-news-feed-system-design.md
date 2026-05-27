@@ -2,7 +2,7 @@
 
 **Source:** YouTube — iOS System Design Interview walkthrough
 
-> Scenario extension of [`docs/ios-app-system-design.md`](../ios-app-system-design.md)
+> Scenario extension of [`docs/ios-app-system-design-philosophy.md`](../ios-app-system-design-philosophy.md)
 > Read the delta below first.
 
 ---
@@ -21,12 +21,16 @@
 - Coordinator-based navigation, manual init injection (no DI framework)
 - Mock-the-layer-below testing strategy
 - `ThirdPartyDataSource` pattern — wraps third-party SDKs; app never calls SDK directly
+- `async/await` for I/O; Combine for reactive binding to `@Published` state
+- Idempotency keys on mutations — client-generated UUID at `Param` call site for any retryable mutation
+- HTTP `409 ≠ 5xx` — concurrency conflicts and transient server errors must never share a code path
+- Infrastructure layer (`Gateway` suffix) — Domain defines protocol; concrete in Infrastructure; nothing depends on Gateway except DI wiring in Application
 
 ### What this scenario adds
 
 | Concept | Generic | This Scenario |
 |---|---|---|
-| Optimistic UI | Mutation flow awaits server response | Immediate UI update on like; `LikeDomainService` retries in background until confirmed |
+| Optimistic UI | Mutation flow awaits server response | Immediate UI update on like; `LikeService` retries in background until confirmed |
 | Like queue persistence | Not in generic | Core Data stores `Like { userID, postID, successfullySent }` — durable across app kills |
 | Image loading | Not covered | `ImageSDKDataSource` (ThirdPartyDataSource wrapping SDWebImage) — caches decoded `UIImage` on disk |
 | Feed freshness | `FetchPolicy.cached` | 2-minute timestamp check before firing network (extends .cached semantics at Repository level) |
@@ -35,13 +39,13 @@
 | Pagination | Not covered | Cursor-based with `postID` anchor, `limit=20`, `page: prev\|next` |
 | Polymorphic cell UIModels | `UIModel` (flat struct per screen) | `FeedCellUIModel` enum — `.photo(PhotoCellUIModel)` / `.album(AlbumCellUIModel)` |
 | ViewModel as data source | ViewModel owns UIModel array | ViewModel also implements `UICollectionViewDataSource` / `UICollectionViewDelegate` directly |
-| UI framework | SwiftUI for new apps; UIKit when scroll lifecycle needed | UIKit — `UICollectionView` for prefetch lifecycle control and complex cell layout |
+| UI framework | SwiftUI default for new apps; UIKit when scroll lifecycle, AVPlayer, or custom transitions needed; hybrid valid screen-by-screen | UIKit — `UICollectionView` for prefetch lifecycle control and complex cell layout |
 
 ### Key decisions unique to this scenario
 
 - **Cursor-based pagination over offset.** New posts arrive continuously. Offset pagination drifts — page 2 after an insertion returns one item you already saw. Cursor (`postID`) anchors to a fixed point in the feed regardless of insertions above it.
-- **`LikeDomainService` is a Domain Service, not a UseCase.** It is stateful (holds a durable retry queue), app-scoped, and long-lived — must survive foreground/background cycles. A stateless UseCase cannot hold or retry queued actions.
-- **Optimistic UI with Core Data-backed queue.** The like queue (`successfullySent: false`) is persisted — not in-memory. An app kill mid-retry does not lose the user's intent. On relaunch, `LikeDomainService` reads pending `Like` records and resumes retrying.
+- **`LikeService` is a Domain Service, not a UseCase.** It is stateful (holds a durable retry queue), app-scoped, and long-lived — must survive foreground/background cycles. A stateless UseCase cannot hold or retry queued actions.
+- **Optimistic UI with Core Data-backed queue.** The like queue (`successfullySent: false`) is persisted — not in-memory. An app kill mid-retry does not lose the user's intent. On relaunch, `LikeService` reads pending `Like` records and resumes retrying.
 - **SDWebImage as `ImageSDKDataSource` (ThirdPartyDataSource).** `URLCache` stores raw `Data` bytes — every display requires `UIImage(data:)`, a CPU decode hit. SDWebImage caches the already-decoded `UIImage` in memory + disk. Repeat displays are zero-cost.
 - **ViewModel implements `UICollectionViewDataSource` and `UICollectionViewDelegate`.** The ViewModel already owns `items: [FeedCellUIModel]` — it is the natural place to answer "how many cells?" and "which model at index N?". Avoids a separate data source object with shared mutable state.
 - **Feed freshness at the Repository, not FetchPolicy alone.** `FetchPolicy.cached` says "use local if available". This scenario adds a time constraint: local is only valid if `fetchedAt` is < 2 minutes ago. The Repository checks the timestamp before deciding whether `.cached` qualifies.
@@ -172,7 +176,7 @@ struct AlbumCellUIModel {
 ```
 Presentation  →  ViewController + FeedViewModel (@MainActor)
                  FeedViewModel implements UICollectionViewDataSource + UICollectionViewDelegate
-Domain        →  FetchFeedUseCase · LikePostUseCase · LikeDomainService (app-scoped)
+Domain        →  FetchFeedUseCase · LikePostUseCase · LikeService (app-scoped)
 Data          →  NewsFeedRepository · LikeRepository
                  FeedRemoteDataSource · FeedLocalDataSource (Core Data)
                  ImageSDKDataSource (ThirdPartyDataSource — SDWebImage)
@@ -186,7 +190,7 @@ Application   →  AppDelegate · AppCoordinator · manual init injection
 | Layer | Components |
 |---|---|
 | Presentation | `FeedViewController`, `FeedViewModel`, `FeedCellUIModel` (enum), `PhotoCell`, `AlbumCell` |
-| Domain | `FetchFeedUseCase`, `LikePostUseCase`, `LikeDomainService`, `Post`, `User`, `Like`, `FeedParam` |
+| Domain | `FetchFeedUseCase`, `LikePostUseCase`, `LikeService`, `Post`, `User`, `Like`, `FeedParam` |
 | Data | `NewsFeedRepository`, `LikeRepository`, `FeedRemoteDataSource`, `FeedLocalDataSource`, `PostDTO`, `PostMapper` |
 | ThirdParty | `ImageSDKDataSource` (wraps SDWebImage) |
 | Application | `AppCoordinator`, `AppDelegate` |
@@ -206,7 +210,7 @@ FeedViewModel (@MainActor)
     │               ├─► FeedRemoteDataSource ─── GET /users/<id>/feed ──► REST API
     │               └─► FeedLocalDataSource (Core Data — metadata cache)
     │
-    └──► LikeDomainService (app-scoped singleton)
+    └──► LikeService (app-scoped singleton)
              └─► LikeRepository
                      ├─► LikeRemoteDataSource ── POST /users/<id>/likes ──► REST API
                      └─► FeedLocalDataSource (Core Data — Like queue, successfullySent flag)
@@ -232,7 +236,7 @@ let newsFeedRepo = NewsFeedRepository(remote: feedRemoteDS, local: feedLocalDS)
 let likeRepo     = LikeRepository(remote: likeRemoteDS, local: feedLocalDS)
 
 // Domain Services — strong property on AppCoordinator; survives screen transitions
-let likeService  = LikeDomainService(repository: likeRepo)
+let likeService  = LikeService(repository: likeRepo)
 likeService.resumePendingRetries()                    // re-queue successfullySent=false on launch
 
 // UseCases — stateless; created per-navigation
@@ -245,7 +249,7 @@ let viewModel = FeedViewModel(
 )
 ```
 
-`LikeDomainService` is a stored property on `AppCoordinator`, not created inside `FeedViewController`. This is what keeps it alive across screen transitions and app lifecycle events. If it were owned by the ViewController, it would deallocate on pop and lose the retry queue.
+`LikeService` is a stored property on `AppCoordinator`, not created inside `FeedViewController`. This is what keeps it alive across screen transitions and app lifecycle events. If it were owned by the ViewController, it would deallocate on pop and lose the retry queue.
 
 ---
 
@@ -275,7 +279,7 @@ FeedViewController.viewDidLoad()
 User taps like on post at index i
     → FeedViewModel.toggleLike(at: i)
         → items[i] optimistically mutated (toggle isLiked, ±1 likeCount)  ← instant UI
-        → LikeDomainService.enqueue(Like { userID, postID, successfullySent: false })
+        → LikeService.enqueue(Like { userID, postID, successfullySent: false })
             → FeedLocalDataSource.save(Like)  ← persisted to Core Data
             → LikeRemoteDataSource.post([{ postID, value }])
                 → success: FeedLocalDataSource.update(Like, successfullySent: true)
@@ -364,7 +368,7 @@ The `Like.successfullySent` flag bridges the two worlds:
 - `false` = pending, persist to Core Data, enqueue retry
 - `true` = confirmed, clean up record
 
-On app relaunch, `LikeDomainService` reads all `Like` records with `successfullySent = false` from `FeedLocalDataSource` and resumes retrying. The queue is durable — not session-scoped.
+On app relaunch, `LikeService` reads all `Like` records with `successfullySent = false` from `FeedLocalDataSource` and resumes retrying. The queue is durable — not session-scoped.
 
 Open question: retry policy (exponential back-off vs fixed interval, retry cap) is not specified by the video. Worth having a position: exponential back-off with a 3-attempt cap, then surface an error to the user.
 
@@ -376,20 +380,20 @@ Open question: retry policy (exponential back-off vs fixed interval, retry cap) 
 - **Offset pagination on a live feed.** Insertions at the top shift offsets — duplicates appear. Use cursor-based pagination.
 - **Not implementing `cancelPrefetchingForItemsAt`.** Stale requests pile up and starve visible cells. Always pair `prefetchItemsAt` with its cancel counterpart.
 - **Forgetting `sd_cancelCurrentImageLoad()` in `prepareForReuse`.** Fast scrollers see wrong images briefly — the recycled cell shows the previous request's result.
-- **Creating `LikeDomainService` inside a ViewController instead of the composition root.** If `FeedViewController` owns it, the service deallocates on pop — the retry queue is lost. It must be a stored property on `AppCoordinator`, passed down via init injection.
+- **Creating `LikeService` inside a ViewController instead of the composition root.** If `FeedViewController` owns it, the service deallocates on pop — the retry queue is lost. It must be a stored property on `AppCoordinator`, passed down via init injection.
 - **`successfullySent` records never cleaned up.** The retry loop must set `successfullySent = true` and eventually delete the record on success, or the Core Data queue grows unbounded.
-- **`LikeDomainService` owned by a ViewController.** If scoped to a screen, it deallocates when the user navigates away — the retry queue disappears. Register at AppCoordinator level, same as `PlayerService` in the music streaming scenario.
+- **`LikeService` owned by a ViewController.** If scoped to a screen, it deallocates when the user navigates away — the retry queue disappears. Register at AppCoordinator level, same as `PlayerService` in the music streaming scenario.
 
 ---
 
 ## Interviewer Talking Points
 
 - "I'd use cursor-based pagination — it's stable when new posts arrive, unlike offset which drifts and causes duplicates or skips."
-- "The `Like` domain model carries a `successfullySent` flag. `LikeDomainService` updates the UI optimistically and retries in the background until the flag flips to true."
+- "The `Like` domain model carries a `successfullySent` flag. `LikeService` updates the UI optimistically and retries in the background until the flag flips to true."
 - "For image caching I'd wrap SDWebImage in an `ImageSDKDataSource` — it caches the decoded `UIImage`, so repeat displays are zero-cost. `URLCache` stores raw bytes and you pay the decode hit every time."
 - "I'd use `UICollectionView` with `UICollectionViewDataSourcePrefetching`. That protocol gives me `cancelPrefetchingForItemsAt` — without it, rapid scrolling queues hundreds of stale requests and starves visible cells."
 - "The ViewModel maps `Post` domain objects into typed `FeedCellUIModel` variants before the collection view sees them. Cells are dumb renderers — they never touch the domain layer."
-- "The like queue is persisted to Core Data with `successfullySent: false`. An app kill mid-retry doesn't lose the user's intent — `LikeDomainService` reads pending records on relaunch and resumes."
+- "The like queue is persisted to Core Data with `successfullySent: false`. An app kill mid-retry doesn't lose the user's intent — `LikeService` reads pending records on relaunch and resumes."
 - "Feed freshness extends `FetchPolicy.cached` with a 2-minute timestamp. If `fetchedAt` is recent, skip the network. The Repository is the only place that reads this timestamp."
 
 ---
@@ -400,4 +404,4 @@ Open question: retry policy (exponential back-off vs fixed interval, retry cap) 
 - **Exact prefetch trigger threshold:** How many cells from the bottom to fire the next cursor page request — `UICollectionViewDataSourcePrefetching` provides the hook but the threshold is a product decision (e.g., last 5 cells = ~25% of one page).
 - **Feed refresh UI transition:** Full reload vs `NSDiffableDataSourceSnapshot` diff on cache expiry. Diff avoids flash; full reload is simpler.
 - **Cache timestamp storage:** `fetchedAt` can live as a Core Data entity field on a `FeedMetadata` record, or in `UserDefaults` keyed by `userID`. Either works; UserDefaults is simpler.
-- **Network restoration trigger for `LikeDomainService`:** `NWPathMonitor` (modern, built-in, no third-party) vs Reachability (legacy). Prefer `NWPathMonitor`.
+- **Network restoration trigger for `LikeService`:** `NWPathMonitor` (modern, built-in, no third-party) vs Reachability (legacy). Prefer `NWPathMonitor`.

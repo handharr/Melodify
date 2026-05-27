@@ -264,6 +264,7 @@
   <a class="toc-sub" href="#presentation">Presentation</a>
   <a class="toc-sub" href="#domain">Domain</a>
   <a class="toc-sub" href="#data">Data</a>
+  <a class="toc-sub" href="#infrastructure">Infrastructure</a>
   <a class="toc-sub" href="#application">Application</a>
   <a href="#di">Dependency Injection</a>
   <a href="#flows">Generic Data Flows</a>
@@ -283,11 +284,12 @@
   <p><strong>Clean Architecture + MVVM + UIKit</strong></p>
   <div class="stack">
     <div class="stack-row"><div class="stack-name">Presentation</div><div class="stack-desc">ViewController + ViewModel (Combine <code>@Published</code>)</div></div>
-    <div class="stack-row"><div class="stack-name">Domain</div><div class="stack-desc">UseCase + Protocol + Model + Param + FetchPolicy</div></div>
+    <div class="stack-row"><div class="stack-name">Domain</div><div class="stack-desc">UseCase + Service + Protocol + Model + Param + FetchPolicy</div></div>
     <div class="stack-row"><div class="stack-name">Data</div><div class="stack-desc">Repository + DataSource + DTO + Mapper + APIClient</div></div>
+    <div class="stack-row"><div class="stack-name">Infrastructure</div><div class="stack-desc">Gateway (external SDK + OS framework facades)</div></div>
     <div class="stack-row"><div class="stack-name">Application</div><div class="stack-desc">AppDelegate + Coordinator + DI (manual init injection)</div></div>
   </div>
-  <div class="rule"><strong>Layer dependency rule: Presentation → Domain ← Data. Domain depends on nothing.</strong> Data knows Domain models (via Mapper). Presentation knows Domain models (via UseCase). Neither knows the other exists.</div>
+  <div class="rule"><strong>Layer dependency rule: Presentation → Domain ← Data. Infrastructure conforms to Domain protocols. Domain depends on nothing.</strong> Data knows Domain models (via Mapper). Presentation knows Domain models (via UseCase). Infrastructure implements Domain protocols but is never imported by Domain, Data, or Presentation — only wired by Application.</div>
 </section>
 
 <!-- WHY THESE CHOICES -->
@@ -299,6 +301,7 @@
   <div class="callout"><strong>New app → SwiftUI.</strong> SwiftUI is the current default for greenfield iOS development. State-driven rendering and declarative layout fit cleanly with MVVM — the ViewModel exposes <code>@Published</code> state; the View subscribes with no extra Combine boilerplate.</div>
   <div class="callout"><strong>Legacy app → stay on UIKit.</strong> Migrating an existing UIKit codebase is high risk for low gain. New screens in a UIKit app should remain UIKit unless there is a specific team mandate to migrate.</div>
   <div class="callout"><strong>UIKit is still the right call even in a new app</strong> for: granular scroll lifecycle (<code>willDisplay cell</code> for paginated fetches), complex custom transitions, direct <code>AVPlayerViewController</code> / <code>AVPlayerLayer</code> integration, or pixel-level layout fidelity SwiftUI can't match.</div>
+  <div class="callout"><strong>Infrastructure as the fourth layer.</strong> The three-layer model (Presentation → Domain ← Data) is a simplification of Clean Architecture's four-ring model. Third-party SDKs like Stripe, Firebase, APNs, and LocalAuthentication span concerns — they may present UI, make network calls, or interact with OS services. Data handles the app's own networking and storage. Domain must remain pure Swift. Infrastructure is the explicit fourth layer for classes that wrap external systems the app doesn't control. Domain defines the protocol; Infrastructure provides the concrete. Swapping an SDK = one file change. <strong>Why Gateway as the suffix?</strong> <code>Service</code> is claimed by Domain. <code>DataSource</code> is claimed by Data. <code>Gateway</code> is unclaimed and precise — it is the entry point to an external system the app doesn't own.</div>
   <div class="callout"><strong>Hybrid UIKit/SwiftUI</strong> is valid screen-by-screen. Coordinator wires them together. UIKit hosts SwiftUI via <code>UIHostingController</code>; SwiftUI embeds UIKit via <code>UIViewRepresentable</code>. <strong>Rule of thumb:</strong> lifecycle control needed → UIKit. Reactive state → UI → SwiftUI.</div>
 </section>
 
@@ -319,7 +322,7 @@
   <h3 id="domain">Domain</h3>
   <div class="stack">
     <div class="stack-row"><div class="stack-name">UseCase</div><div class="stack-desc">One public method: <code>execute(policy:param:) async throws → Output</code>. Stateless — created per call or injected. Orchestrates one business action. Calls Repository methods. Never touches networking or storage directly.</div></div>
-    <div class="stack-row"><div class="stack-name">Domain Service</div><div class="stack-desc">Stateful or long-lived logic not tied to a single user action. Injected, lives as long as needed (often app-scoped). Examples: PlayerService, SessionService, AuthService.</div></div>
+    <div class="stack-row"><div class="stack-name">Domain Service</div><div class="stack-desc">Stateful or long-lived logic not tied to a single user action. Injected, lives as long as needed (often app-scoped). Pure Swift — no UIKit, no SDK imports. Examples: PlayerService, SessionService, AuthService.</div></div>
     <div class="stack-row"><div class="stack-name">Model</div><div class="stack-desc">Pure Swift structs — no <code>import UIKit</code>, no Foundation networking types. The only type that crosses all layers.</div></div>
     <div class="stack-row"><div class="stack-name">Param</div><div class="stack-desc">Typed struct for every UseCase input. Split into <code>path:</code> and <code>query:</code> sub-structs. Adding a field never breaks existing call sites.</div></div>
     <div class="stack-row"><div class="stack-name">FetchPolicy</div><div class="stack-desc"><code>.fresh</code> always hits network. <code>.cached</code> returns cache if available, else network. <code>.strict</code> cache only, throws on miss. Travels ViewModel → UseCase → Repository. Repository is the only place that interprets it.</div></div>
@@ -331,6 +334,7 @@
       <tr><td>Triggered by</td><td>User action</td><td>Another component</td></tr>
       <tr><td>State</td><td>Stateless</td><td>Can be stateful</td></tr>
       <tr><td>Lifetime</td><td>Per call</td><td>Injected, lives as needed</td></tr>
+      <tr><td>Imports</td><td>Nothing</td><td>Nothing (pure Swift)</td></tr>
       <tr><td>Example</td><td><code>SearchTracksUseCase</code></td><td><code>PlayerService</code>, <code>SessionService</code></td></tr>
     </table>
   </div>
@@ -346,7 +350,6 @@
     <div class="stack-row"><div class="stack-name">LocalDataSource</div><div class="stack-desc">Wraps persistence backend (UserDefaults / SQLite / GRDB). Returns DTOs — never Domain models. Repository never touches the storage backend directly.</div></div>
     <div class="stack-row"><div class="stack-name">DTO</div><div class="stack-desc">Mirrors the API or DB schema exactly. <code>Codable</code>. Disposable — only lives between the network/DB and the Mapper.</div></div>
     <div class="stack-row"><div class="stack-name">Mapper</div><div class="stack-desc">The only type that knows both DTO and Domain model. <code>static func toDomain(_ dto: DTO) -> Model?</code> Returns Optional — invalid data is silently dropped, never crashes.</div></div>
-    <div class="stack-row"><div class="stack-name">ThirdPartyDataSource</div><div class="stack-desc">SDK facade — wraps a third-party SDK (Stripe, Firebase, etc.) as a <code>RemoteDataSource</code>. Rest of the app calls a <code>RepositoryProtocol</code> — never the SDK directly. Swapping the SDK = one change in one DataSource file. Examples: <code>PaymentRemoteDataSource</code> (Stripe), <code>AnalyticsDataSource</code> (Firebase).</div></div>
   </div>
 
   <h4>DTO → Mapper → Domain Model flow</h4>
@@ -358,6 +361,50 @@
   → <span class="ty">ViewModel</span> maps → <span class="ty">UIModel</span>    <span class="cm">// for the View</span></code></pre>
 
   <div class="rule"><strong>Mapper is the seam between external data and your business logic.</strong> Keep it the only crossing point. If you find yourself converting DTOs anywhere else, move it to the Mapper.</div>
+
+  <hr class="divider">
+
+  <h3 id="infrastructure">Infrastructure</h3>
+  <div class="stack">
+    <div class="stack-row"><div class="stack-name">Gateway</div><div class="stack-desc">Concrete implementation of a Domain protocol (<code>XxxGatewayProtocol</code>). Wraps one external system — SDK, OS framework, or third-party service. May import UIKit, SDKs, OS frameworks — Domain never does. Nothing depends on Gateway except DI wiring in Application.</div></div>
+  </div>
+
+  <h4>Domain Service vs Gateway — when to use which</h4>
+  <div class="table-wrap">
+    <table>
+      <tr><th></th><th>Domain Service</th><th>Gateway</th></tr>
+      <tr><td>Owns</td><td>Business logic + state</td><td>External system interaction</td></tr>
+      <tr><td>Imports</td><td>Nothing (pure Swift)</td><td>UIKit, SDK, OS frameworks</td></tr>
+      <tr><td>Layer</td><td>Domain</td><td>Infrastructure</td></tr>
+      <tr><td>Protocol lives in</td><td>Domain</td><td>Domain</td></tr>
+      <tr><td>Concrete lives in</td><td>Domain</td><td>Infrastructure</td></tr>
+      <tr><td>Example</td><td><code>PlayerService</code>, <code>ReservationService</code></td><td><code>StripePaymentGateway</code>, <code>APNsNotificationGateway</code></td></tr>
+    </table>
+  </div>
+
+  <div class="rule"><strong>The rule:</strong> if a class needs to import an external SDK or OS framework to do its job, it belongs in Infrastructure, not Domain. Domain defines what it needs via protocol; Infrastructure provides the concrete.</div>
+
+<pre><code><span class="cm">// Domain — no SDK imports, defines the contract</span>
+<span class="kw">protocol</span> <span class="ty">PaymentGatewayProtocol</span> {
+    <span class="kw">func</span> <span class="nm">collectToken</span>() <span class="kw">async throws</span> -> <span class="ty">String</span>
+}
+
+<span class="cm">// Infrastructure — imports Stripe SDK, fulfills the contract</span>
+<span class="kw">final class</span> <span class="ty">StripePaymentGateway</span>: <span class="ty">PaymentGatewayProtocol</span> {
+    <span class="kw">func</span> <span class="nm">collectToken</span>() <span class="kw">async throws</span> -> <span class="ty">String</span> { ... }
+}</code></pre>
+
+  <h4>Suffix clarity — one suffix per layer</h4>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Suffix</th><th>Layer</th><th>Example</th></tr>
+      <tr><td><code>UseCase</code></td><td>Domain</td><td><code>SearchTracksUseCase</code></td></tr>
+      <tr><td><code>Service</code></td><td>Domain</td><td><code>PlayerService</code>, <code>ReservationService</code></td></tr>
+      <tr><td><code>Repository</code></td><td>Data</td><td><code>TrackRepository</code></td></tr>
+      <tr><td><code>DataSource</code></td><td>Data</td><td><code>TrackRemoteDataSource</code></td></tr>
+      <tr><td><code>Gateway</code></td><td>Infrastructure</td><td><code>StripePaymentGateway</code>, <code>APNsNotificationGateway</code></td></tr>
+    </table>
+  </div>
 
   <hr class="divider">
 
@@ -518,6 +565,7 @@
       <tr><td>UseCase</td><td>MockRepository</td><td>Return value, thrown error, param forwarding</td></tr>
       <tr><td>Repository</td><td>MockRemoteDataSource + MockLocalDataSource</td><td>FetchPolicy logic, Mapper output, cache read/write order</td></tr>
       <tr><td>DataSource</td><td>MockAPIClient / in-memory store</td><td>Request shape, URL construction, response decoding</td></tr>
+      <tr><td>Gateway</td><td>MockGatewayProtocol (in Domain tests)</td><td>Protocol method called, correct input forwarded</td></tr>
     </table>
   </div>
 
@@ -547,7 +595,8 @@
     <div class="stack-row"><div class="stack-name">4. Identify Domain Services</div><div class="stack-desc">Anything stateful, long-lived, or shared across screens. App-scoped.</div></div>
     <div class="stack-row"><div class="stack-name">5. Apply FetchPolicy</div><div class="stack-desc">Does this screen need fresh data? Can it show stale? Offline-first?</div></div>
     <div class="stack-row"><div class="stack-name">6. Identify local storage need</div><div class="stack-desc">Cache only? Offline-first with user-controlled saves? File storage? LRU eviction?</div></div>
-    <div class="stack-row"><div class="stack-name">7. Draw the data flow</div><div class="stack-desc">Top to bottom, out loud, immediately after the diagram. Catches missing dependencies and edge cases live.</div></div>
+    <div class="stack-row"><div class="stack-name">7. Identify Infrastructure</div><div class="stack-desc">Which third-party SDKs or OS frameworks does this scenario require? Each gets a Gateway. Define the protocol in Domain, the concrete in Infrastructure.</div></div>
+    <div class="stack-row"><div class="stack-name">8. Draw the data flow</div><div class="stack-desc">Top to bottom, out loud, immediately after the diagram. Catches missing dependencies and edge cases live.</div></div>
   </div>
 
   <div class="rule"><strong>State your principles first, then draw.</strong> Before touching the whiteboard: "I'll use Clean Architecture — Presentation → Domain ← Data. Domain depends on nothing. Let me name the layers for this scenario." One sentence. Then draw.</div>

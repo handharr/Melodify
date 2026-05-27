@@ -297,15 +297,17 @@
     <li><code>ThirdPartyDataSource</code> (SDK facade) — wraps third-party SDKs as a <code>RemoteDataSource</code>; app calls protocol, never SDK directly</li>
     <li>Idempotency keys on mutations — client-generated UUID at <code>Param</code> call site for any retryable mutation</li>
     <li>HTTP 409 ≠ 5xx — concurrency conflicts and transient server errors must never share a code path</li>
+    <li>Infrastructure layer (<code>Gateway</code> suffix) — Domain defines protocol; concrete in Infrastructure; nothing depends on Gateway except DI wiring in Application</li>
   </ul>
 
   <h3>What this scenario adds</h3>
   <div class="table-wrap">
     <table>
       <tr><th>Concept</th><th>Generic</th><th>Hotel Booking</th></tr>
-      <tr><td>Image storage</td><td>Not in generic</td><td>Two-tier cache: <code>LocalFileDataSource</code> (disk) + CoreData metadata index (<code>url → filePath + savedAt</code> for TTL)</td></tr>
+      <tr><td>Image storage</td><td>Not in generic</td><td>Two-tier cache: <code>ImageFileDataSource</code> (disk) + CoreData metadata index (<code>url → filePath + savedAt</code> for TTL)</td></tr>
       <tr><td>Offline storage</td><td>Not in generic</td><td><code>ReservationLocalDataSource</code> (CoreData) — read-only offline reservation history</td></tr>
-      <tr><td>Domain Services</td><td>Generic (SessionService example)</td><td><code>ReservationService</code> (hold timer + live state) · <code>ImageService</code> (two-tier image cache) · <code>PaymentService</code> (Stripe SDK facade)</td></tr>
+      <tr><td>Domain Services</td><td><code>Service</code> suffix — stateful/long-lived, pure Swift, no SDK imports</td><td><code>ReservationService</code> (hold timer + live state) · <code>ImageService</code> (two-tier cache) · <code>PaymentService</code> (orchestrates payment via <code>PaymentGatewayProtocol</code> → <code>ProcessPaymentUseCase</code>)</td></tr>
+      <tr><td>Infrastructure</td><td>Not typically in scope</td><td><code>StripePaymentGateway: PaymentGatewayProtocol</code> — only class that imports Stripe SDK; wired by Application</td></tr>
       <tr><td>Hold timer</td><td>Not in generic</td><td>Server-authoritative 15-min lock; client counts down using server's <code>expiration_time</code></td></tr>
       <tr><td>Idempotency key</td><td>Documented in generic — UUID at <code>Param</code> call site for retryable mutations</td><td>Client-generated <code>local_id</code> UUID on every mutation — prevents duplicate reservations/charges on retry</td></tr>
       <tr><td>Pagination</td><td>Not in generic</td><td>Offset-limit — simpler; BE controls sort order; data doesn't move mid-scroll</td></tr>
@@ -323,7 +325,7 @@
   <div class="rule"><strong>Server owns the clock.</strong> <code>expiration_time</code> is always server-generated. The client never calculates a hold window — it only displays a countdown using the server's timestamp.</div>
   <div class="callout"><strong>Offset-limit over cursor pagination.</strong> BE controls sort order; hotel search results don't change mid-scroll (no cross-device sync). Offset is simpler and sufficient. Cursor pays off only when data moves (e.g. music library synced across devices).</div>
   <div class="callout"><strong>WebSockets rejected twice.</strong> For autocomplete and for the hold timer — HTTP + client countdown achieves the same UX at a fraction of the cost at 10M DAU.</div>
-  <div class="warn"><strong>Image cache and offline reservation storage must never share storage.</strong> Cache pressure must not evict user reservation data. <code>LocalFileDataSource</code> for images and <code>ReservationLocalDataSource</code> for reservations are completely separate.</div>
+  <div class="warn"><strong>Image cache and offline reservation storage must never share storage.</strong> Cache pressure must not evict user reservation data. <code>ImageFileDataSource</code> for images and <code>ReservationLocalDataSource</code> for reservations are completely separate.</div>
   <div class="rule"><strong><code>local_id</code> is always client-generated.</strong> Standard industry idempotency key. Prevents duplicate charges on network retry. Server dedup would add server complexity; client UUID is cheap and reliable.</div>
 </section>
 
@@ -486,9 +488,10 @@ limit=&lt;int&gt;          <span class="cm">// 25 per page</span>
   <div class="stack">
     <div class="stack-row"><div class="stack-name">Presentation</div><div class="stack-desc">ViewController + ViewModel (@MainActor, @Published) · SwiftUI Views · binds to UseCases and Domain Services</div></div>
     <div class="stack-row"><div class="arrow">↓</div><div class="stack-name">UseCase</div><div class="stack-desc">SearchHotelsUseCase · FetchHotelDetailUseCase · FetchAmenitiesUseCase · CreateReservationUseCase · ProcessPaymentUseCase</div></div>
-    <div class="stack-row"><div class="arrow">↓</div><div class="stack-name">Domain Service</div><div class="stack-desc">ReservationService (hold timer + live state) · ImageService (two-tier cache) · PaymentService (presents Stripe SDK UI, collects token, delegates to ProcessPaymentUseCase)</div></div>
+    <div class="stack-row"><div class="arrow">↓</div><div class="stack-name">Domain Service</div><div class="stack-desc">ReservationService (hold timer + live state) · ImageService (two-tier cache) · PaymentService (orchestrates payment via PaymentGatewayProtocol → ProcessPaymentUseCase)</div></div>
+    <div class="stack-row"><div class="stack-name">Infrastructure</div><div class="stack-desc">StripePaymentGateway: PaymentGatewayProtocol — only class that imports Stripe SDK; wired by Application</div></div>
     <div class="stack-row"><div class="arrow">↓</div><div class="stack-name">Repository</div><div class="stack-desc">HotelRepository · ReservationRepository · AmenityRepository · ImageRepository · PaymentRepository</div></div>
-    <div class="stack-row"><div class="arrow">↓</div><div class="stack-name">DataSource</div><div class="stack-desc">Remote: HotelRemoteDataSource · ReservationRemoteDataSource · MediaRemoteDataSource<br>Local: HotelLocalDataSource · ReservationLocalDataSource · AmenityLocalDataSource · ImageLocalDataSource · LocalFileDataSource</div></div>
+    <div class="stack-row"><div class="arrow">↓</div><div class="stack-name">DataSource</div><div class="stack-desc">Remote: HotelRemoteDataSource · ReservationRemoteDataSource · MediaRemoteDataSource<br>Local: HotelLocalDataSource · ReservationLocalDataSource · AmenityLocalDataSource · ImageLocalDataSource · ImageFileDataSource</div></div>
     <div class="stack-row"><div class="stack-name">Application</div><div class="stack-desc">AppDelegate · Coordinator (per flow) · Swinject DI container</div></div>
   </div>
 
@@ -498,7 +501,7 @@ limit=&lt;int&gt;          <span class="cm">// 25 per page</span>
       <tr><th>Scope</th><th>Service</th><th>Reason</th></tr>
       <tr><td>Singleton</td><td><code>ReservationService</code></td><td>Owns live hold state + 15-min countdown timer — must survive screen transitions</td></tr>
       <tr><td>Singleton</td><td><code>ImageService</code></td><td>Owns two-tier image cache — must persist across screens</td></tr>
-      <tr><td>Singleton</td><td><code>PaymentService</code></td><td>Presents Stripe SDK UI, collects token, orchestrates <code>ProcessPaymentUseCase</code> — one instance</td></tr>
+      <tr><td>Singleton</td><td><code>PaymentService</code></td><td>Orchestrates payment flow via <code>PaymentGatewayProtocol</code> (Stripe SDK never imported in Domain) — one instance</td></tr>
       <tr><td>Transient</td><td>UseCases</td><td>Stateless — no mutable state to share across ViewModels</td></tr>
     </table>
   </div>
@@ -558,8 +561,8 @@ limit=&lt;int&gt;          <span class="cm">// 25 per page</span>
   <h3>Payment</h3>
 <pre><code><span class="nm">PaymentViewModel</span>.pay()
   → <span class="nm">PaymentService</span>  <span class="cm">// Domain Service — app-scoped singleton</span>
-      1. presents Stripe SDK UI → receives payment_token
-      2. → <span class="nm">ProcessPaymentUseCase</span>.execute(param: <span class="ty">PaymentParam</span>(token: payment_token))
+      1. paymentGateway.collectToken()   <span class="cm">// StripePaymentGateway (Infrastructure) — presents Stripe UI, returns token</span>
+      2. → <span class="nm">ProcessPaymentUseCase</span>.execute(param: <span class="ty">PaymentParam</span>(token:))
              → <span class="nm">PaymentRepository</span> (<span class="ty">PaymentRepositoryProtocol</span>)
                  → <span class="nm">PaymentRemoteDataSource</span>.post(<span class="st">"/reservations/payment"</span>, body: { payment_token })
       → returns success
@@ -580,14 +583,14 @@ limit=&lt;int&gt;          <span class="cm">// 25 per page</span>
 <pre><code>Image Request (via <span class="nm">ImageService</span>)
      │
      ▼
-<span class="nm">LocalFileDataSource</span> (disk)
+<span class="nm">ImageFileDataSource</span> (disk)
      │ hit? → serve immediately (zero network)
      │ miss?
      ▼
 <span class="nm">MediaRemoteDataSource</span> (S3 fetch)
      │
      ▼
-Write binary file to disk (<span class="nm">LocalFileDataSource</span>)
+Write binary file to disk (<span class="nm">ImageFileDataSource</span>)
 Write metadata to CoreData (<span class="nm">ImageLocalDataSource</span>):
   { url: <span class="ty">String</span>, filePath: <span class="ty">String</span>, savedAt: <span class="ty">Date</span> }</code></pre>
 
@@ -598,7 +601,7 @@ Write metadata to CoreData (<span class="nm">ImageLocalDataSource</span>):
   <h4>LRU size cap</h4>
   <p>Alongside TTL, a size threshold prevents disk bloat. When the cap is hit, oldest entries are pruned first (LRU-style) regardless of TTL. Thumbnails and full-size images are cached independently — both sizes available for their respective UIs without re-fetching.</p>
 
-  <div class="rule"><strong>CoreData as metadata index, not blob store.</strong> CoreData stores file paths and TTL data. Binary image files live on disk managed by <code>LocalFileDataSource</code>. Never shove binary data into a CoreData attribute — it degrades performance and defeats the purpose of file-level LRU eviction.</div>
+  <div class="rule"><strong>CoreData as metadata index, not blob store.</strong> CoreData stores file paths and TTL data. Binary image files live on disk managed by <code>ImageFileDataSource</code>. Never shove binary data into a CoreData attribute — it degrades performance and defeats the purpose of file-level LRU eviction.</div>
 
   <hr class="divider">
 
@@ -685,8 +688,8 @@ Stripe SDK returns payment_token
      ▼
 BE charges card server-side via Stripe API</code></pre>
 
-  <div class="callout"><strong>Facade over SDK — always.</strong> <code>PaymentService</code> wraps the Stripe SDK. Rest of the app calls <code>PaymentServiceProtocol</code> — never the Stripe SDK directly. Swapping payment providers (Stripe → Adyen, Braintree) = one change in one file. No ViewModel knows which payment SDK is running.</div>
-  <div class="rule"><strong>In Clean Architecture terms:</strong> <code>PaymentService</code> (Domain Service) handles the Stripe SDK UI to collect a token, then delegates to <code>ProcessPaymentUseCase</code> → <code>PaymentRepository: PaymentRepositoryProtocol</code> → <code>PaymentRemoteDataSource</code> → API. <code>PaymentViewModel</code> calls <code>PaymentService</code> via <code>PaymentServiceProtocol</code> — nothing above the DataSource level knows which payment SDK is running.</div>
+  <div class="callout"><strong>Facade over SDK — always.</strong> <code>StripePaymentGateway</code> (Infrastructure) wraps the Stripe SDK behind <code>PaymentGatewayProtocol</code>. <code>PaymentService</code> (Domain Service) orchestrates without importing the SDK. Rest of the app calls <code>PaymentServiceProtocol</code> — never the Stripe SDK directly. Swapping payment providers = one file in Infrastructure (<code>StripePaymentGateway</code>). No ViewModel knows which payment SDK is running.</div>
+  <div class="rule"><strong>In Clean Architecture terms:</strong> <code>PaymentService</code> (Domain Service) calls <code>PaymentGatewayProtocol.collectToken()</code> (implemented by <code>StripePaymentGateway</code> in Infrastructure — the only class that imports the Stripe SDK), then delegates to <code>ProcessPaymentUseCase</code> → <code>PaymentRepository: PaymentRepositoryProtocol</code> → <code>PaymentRemoteDataSource</code> → API. <code>PaymentViewModel</code> calls <code>PaymentService</code> via <code>PaymentServiceProtocol</code> — nothing above the DataSource level knows which payment SDK is running.</div>
 </section>
 
 <!-- TRADE-OFFS -->
@@ -697,7 +700,7 @@ BE charges card server-side via Stripe API</code></pre>
       <tr><th>Decision</th><th>Chosen</th><th>Rejected</th><th>Why</th></tr>
       <tr><td>Autocomplete</td><td>Prefetch + debounced HTTP GET</td><td>WebSocket streaming</td><td>Too expensive at 10M DAU</td></tr>
       <tr><td>Reservation hold timer</td><td>Server timestamp + client countdown</td><td>WebSockets / long-poll</td><td>Simpler; server stays authoritative</td></tr>
-      <tr><td>Image caching</td><td>Manual <code>LocalFileDataSource</code> + CoreData TTL/LRU</td><td>URLSession default cache</td><td>Granular eviction control</td></tr>
+      <tr><td>Image caching</td><td>Manual <code>ImageFileDataSource</code> + CoreData TTL/LRU</td><td>URLSession default cache</td><td>Granular eviction control</td></tr>
       <tr><td>Payment</td><td>Stripe SDK token</td><td>DIY card collection</td><td>PCI compliance; no raw card data on client</td></tr>
       <tr><td>Pagination</td><td>Offset-limit</td><td>Cursor-based</td><td>Simpler; BE owns sort order; data stable mid-scroll</td></tr>
       <tr><td>Idempotency</td><td>Client-generated <code>local_id</code> UUID</td><td>Server dedup</td><td>Handles network retry duplicates cheaply</td></tr>
@@ -712,7 +715,7 @@ BE charges card server-side via Stripe API</code></pre>
   <h2>Key Takeaways</h2>
   <div class="rule"><strong>Idempotency key — always client-generated</strong> for mutation requests that could be retried. UUID at the call site. Same ID on retry = server deduplicates = no double charge.</div>
   <div class="rule"><strong>Server-authoritative timestamps</strong> — never trust the client clock for business-critical windows. Hold expiry, pricing windows, time-limited offers — all server-generated, client reads only.</div>
-  <div class="rule"><strong>Facade over third-party SDKs.</strong> <code>PaymentService</code> wraps Stripe. <code>ImageService</code> wraps caching logic. Rest of the app calls protocols. Swapping providers = one change.</div>
+  <div class="rule"><strong>Facade over third-party SDKs.</strong> <code>StripePaymentGateway</code> (Infrastructure) wraps Stripe SDK behind <code>PaymentGatewayProtocol</code>; <code>PaymentService</code> (Domain Service) orchestrates without importing the SDK. <code>ImageService</code> wraps caching logic. Rest of the app calls protocols. Swapping providers = one file change.</div>
   <div class="rule"><strong>Prefetch on launch</strong> for data expensive to fetch per-keystroke but bounded in size — autocomplete destinations, amenity icon library. Zero-latency lookup, fraction of the network cost.</div>
   <div class="rule"><strong>CoreData as metadata index, not blob store.</strong> Store file paths and TTL timestamps. Binary files live on disk. Use CoreData for queryable metadata, not raw binary payloads.</div>
   <div class="warn"><strong>Common gotcha — <code>ReservationService</code> scope.</strong> If owned by a ViewModel, it deallocates when the screen pops — the hold countdown stops and the reservation state is lost. Register it as a singleton in your DI container at app startup, not inside a ViewController.</div>
