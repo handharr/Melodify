@@ -457,7 +457,7 @@
     </div>
     <div class="stack-row">
       <div class="stack-name">StoryViewModel</div>
-      <div class="stack-desc"><code>@MainActor</code> · <code>@Published var currentStory: StoryUIModel?</code> · calls <code>FetchStoriesUseCase</code> · calls <code>StoryOrderService.markAsSeen(id:)</code> · triggers <code>ImageSDKDataSource.prefetch</code> for next story</div>
+      <div class="stack-desc"><code>@MainActor</code> · <code>@Published var currentStory: StoryUIModel?</code> · calls <code>FetchStoriesUseCase</code> · calls <code>StoryOrderService.markAsSeen(id:)</code> · calls <code>PrefetchStoryImageUseCase.execute(url:)</code> for next story</div>
     </div>
   </div>
 
@@ -466,6 +466,10 @@
     <div class="stack-row">
       <div class="stack-name">FetchStoriesUseCase</div>
       <div class="stack-desc"><code>execute(policy: FetchPolicy, param: FetchStoriesParam) async throws -> [Story]</code> · calls <code>StoryRepositoryProtocol</code></div>
+    </div>
+    <div class="stack-row">
+      <div class="stack-name">PrefetchStoryImageUseCase</div>
+      <div class="stack-desc"><code>execute(url: URL)</code> → <code>StoryRepositoryProtocol.prefetchImage(url:)</code> → <code>ImageSDKDataSource</code></div>
     </div>
     <div class="stack-row">
       <div class="stack-name">StoryOrderService</div>
@@ -485,7 +489,7 @@
   <div class="stack">
     <div class="stack-row">
       <div class="stack-name">StoryRepository</div>
-      <div class="stack-desc">Implements <code>StoryRepositoryProtocol</code> · applies <code>FetchPolicy.cached</code> (skip remote if &lt; 10 min old) · filters <code>expireAt &lt; now</code> · maps <code>StoryDTO → Story</code> via <code>StoryMapper</code></div>
+      <div class="stack-desc">Implements <code>StoryRepositoryProtocol</code> · applies <code>FetchPolicy.cached</code> (skip remote if &lt; 10 min old) · filters <code>expireAt &lt; now</code> · maps <code>StoryDTO → Story</code> via <code>StoryMapper</code> · <code>prefetchImage(url:)</code> → <code>ImageSDKDataSource.prefetch(url:)</code></div>
     </div>
     <div class="stack-row">
       <div class="stack-name">StoryRemoteDataSource</div>
@@ -558,7 +562,7 @@
       → StoryOrderService.<span class="nm">ordered</span>(stories:) → sorted [<span class="ty">Story</span>] (unseen-first)
       → ViewModel maps <span class="ty">Story</span> → <span class="ty">StoryUIModel</span>
       → @Published currentStory updated → ViewController renders
-      → ImageSDKDataSource.<span class="nm">prefetch</span>(url: nextStory.photoURL)
+      → PrefetchStoryImageUseCase.<span class="nm">execute</span>(url: nextStory.photoURL)   <span class="cm">// ViewModel → UseCase → StoryRepository → ImageSDKDataSource</span>
       → <span class="kw">defer</span>: isLoading = <span class="kw">false</span></code></pre>
 
   <h3>Delta update (foreground re-entry)</h3>
@@ -657,7 +661,7 @@ StoryOrderService places 7, 8, 9 at front (newest unseen first)</code></pre>
   </div>
 
   <h3 id="prefetch">6. Pre-fetching</h3>
-  <p><code>StoryViewModel</code> calls <code>ImageSDKDataSource.prefetch(url: nextStory.photoURL)</code> immediately after rendering the current story. By the time the user swipes, the next image is already decoded in SDWebImage's memory cache — zero visible latency, no spinner.</p>
+  <p><code>StoryViewModel</code> calls <code>PrefetchStoryImageUseCase.execute(url: nextStory.photoURL)</code> immediately after rendering the current story. The UseCase delegates to <code>StoryRepository.prefetchImage(url:)</code> → <code>ImageSDKDataSource.prefetch(url:)</code>. By the time the user swipes, the next image is already decoded in SDWebImage's memory cache — zero visible latency, no spinner. ViewModel never calls the DataSource directly (no Presentation → Data bypass).</p>
 
   <div class="warn">
     <strong>Cancel prefetch on backward swipe.</strong> If the user swipes back to story N-1, the in-flight prefetch for story N+1 should be cancelled. Stale prefetch requests waste bandwidth and pollute the cache.

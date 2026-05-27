@@ -492,6 +492,16 @@ Each quality bucket → chunks:
     <div class="stack-row"><div class="stack-name">Application</div><div class="stack-desc"><code>AppCoordinator</code> (composition root — builds full dependency graph, registers app-scoped services) · <code>AppDelegate</code> (entry point — wires window, registers <code>PlayerService</code> at app scope) · Manual init injection — no DI framework; Coordinators compose all dependencies via init</div></div>
   </div>
 
+  <h3>FetchPolicy applies here too</h3>
+  <p>Same <code>.fresh / .cached / .strict</code> you use in Melodify — <code>LibraryRepository</code> checks policy before deciding to hit remote or return from local. No new concept needed.</p>
+
+  <h3>Why <code>PlayableItemRepository</code> is separate from <code>CollectionRepository</code></h3>
+  <p>Same reason you'd split <code>TrackRepository</code> from <code>PlaylistRepository</code> in Melodify:</p>
+  <ol>
+    <li><strong>Deep link / direct access</strong> — a track URL can open without collection context</li>
+    <li><strong>Granular cache invalidation</strong> — refresh one episode's <code>resumeTimestamp</code> without busting the whole collection cache</li>
+  </ol>
+
   <h3>Data Flow — Library Screen</h3>
   <p>Pattern A — two awaits in the ViewModel. <code>async/await</code> returns once; a single <code>execute()</code> cannot update state twice.</p>
 <pre><code><span class="nm">LibraryViewModel</span>.load()

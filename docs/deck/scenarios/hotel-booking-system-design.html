@@ -275,6 +275,7 @@
   <a class="toc-sub" href="#payment">5. Payment Processing — Stripe facade</a>
   <a href="#tradeoffs">Trade-off Summary</a>
   <a href="#feedback">Key Takeaways</a>
+  <a href="#bonus">Bonus — Feedback &amp; Rating System</a>
 </div>
 
 <!-- DELTA -->
@@ -751,6 +752,19 @@ BE charges card server-side via Stripe API</code></pre>
   <div class="warn"><strong>Common gotcha — <code>ReservationService</code> scope.</strong> If owned by a ViewModel, it deallocates when the screen pops — the hold countdown stops and the reservation state is lost. Register it as a singleton in your DI container at app startup, not inside a ViewController.</div>
   <div class="warn"><strong>Common gotcha — conflating 409 with 5xx.</strong> HTTP 409 Conflict is a specific concurrency event requiring a specific UX (room taken, go back). HTTP 5xx is a generic server error requiring a retry UI. Never conflate them — the user experience is completely different.</div>
   <div class="callout"><strong>Interview verdict: Strong hire for Senior iOS.</strong> Candidate communicated trade-offs clearly, avoided over-engineering (rejected WebSockets twice), and kept complexity proportional to requirements.</div>
+</section>
+
+<!-- BONUS -->
+<section id="bonus">
+  <h2>Bonus — Feedback &amp; Rating System (out of interview scope)</h2>
+  <div class="stack">
+    <div class="stack-row"><div class="stack-name">Trigger</div><div class="stack-desc"><code>FeedbackService</code> triggers post-checkout — 1–2 hours after payment confirmation</div></div>
+    <div class="stack-row"><div class="stack-name">Channels</div><div class="stack-desc">In-app star rating (immediate) + post-stay text survey (optional, delayed)</div></div>
+    <div class="stack-row"><div class="stack-name">Metadata</div><div class="stack-desc">Each submission attaches: app version, OS, ViewModel state at time of submission</div></div>
+    <div class="stack-row"><div class="stack-name">Endpoint</div><div class="stack-desc">Central <code>POST /feedback</code> endpoint consolidates all sources</div></div>
+    <div class="stack-row"><div class="stack-name">Routing</div><div class="stack-desc">Negative feedback → automated alert to support team; positive → prompt for public review</div></div>
+    <div class="stack-row"><div class="stack-name">UX rule</div><div class="stack-desc">Keep surveys under 60 seconds to maximise completion rate</div></div>
+  </div>
 </section>
 
 <div class="bottom-nav">

@@ -579,20 +579,25 @@ WS   /chat/{chat_id}                          → event stream after REST sync</
 
   <h3 id="flow-ws-receive">Receive Message via WebSocket (foreground, cross-screen)</h3>
 <pre><code>WebSocket receives <span class="ty">WSEvent</span> { type: .messageReceived, payload: <span class="ty">MessageDTO</span> }
-  → <span class="ty">MessageStreamService</span> publishes <span class="ty">Message</span> to <span class="ty">AnyPublisher</span>&lt;<span class="ty">Message</span>, <span class="ty">Never</span>&gt;
-  → <span class="ty">MessageRepository</span> handles incoming event:
+  → <span class="ty">MessageStreamDataSource</span> decodes raw frame → <span class="ty">MessageDTO</span>
+  → <span class="ty">MessageStreamService</span> receives <span class="ty">MessageDTO</span>:
+      1. calls <span class="ty">MessageRepository</span>.<span class="nm">receiveMessage</span>(dto:)   <span class="cm">// upsert into local DB before publishing</span>
+             → <span class="ty">MessageLocalDataSource</span>.<span class="nm">upsert</span>(dto)       <span class="cm">// upsert by message.id</span>
+               → Realm live query fires
+               → <span class="ty">ChatThreadViewModel</span>.state updated         <span class="cm">// if this thread is open</span>
+             → <span class="ty">ChatLocalDataSource</span>.<span class="nm">upsert</span>(<span class="ty">ChatDTO</span>(
+                   chatId: dto.chatId,
+                   preview: dto.text,
+                   lastActivity: dto.sentTime))
+               → Realm live query fires
+               → <span class="ty">ChatListViewModel</span>.state re-sorted         <span class="cm">// chat bubbles to top, preview updated</span>
+      2. publishes <span class="ty">Message</span> (Domain model) via <span class="ty">AnyPublisher</span>&lt;<span class="ty">Message</span>, <span class="ty">Never</span>&gt;
+         → ViewModel subscribers receive domain model; no second upsert needed
 
-      1. <span class="ty">MessageLocalDataSource</span>.<span class="nm">upsert</span>(dto)
-         → Realm live query fires
-         → <span class="ty">ChatThreadViewModel</span>.state updated          <span class="cm">// if this thread is open — new message appears</span>
-
-      2. <span class="ty">ChatLocalDataSource</span>.<span class="nm">upsert</span>(<span class="ty">ChatDTO</span>(
-             chatId: message.chatId,
-             preview: message.text,
-             lastActivity: message.sentTime))
-         → Realm live query fires
-         → <span class="ty">ChatListViewModel</span>.state re-sorted          <span class="cm">// chat bubbles to top, preview updated</span></code></pre>
-  <div class="callout"><strong>Why ViewModels are decoupled:</strong> neither ViewModel knows about the other. Both observe their own Realm DataSource. The Repository is responsible for keeping both stores in sync when a message arrives — <code>MessageLocalDataSource</code> for the thread, <code>ChatLocalDataSource</code> for the list preview and sort order.</div>
+<span class="cm">Key: MessageStreamService writes to local DB first (via MessageRepository), then publishes.
+     ViewModels observe their own Realm DataSource and the publisher independently —
+     neither knows about the other.</span></code></pre>
+  <div class="callout"><strong>Why ViewModels are decoupled:</strong> neither ViewModel knows about the other. Both observe their own Realm DataSource. <code>MessageStreamService</code> writes to local DB first (via <code>MessageRepository</code>), then publishes — DB triggers the Realm live queries; the publisher carries the Domain model to any additional subscribers.</div>
 
   <h3 id="flow-foreground">App Foreground — Gap Recovery</h3>
 <pre><code>sceneDidBecomeActive / applicationDidBecomeActive

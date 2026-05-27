@@ -266,6 +266,7 @@
   <a href="#api">API Design</a>
   <a href="#architecture">Architecture</a>
   <a class="toc-sub" href="#layer-breakdown">Layer Breakdown</a>
+  <a class="toc-sub" href="#high-level-diagram">High-Level Diagram</a>
   <a class="toc-sub" href="#vocab">Vocabulary Mapping</a>
   <a href="#dataflow">Data Flow</a>
   <a class="toc-sub" href="#flow-restaurant">Restaurant List</a>
@@ -376,9 +377,12 @@
 <span class="kw">struct</span> <span class="ty">Address</span> {
     <span class="nm">addressID</span>: <span class="ty">Int</span>
     <span class="nm">label</span>: <span class="ty">String</span>
+    <span class="nm">city</span>: <span class="ty">String</span>
+    <span class="nm">street</span>: <span class="ty">String</span>
+    <span class="nm">flat</span>: <span class="ty">String</span>
+    <span class="nm">postcode</span>: <span class="ty">String</span>
     <span class="nm">latitude</span>: <span class="ty">Double</span>
     <span class="nm">longitude</span>: <span class="ty">Double</span>
-    <span class="cm">// + city, street, flat, postcode</span>
 }
 
 <span class="kw">struct</span> <span class="ty">Restaurant</span> {
@@ -507,6 +511,16 @@
       <div class="stack-desc"><code>AppCoordinator</code> · <code>RestaurantCoordinator</code> · <code>BasketCoordinator</code> · <code>OrderCoordinator</code> · manual init injection — no DI framework</div>
     </div>
   </div>
+
+  <h3 id="high-level-diagram">High-Level Diagram</h3>
+<pre><code>ViewController ──→ ViewModel ──→ UseCases ──→ Repository ──→ RemoteDataSource ──http──→ REST API
+                        │                                  └─→ LocalDataSource ──→ Core Data
+                        │
+                        └──→ OrderService ──→ OrderSSEDataSource ──sse──→ SSE API
+
+ViewController ──→ UIImageView extension ──→ SDWebImage/Kingfisher ──http──→ Image CDN
+
+DI: Coordinator composes all dependencies via manual init injection (no framework)</code></pre>
 
   <h3 id="vocab">Vocabulary Mapping</h3>
   <div class="table-wrap">
