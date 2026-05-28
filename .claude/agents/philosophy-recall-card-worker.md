@@ -159,11 +159,14 @@ The prompt will provide:
 - **New card HTML per scenario:** the card HTML blocks returned by individual diff workers
 - **Unapproved scenarios:** their card HTML must be copied verbatim from the current file
 
-### Step 1 — Read the current recall HTML
+### Step 1 — Read both recall files
 
-Read `docs/deck/system-design-recall.html`.
+Read:
+1. `docs/deck/system-design-recall.html`
+2. `docs/deck/system-design-recall-diagram.html`
+3. `docs/conventions/scenario-conventions.md` — Section 7 for chip ID scheme and prefix table
 
-### Step 2 — Assemble the updated file
+### Step 2 — Assemble the updated recall file
 
 Replace each approved scenario's `<div class="scenario-card">` block with the new card HTML from the prompt.
 Copy all unapproved scenario card blocks verbatim from the file read in Step 1.
@@ -180,19 +183,36 @@ Copy all unapproved scenario card blocks verbatim from the file read in Step 1.
 
 **Row borders:** `.arch-table tbody tr` must NOT have `border-bottom`. Flow rows are visually separated by the left-border color on `.flow-name` only. If the `<style>` block still contains that rule, remove it (and its `tr:last-child` companion) during assembly.
 
-### Step 3 — Write the updated file
+### Step 3 — Write `system-design-recall.html`
 
 Write the full updated `docs/deck/system-design-recall.html`.
+
+### Step 3b — Assemble and write the diagram file
+
+The diagram file mirrors `system-design-recall.html` exactly, with two additions:
+- Chip `<span>` elements carry `id="{prefix}-{component-kebab-name}"` attributes
+- A `<script>` block at the bottom contains the `PATHS` connection graph
+
+For each **approved** scenario card:
+1. Start from the new card HTML (same content as written to recall.html)
+2. **Re-apply chip IDs:** For each chip `<span>` in the new card, find the matching chip in the *existing* diagram card (match by chip text content). If a match exists, carry its `id` attribute over to the new span. If no match (new component), assign a new ID using the scheme `{prefix}-{component-kebab-name}` per Section 7 of conventions.
+3. **Update PATHS:** If any component was renamed, find all PATHS entries referencing the old ID and update them to the new ID. If a new component was added that should participate in a connection arc, add it to the relevant PATHS entry (use the flow color assignment from diff mode Step 2b to determine which flow it belongs to).
+
+For **unapproved** scenario cards: copy the existing diagram card verbatim (ids and all) — no changes.
+
+**Never touch** the diagram file's `<head>`, `<nav>`, `<header>`, `.legend`, `.chip-legend`, or the `<script>` block structure (only update `PATHS` array contents).
+
+Write the full updated `docs/deck/system-design-recall-diagram.html`.
 
 ### Step 4 — Return
 
 ```
-## Assembled — system-design-recall.html
+## Assembled — system-design-recall.html + system-design-recall-diagram.html
 
 ### Updated cards
-| Scenario | Flows | Changes |
-|---|---|---|
-| <name> | <count> | <summary> |
+| Scenario | Flows | Changes | Diagram IDs |
+|---|---|---|---|
+| <name> | <count> | <summary> | carried / new: <list> / renamed: <list> |
 
 ### Unchanged cards
 <list of cards written back verbatim>

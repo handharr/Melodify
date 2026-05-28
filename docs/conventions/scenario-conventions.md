@@ -1,9 +1,10 @@
 # Scenario Conventions
 
-Machine-readable rules for all three scenario doc types:
+Machine-readable rules for all four scenario doc types:
 - `docs/scenarios/*.md` — scenario markdown docs
 - `docs/deck/scenarios/*.html` — scenario HTML decks
-- `docs/deck/system-design-recall.html` — recall card
+- `docs/deck/system-design-recall.html` — recall card (table layout)
+- `docs/deck/system-design-recall-diagram.html` — recall card with SVG connection arcs
 
 Workers read this file at runtime. The philosophy doc (`docs/ios-app-system-design-philosophy.md`) is the human-readable narrative; this file is the authoritative rule set.
 
@@ -122,3 +123,52 @@ Rules:
 - Nothing scenario-specific in the "Same as generic" list
 - Nothing generic in the delta table
 - Every row in the delta table must have a corresponding bullet in "Key decisions"
+
+---
+
+## Section 7 — Recall Diagram: Chip ID Convention
+
+`system-design-recall-diagram.html` adds SVG bezier arcs between chips. Every chip
+that participates in a connection arc must carry an `id` attribute.
+
+### ID scheme
+
+```
+{scenario-prefix}-{component-kebab-name}
+```
+
+| Scenario            | Prefix |
+|---------------------|--------|
+| Uber Eats           | `ue`   |
+| Messenger           | `ms`   |
+| Music Streaming     | `mst`  |
+| Instagram News Feed | `ig`   |
+| Hotel Booking       | `hb`   |
+| Story Viewer        | `sv`   |
+
+Examples: `id="ue-basket-repo"`, `id="ms-msg-stream-svc"`, `id="hb-stripe"`
+
+### PATHS array
+
+The `const PATHS` array inside the diagram's `<script>` block is the authoritative
+connection graph. Each entry:
+
+```js
+{ flow: 'f1', ids: ['chip-a', 'chip-b', 'chip-c'] }
+```
+
+A bezier arc is drawn between every adjacent pair in `ids`, left-to-right through layers.
+Flow IDs map to colours: `f1` blue, `f2` orange, `f3` green, `f4` red, `f5` purple.
+
+### Maintenance rules
+
+When adding or renaming a chip in `system-design-recall.html`, apply the same change
+to `system-design-recall-diagram.html`:
+1. Add/update `id="{prefix}-{name}"` on the chip `<span>`
+2. Add/update the corresponding entry in `PATHS`
+
+When adding a new scenario:
+1. Choose a unique prefix (2–4 chars, lowercase, no hyphens)
+2. Add the prefix to the table above
+3. Add chip IDs to all connection-participant chips
+4. Add all flow paths to `PATHS`, grouped with a comment header

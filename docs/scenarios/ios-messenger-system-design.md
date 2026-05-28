@@ -30,6 +30,8 @@ All standard Clean Architecture + MVVM patterns as per the philosophy doc — no
 | Optimistic send | Not covered | `StageMessageUseCase` (sync DB write → instant UI) + `SendMessageUseCase` (async network → confirmation write) |
 | File/attachment storage | Not in generic | `AttachmentLocalFileDataSource` — stores media binaries; only URL stored in `MessageLocalDataSource` |
 | Message status lifecycle | Not covered | `sentTime` / `receivedTime` / `readTime` + `isSent: Bool` for local delivery tracking |
+| Image loading | Not covered | `ImageService` Domain Service — wraps `ImageDataSource` (SDWebImage); memory + disk two-level cache; lazy loaded per cell appearance, never eagerly on thread open |
+| File/attachment download | Not covered | `FileService` Domain Service — `download(url:) async throws -> URL`; checks `AttachmentLocalFileDataSource` first, fetches via `AttachmentRemoteDataSource` on miss, stores to disk, returns local URL |
 
 ### Key decisions unique to this scenario
 
@@ -40,6 +42,10 @@ All standard Clean Architecture + MVVM patterns as per the philosophy doc — no
 - **Send uses two UseCases.** `StageMessageUseCase` writes the optimistic message to DB synchronously (publisher fires → UI updates instantly with `isSent: false`). `SendMessageUseCase` fires the network call async; on success it upserts the confirmed message to DB (publisher fires again → `isSent: true`).
 - **Three-tier REST is required alongside FetchPolicy.** FetchPolicy (`.fresh` / `.cached`) covers read intent but doesn't model delta sync — fetching only records changed since a known `sequenceId` is a separate concern.
 - **Upsert by `message.id`, never append.** A message can arrive via both WebSocket and a delta REST sync. Appending would duplicate it; upserting by `id` is idempotent.
+- **Single WebSocket connection for all chats.** `connect()` opens one socket to `WS /events`, then reads all known chatIds from `ChatRepositoryProtocol` (local Realm read — no network call) and sends a subscribe frame per chatId. `subscribe(chatId:)` returns a filtered publisher on the single stream — it never opens a new socket. On reconnect (app foreground), re-send subscribe frames for cached chatIds immediately (optimistic), then call `refreshSubscriptions()` after the delta sync completes to cover any newly discovered chats.
+- **Images lazy loaded per cell, never eagerly on thread open.** `ImageService.load(url:, size:)` is called as each cell scrolls into viewport — not when the thread loads. `ImageDataSource` is the only caller of SDWebImage. Thumbnail shown inline; full-res loaded only on tap.
+- **`FileService` checks disk before network.** `AttachmentLocalFileDataSource` is always the first lookup. Network fetch via `AttachmentRemoteDataSource` only on full cache miss. ViewModel receives a local `URL` — never a raw binary.
+- **Delta sync on foreground, not full chat list refetch.** `GET /chat/all/delta?sequenceId=<lastKnown>` returns only chats changed since the last sync — payload is proportional to activity, not list size. `sequenceId` is persisted in `UserDefaults` after every successful sync. Full `GET /chat/all` (paginated) is used only on first cold launch when no `sequenceId` exists yet.
 
 ---
 
@@ -81,7 +87,7 @@ Send (REST fallback — prefer WebSocket when socket is live)
   POST /chat/{chat_id}/message                → send a Message object
 
 Real-time
-  WS   /chat/{chat_id}                        → event stream after REST sync
+  WS   /events                                → single multiplexed stream; client sends subscribe frames per chatId after connect
 ```
 
 **Why three tiers?** Each tier has a distinct job:
@@ -188,10 +194,17 @@ Domain
     MarkReadUseCase            execute(param:) async throws                      → MessageRepositoryProtocol
 
   Domain Services (stateful / app-scoped):
-    MessageStreamService       connect/disconnect · subscribe(chatId:) → AnyPublisher<Message, Never>
-                               calls MessageStreamDataSourceProtocol — never touches WebSocket library directly
+    MessageStreamService       connect() opens WS /events + sends subscribe frames for all known chatIds (via ChatRepositoryProtocol)
+                               subscribe(chatId:) → AnyPublisher<Message, Never> — filtered publisher, no new socket
+                               disconnect() — calls MessageStreamDataSourceProtocol — never touches WebSocket library directly
     MessageSyncService         syncPending() on foreground — flushes isSent=false messages
                                calls messageRepository.fetchPending() → [Message], then SendMessageUseCase per message
+    ImageService               load(url:, size: .thumbnail | .fullRes) → AnyPublisher<UIImage, Error>
+                               calls ImageDataSource (wraps SDWebImage) — memory cache → disk cache → network fetch
+                               lazy: called per cell appearance, never eagerly on thread open
+    FileService                download(url:) async throws -> URL — returns local file URL
+                               checks AttachmentLocalFileDataSource first; fetches via AttachmentRemoteDataSource on miss
+                               stores binary to AttachmentLocalFileDataSource, returns local URL
 
   Models:   Chat, Message, User, Attachment, ChatStatus, AttachmentType
   Params:   ChatListParam(), ChatParam(chatId:), StageMessageParam(chatId:, text:, localId:),
@@ -218,6 +231,9 @@ Data
     └─ persistent-connection peer to APIClient — networking transport only, no Presentation footprint
 
   AttachmentLocalFileDataSource — binary files on disk; only URL stored in MessageLocalDataSource
+  AttachmentRemoteDataSource    — fetches attachment binaries from network (used by FileService on cache miss)
+  ImageDataSource               — wraps SDWebImage; exposes load(url:) → AnyPublisher<UIImage, Error>
+                                  SDWebImage handles memory (NSCache) + disk cache internally
 
 Infrastructure
   None
@@ -226,6 +242,7 @@ External
   URLSessionWebSocketTask / Starscream
   Realm
   URLSession
+  SDWebImage
 
 Application
   AppCoordinator + ChatCoordinator (navigation only) + DI via manual init injection
@@ -300,6 +317,12 @@ ChatThreadViewController.viewDidLoad()
                 → MessageLocalDataSource.upsert(messages)    // DB write → observer emits → state updated
 
       defer: isLoading = false
+
+      // Images — lazy loaded per cell, never eagerly on thread open
+      // Each cell calls ImageService as it scrolls into viewport:
+      //   ImageService.load(url: message.attachment.url, size: .thumbnail)
+      //       → ImageDataSource (SDWebImage): memory cache → disk cache → network fetch
+      // Full-res loaded only on user tap, not on thread open.
 
       // WebSocket — each incoming frame also writes to DB → observer emits → state updated
       → MessageStreamService.subscribe(chatId:) → AnyPublisher<Message, Never>
@@ -423,23 +446,30 @@ sceneDidBecomeActive / applicationDidBecomeActive
   → AppCoordinator.handleForeground():
 
       1. MessageStreamService.connect()
-         → WebSocket reopened
+         → opens WS /events
+         → reads chatIds from ChatLocalDataSource (Realm, local-only — instant)
+         → sends subscribe frames for all cached chatIds   // optimistic coverage
 
-      2. For each open / recently-visited chatId (use withThrowingTaskGroup for concurrent calls):
-         withThrowingTaskGroup: one FetchMessagesUseCase call per chatId, all concurrent
+      2. GET /chat/all/delta?sequenceId=<lastKnown>        // NOT full /chat/all — proportional to activity
+         → FetchChatsUseCase.execute(policy: .fresh, param: ChatListParam(sequenceId: lastKnown))
+             → ChatRemoteDataSource.fetch()
+             → upserts new/changed chats into ChatLocalDataSource
+             → persists new sequenceId to UserDefaults
+         → MessageStreamService.refreshSubscriptions()
+             → sends subscribe frames for any newly discovered chatIds
+
+      3. withThrowingTaskGroup: one FetchMessagesUseCase call per chatId, all concurrent
          FetchMessagesUseCase.execute(policy: .fresh,
              param: MessageParam(chatId:, after: lastKnownTimestamp))
-             → MessageRepository.fetchMessages(policy: .fresh, chatId:, after: lastKnownTimestamp)
-                 → MessageRemoteDataSource.fetch()    // GET /chat/{id}/all/after?timestamp=lastKnown
-                 → MessageLocalDataSource.upsert(dtos)        // fill gap from background period
-         → state updated with missed messages
+             → MessageRemoteDataSource.fetch()    // GET /chat/{id}/all/after?timestamp=lastKnown
+             → MessageLocalDataSource.upsert(dtos)        // fill gap from background period
 
-      3. MessageSyncService.syncPending()
+      4. MessageSyncService.syncPending()
          → fetch isSent == false → retry sends
 
-Order matters: fill the REST gap before relying on WebSocket.
-Messages that arrived during the background period are fetched by REST.
-WebSocket handles only new messages from reconnect forward.
+Order matters: reconnect + subscribe → delta chat sync → message gap fill → pending sends.
+Step 1 chatId reads are local-only (Realm). Full GET /chat/all is only used on first cold launch
+when no sequenceId exists in UserDefaults yet.
 ```
 
 ### Chat Thread Scroll Pagination (scroll up for older messages)
@@ -481,6 +511,37 @@ User opens ChatThread (or scrolls to bottom, viewing latest messages)
               → ChatLocalDataSource.update(chatId:, status: .read)
 ```
 
+### Load Image (lazy, per cell)
+
+```
+Cell scrolls into viewport
+  → ChatThreadViewModel.loadImage(url:, size: .thumbnail)
+      → ImageService.load(url:, size:) → AnyPublisher<UIImage, Error>
+          → ImageDataSource (SDWebImage):
+              1. memory cache (NSCache) hit → return immediately
+              2. disk cache hit → return, promote to memory cache
+              3. miss → network fetch → store to disk + memory → return
+          → cell renders image on emission
+
+User taps attachment to expand
+  → ChatThreadViewModel.loadImage(url:, size: .fullRes)
+      → same ImageService.load() call with .fullRes URL
+```
+
+### Download File Attachment
+
+```
+User taps file attachment (PDF, video)
+  → ChatThreadViewModel.downloadAttachment(attachment:)
+      → FileService.download(url: attachment.url) async throws -> URL
+          1. AttachmentLocalFileDataSource.localURL(for: attachment.url)
+             → file exists on disk → return local URL immediately
+          2. miss → AttachmentRemoteDataSource.fetch(url:) → Data
+             → AttachmentLocalFileDataSource.store(data:, for: attachment.url)
+             → return local URL
+      → ViewModel receives local URL → opens file (QuickLook / AVPlayer)
+```
+
 ---
 
 ## Deep Dives
@@ -492,21 +553,26 @@ User opens ChatThread (or scrolls to bottom, viewing latest messages)
 ```swift
 class MessageStreamService {
     private let streamDataSource: MessageStreamDataSourceProtocol   // Data — injected via DI
-    private let messageRepository: MessageRepositoryProtocol        // Domain protocol — not the concrete MessageRepository
+    private let messageRepository: MessageRepositoryProtocol        // Domain protocol
+    private let chatRepository: ChatRepositoryProtocol              // fetches known chatIds on connect
 
-    func connect()
-    func subscribe(to chatId: String) -> AnyPublisher<Message, Never>
+    func connect()    // opens socket to WS /events + sends subscribe frames for all known chatIds
+    func subscribe(to chatId: String) -> AnyPublisher<Message, Never>  // filtered publisher — no new socket
     func disconnect()
 }
 ```
 
 Lifecycle:
 1. App foreground → `AppCoordinator` calls `messageStreamService.connect()`
-2. View appears → ViewModel calls `messageStreamService.subscribe(to: chatId)`, cancels on `viewWillDisappear`
-3. App backgrounds → `messageStreamService.disconnect()` (socket closed to save battery)
-4. App foregrounds → `connect()`, then `FetchMessagesUseCase` with delta endpoint to catch messages missed during the background gap
+2. `connect()` opens one socket to `WS /events`, reads all cached chatIds from `ChatLocalDataSource` (local Realm read, no network), sends subscribe frames — chat list gets real-time updates before any thread is opened
+3. `GET /chat/all/delta?sequenceId=` completes → `refreshSubscriptions()` sends frames for any newly discovered chatIds
+4. View appears → ViewModel calls `messageStreamService.subscribe(to: chatId)` — attaches a filtered `AnyPublisher` on the already-active stream; cancels on `viewWillDisappear`
+5. App backgrounds → `messageStreamService.disconnect()` (socket closed to save battery)
+6. App foregrounds → repeat from step 1
 
 The ViewModel subscribes to both `ObserveMessagesUseCase` and `MessageStreamService` — both feed the same `@Published var state: ViewState<[Message]>`.
+
+**Why not one socket per chat?** One `URLSessionWebSocketTask` per chat would multiply TCP connections by N — battery and socket overhead with no benefit. A single multiplexed connection carries all chats; the per-chatId filter in `subscribe(chatId:)` is just a publisher `.filter` on the client side.
 
 ### Three-Tier REST vs FetchPolicy
 

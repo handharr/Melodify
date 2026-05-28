@@ -4,7 +4,13 @@ description: Syncs docs/deck/system-design-recall.html with the current state of
 user-invocable: true
 ---
 
-Sync the recall page with the current scenario docs.
+Sync the recall pages with the current scenario docs.
+
+Two files are always co-maintained:
+- `docs/deck/system-design-recall.html` — table layout (source of truth for structure)
+- `docs/deck/system-design-recall-diagram.html` — same content + SVG connection arcs
+
+The assembler writes both. Chip `id=""` attributes and the `PATHS` array in the diagram file are governed by Section 7 of `docs/conventions/scenario-conventions.md`.
 
 ## Parse Arguments
 
