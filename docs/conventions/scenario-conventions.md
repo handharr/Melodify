@@ -1,10 +1,9 @@
 # Scenario Conventions
 
-Machine-readable rules for all four scenario doc types:
+Machine-readable rules for all three scenario doc types:
 - `docs/scenarios/*.md` — scenario markdown docs
 - `docs/deck/scenarios/*.html` — scenario HTML decks
-- `docs/deck/system-design-recall.html` — recall card (table layout)
-- `docs/deck/system-design-recall-diagram.html` — recall card with SVG connection arcs
+- `docs/deck/system-design-recall.html` — recall card with SVG connection arcs
 
 Workers read this file at runtime. The philosophy doc (`docs/ios-app-system-design-philosophy.md`) is the human-readable narrative; this file is the authoritative rule set.
 
@@ -128,7 +127,7 @@ Rules:
 
 ## Section 7 — Recall Diagram: Chip ID Convention
 
-`system-design-recall-diagram.html` adds SVG bezier arcs between chips. Every chip
+`system-design-recall.html` renders SVG bezier arcs between chips. Every chip
 that participates in a connection arc must carry an `id` attribute.
 
 ### ID scheme
