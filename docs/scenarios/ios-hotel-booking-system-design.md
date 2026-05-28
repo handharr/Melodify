@@ -384,6 +384,65 @@ PaymentViewModel.pay()
   → Coordinator navigates to confirmation screen
 ```
 
+### Autocomplete
+
+Debounce lives in the ViewModel — only the final keystroke after 300ms silence triggers a lookup.
+
+```
+SearchViewModel — on each keystroke (debounced 300ms)
+
+    // Phase 1 — local prefix search (zero latency)
+    let local = HotelLocalDataSource.searchPrefix(query:)
+    if !local.isEmpty
+        → ViewModel maps results → UIModel
+        → @Published update → autocomplete dropdown renders immediately
+
+    // Phase 2 — remote fallback (on cache miss only)
+    if local.isEmpty
+        let remote = try await SearchHotelsUseCase.execute(policy: .fresh, param: SearchHotelsParam(destination: query))
+            → HotelRepository → HotelRemoteDataSource.get("/hotels?destination=<query>")
+            → HotelListingsDTO → Mapper → [HotelListing]
+            → HotelLocalDataSource.save(results)   // cache for future keystrokes
+        → ViewModel maps [HotelListing] → UIModel
+        → @Published update → dropdown refreshes
+```
+
+> **Why debounce in the ViewModel:** the ViewModel owns all user interaction timing. Putting debounce in the UseCase or Repository would force every caller to match autocomplete's timing contract — wrong layer.
+
+### Offline Reservation Read
+
+```
+ReservationListViewModel.loadReservations()
+    → isLoading = true
+    → FetchReservationsUseCase.execute(policy: .strict, param:)
+        → ReservationRepository(.strict) → ReservationLocalDataSource only — throws if empty
+        → [OfflineReservationDTO] → ReservationMapper → [Reservation]
+    → ViewModel maps [Reservation] → UIModel
+    → @Published update → view renders reservation history
+    → defer: isLoading = false
+```
+
+> **FetchPolicy .strict as primary policy:** every other flow in this scenario uses `.strict` as a Phase 1 cache probe before falling back to `.fresh`. Offline read is the only flow where `.strict` is the sole policy — a missing local record is a hard miss, not a fallback trigger. No network call is ever attempted.
+
+### Amenity Prefetch on Launch
+
+```
+AppCoordinator.start()
+    → FetchAmenitiesUseCase.execute(param: FetchAmenitiesParam())
+        → AmenityRepository
+            → AmenityRemoteDataSource.get("/amenities") → [AmenityDTO] → AmenityMapper → [Amenity]
+            → AmenityLocalDataSource.save(dtos)
+    // amenity library now ready for local matching
+
+// Later — HotelDetailViewModel.load(hotelId:)
+    → HotelDTO arrives with amenities: [AmenityDTO] (id + description only — no icon URL in hotel payload)
+    → HotelMapper resolves each amenityId against AmenityLocalDataSource.find(amenityId:)
+    → full Amenity (id + description + iconUrl) assembled locally
+    // zero per-hotel icon network calls
+```
+
+> **Why prefetch on launch:** amenity icons are standardized across the hotel chain and bounded in size — a one-time batch fetch amortizes cost across every hotel detail load. Fetching per-hotel would add a network call on every detail open at 10M DAU.
+
 ---
 
 ## Deep Dives

@@ -24,18 +24,20 @@ All standard Clean Architecture + MVVM patterns as per the philosophy doc — no
 | Concept | Generic | This Scenario |
 |---|---|---|
 | Real-time data | Not covered | `MessageStreamService` Domain Service — calls `MessageStreamDataSourceProtocol`; `MessageStreamDataSource` wraps `WebSocketClient` in Data, exposes `AnyPublisher<Message, Never>` per chat |
-| Offline write queue | Not covered | `MessageSyncService` Domain Service — queues `isSent = false` messages, flushes on app foreground |
+| Offline write queue | Not covered | `MessageSyncService` Domain Service — queues `isSent = false` messages, flushes on app foreground; calls `MessageRepositoryProtocol.fetchPending()` |
 | Three-tier API strategy | `FetchPolicy` covers read intent | Initial load / cursor pagination / delta sync by `sequenceId` — three distinct endpoints per list screen |
-| Local DB as SSOT | `LocalDataSource` for cache | Realm via `LocalDataSource` — renders immediately from cache, syncs in background; WebSocket frames upsert into same store |
+| Local DB as SSOT | `LocalDataSource` for cache | Realm via `LocalDataSource` — `ObserveMessagesUseCase` / `ObserveChatsUseCase` expose live query publishers; all state flows through DB writes |
+| Optimistic send | Not covered | `StageMessageUseCase` (sync DB write → instant UI) + `SendMessageUseCase` (async network → confirmation write) |
 | File/attachment storage | Not in generic | `AttachmentLocalFileDataSource` — stores media binaries; only URL stored in `MessageLocalDataSource` |
 | Message status lifecycle | Not covered | `sentTime` / `receivedTime` / `readTime` + `isSent: Bool` for local delivery tracking |
 
 ### Key decisions unique to this scenario
 
 - **`MessageStreamService` must be app-scoped.** If owned by `ChatThreadViewModel`, the WebSocket closes when the screen pops — incoming messages are silently missed.
-- **`MessageSyncService` triggers on app lifecycle, not a timer.** Fires on `sceneDidBecomeActive` / `applicationDidBecomeActive`, not on a polling interval.
+- **`MessageSyncService` triggers on app lifecycle, not a timer.** Fires on `sceneDidBecomeActive` / `applicationDidBecomeActive`, not on a polling interval. Calls `messageRepository.fetchPending()` — never `MessageLocalDataSource` directly.
 - **ViewModels map `Message` → `MessageUIModel`** (flat display struct); raw `Message` domain models are never passed to the View.
-- **Local DB is the single source of truth.** ViewModels never read from the network. Network writes flow into `MessageLocalDataSource` (upsert by `id`); the LocalDataSource stream drives the ViewModel.
+- **Local DB is the single source of truth.** ViewModels subscribe to `ObserveMessagesUseCase` / `ObserveChatsUseCase` (publishers); all state updates flow through DB writes — ViewModels never manually set state from UseCase return values.
+- **Send uses two UseCases.** `StageMessageUseCase` writes the optimistic message to DB synchronously (publisher fires → UI updates instantly with `isSent: false`). `SendMessageUseCase` fires the network call async; on success it upserts the confirmed message to DB (publisher fires again → `isSent: true`).
 - **Three-tier REST is required alongside FetchPolicy.** FetchPolicy (`.fresh` / `.cached`) covers read intent but doesn't model delta sync — fetching only records changed since a known `sequenceId` is a separate concern.
 - **Upsert by `message.id`, never append.** A message can arrive via both WebSocket and a delta REST sync. Appending would duplicate it; upserting by `id` is idempotent.
 
@@ -169,27 +171,31 @@ Mappers (`ChatMapper`, `MessageMapper`) are the only types that know both DTO an
 ```
 Presentation
   ChatListViewController       → ChatListViewModel
-      FetchChatsUseCase · MessageStreamService.subscribe()
+      ObserveChatsUseCase · FetchChatsUseCase
   ChatThreadViewController     → ChatThreadViewModel
-      FetchMessagesUseCase · SendMessageUseCase · MarkReadUseCase
+      ObserveMessagesUseCase · FetchMessagesUseCase
+      StageMessageUseCase · SendMessageUseCase · MarkReadUseCase
       MessageStreamService (same app-scoped instance) · MessageSyncService
 
 Domain
   UseCases (stateless):
-    FetchChatsUseCase          execute(policy:param:) → [Chat]      → ChatRepositoryProtocol
-    FetchMessagesUseCase       execute(policy:param:) → [Message]   → MessageRepositoryProtocol
-    SendMessageUseCase         execute(param:)                      → MessageRepositoryProtocol
-    MarkReadUseCase            execute(param:)                      → MessageRepositoryProtocol
+    ObserveChatsUseCase        execute() → AnyPublisher<[Chat], Never>          → ChatRepositoryProtocol
+    ObserveMessagesUseCase     execute(chatId:) → AnyPublisher<[Message], Never> → MessageRepositoryProtocol
+    FetchChatsUseCase          execute(policy:param:) async throws → [Chat]      → ChatRepositoryProtocol
+    FetchMessagesUseCase       execute(policy:param:) async throws → [Message]   → MessageRepositoryProtocol
+    StageMessageUseCase        execute(param:) → Message                         → MessageRepositoryProtocol
+    SendMessageUseCase         execute(param:) async throws → Message            → MessageRepositoryProtocol
+    MarkReadUseCase            execute(param:) async throws                      → MessageRepositoryProtocol
 
   Domain Services (stateful / app-scoped):
     MessageStreamService       connect/disconnect · subscribe(chatId:) → AnyPublisher<Message, Never>
                                calls MessageStreamDataSourceProtocol — never touches WebSocket library directly
     MessageSyncService         syncPending() on foreground — flushes isSent=false messages
-                               calls SendMessageUseCase for retries
+                               calls messageRepository.fetchPending() → [Message], then SendMessageUseCase per message
 
   Models:   Chat, Message, User, Attachment, ChatStatus, AttachmentType
-  Params:   ChatListParam(), ChatParam(chatId:), SendMessageParam(chatId:, text:, localId:),
-            MarkReadParam(chatId:, messageIds:)
+  Params:   ChatListParam(), ChatParam(chatId:), StageMessageParam(chatId:, text:, localId:),
+            SendMessageParam(chatId:, localId:), MarkReadParam(chatId:, messageIds:)
 
 Data
   MessageRepository   : MessageRepositoryProtocol
@@ -199,7 +205,7 @@ Data
 
   ChatRepository      : ChatRepositoryProtocol
     └─ ChatRemoteDataSource     → APIClient (GET /chat/all with cursor)
-    └─ ChatLocalDataSource      → Realm (live query drives ChatListViewModel)
+    └─ ChatLocalDataSource      → Realm (live query exposed via ObserveChatsUseCase)
     └─ ChatMapper
 
   MessageStreamDataSource : MessageStreamDataSourceProtocol
@@ -272,83 +278,100 @@ AttachmentLocalFileDataSource — stores attachment binaries, referenced by URL 
 
 ### Load Chat Thread (offline-first)
 
-Pattern A — two awaits in the ViewModel. `async/await` returns once; a single `execute()` cannot update state twice. Pattern B (AsyncStream) is an alternative when two-phase load logic is a cross-cutting concern — see philosophy doc. Pattern A used here.
+ViewModel subscribes to `ObserveMessagesUseCase` once — all state updates (cache, network, WebSocket) flow through this single reactive pipe via DB writes. `FetchMessagesUseCase` triggers the network call; its DB write fires the observer.
 
 ```
 ChatThreadViewController.viewDidLoad()
   → ChatThreadViewModel.load()
       state = .loading
 
-      // Phase 1 — cache (instant)
-      if let cached = try? await FetchMessagesUseCase.execute(policy: .strict, param: ChatParam(chatId:))
-          → MessageRepository checks MessageLocalDataSource only — throws on miss
-          → ViewModel maps [Message] → UIModel
-          → state = .success(cached)                    // renders immediately from cache
+      // Subscribe once — single state update path for all sources
+      ObserveMessagesUseCase.execute(chatId:) → AnyPublisher<[Message], Never>
+          → MessageRepository.observe(chatId:) wraps Realm live query
+          → emits immediately with cached messages if present → state = .success(cached)
+          → re-emits on every subsequent DB write (network fetch, WebSocket upsert)
+          → ViewModel maps [Message] → UIModel on each emission
 
-      // Phase 2 — network (background)
-      let fresh = try await FetchMessagesUseCase.execute(policy: .fresh, param: ChatParam(chatId:))
-          → MessageRepository fetches MessageRemoteDataSource → [MessageDTO] → MessageMapper → [Message]
-          → MessageLocalDataSource.upsert(dtos)          // upsert by message.id
-          → ViewModel maps merged [Message] → UIModel
-          → state = .success(fresh)                      // view refreshes with latest
+      // Trigger network fetch — DB write fires the observer above
+      Task:
+        try await FetchMessagesUseCase.execute(policy: .fresh, param: ChatParam(chatId:))
+            → MessageRepository.fetchMessages(policy: .fresh, chatId:)
+                → MessageRemoteDataSource.fetch() → [MessageDTO] → MessageMapper → [Message]
+                → MessageLocalDataSource.upsert(messages)    // DB write → observer emits → state updated
 
       defer: isLoading = false
 
-      → MessageStreamService.subscribe(chatId: chatId) → AnyPublisher<Message, Never>
-          → each incoming Message: MessageLocalDataSource.upsert(dto) → state updated
+      // WebSocket — each incoming frame also writes to DB → observer emits → state updated
+      → MessageStreamService.subscribe(chatId:) → AnyPublisher<Message, Never>
+          → MessageRepository.receiveMessage(dto:)
+              → MessageLocalDataSource.upsert(dto)    // upsert by message.id
+              → observer emits → state updated (same pipe as above)
 ```
 
 ### Send Message (with offline queue)
 
+Two UseCases — stage is synchronous for instant UI; send is async for the network call. Both write to DB; the `ObserveMessagesUseCase` publisher drives all state updates.
+
 ```
 User taps send
   → ChatThreadViewModel.send(text:)
-      → SendMessageUseCase.execute(param: SendMessageParam(chatId:, text:, localId: UUID()))
-          Phase 1 (optimistic):
-              → MessageRepository.stageOptimistic(message: Message(id: localId, text: text, isSent: false))
-                  → MessageLocalDataSource.upsert(...)    // DB write → Realm live query → ViewModel state updates
-          Phase 2 (network):
-              → MessageRepository.send(chatId:, message:)
-                  → MessageRemoteDataSource.post(/chat/{chat_id}/message)
-                  → on success: MessageLocalDataSource.update(id: localId, isSent: true)
-                  → on failure: isSent remains false → MessageSyncService will retry
+
+      // UseCase 1 — sync, instant DB write → observer fires → UI shows isSent: false immediately
+      StageMessageUseCase.execute(param: StageMessageParam(chatId:, text:, localId: UUID()))
+          → MessageRepository.save(Message(id: localId, text: text, isSent: false, ...))
+              → MessageLocalDataSource.upsert(...)    // DB write → observer emits → state updated
+
+      // UseCase 2 — async, fires in background
+      Task:
+        try await SendMessageUseCase.execute(param: SendMessageParam(chatId:, localId:))
+            → MessageRepository.sendMessage(param:)
+                → MessageRemoteDataSource.post(/chat/{chat_id}/message)
+                → on success: MessageLocalDataSource.upsert(confirmed)  // DB write → observer emits → isSent: true
+                → on failure: isSent remains false → MessageSyncService will retry on next foreground
 ```
 
-The ViewModel calls one UseCase. The UseCase owns both the optimistic write and the network call — ViewModel never touches Repository or DataSource directly.
+The ViewModel never manually sets state. `StageMessageUseCase` owns the optimistic DB write; `SendMessageUseCase` owns the network call and confirmation write — ViewModel never touches Repository or DataSource directly.
 
 ### Background Sync (MessageSyncService)
+
+`MessageSyncService` is a Domain Service — it calls via `MessageRepositoryProtocol`, never `MessageLocalDataSource` directly.
 
 ```
 sceneDidBecomeActive / applicationDidBecomeActive
   → MessageSyncService.syncPending()
-      → MessageLocalDataSource.fetch(where: isSent == false) → [MessageDTO]
-      → for each: SendMessageUseCase.execute(param:)
-          → on success: MessageLocalDataSource.update(id:, isSent: true)
-          → on failure: leave for next foreground event
+      → MessageRepositoryProtocol.fetchPending() → [Message]  // isSent == false
+      → for each: SendMessageUseCase.execute(param: SendMessageParam(chatId:, localId: message.id))
+          → MessageRepository.sendMessage(param:)
+              → MessageRemoteDataSource.post(...)
+              → on success: MessageLocalDataSource.upsert(confirmed)  // DB write → observer emits → isSent: true
+              → on failure: leave for next foreground event
 ```
 
 ### Load Chat List (offline-first)
 
-Pattern A — two awaits in the ViewModel.
+Same pattern as Load Chat Thread — subscribe once, trigger fetch. Observer emits cached data immediately if present; network fetch DB write re-emits with fresh data.
 
 ```
 ChatListViewController.viewDidLoad()
   → ChatListViewModel.load()
       state = .loading
 
-      // Phase 1 — cache (instant)
-      if let cached = try? await FetchChatsUseCase.execute(policy: .strict, param: ChatListParam())
-          → ChatRepository checks ChatLocalDataSource only — throws on miss
-          → ViewModel maps [Chat] → UIModel
-          → state = .success(cached)                  // renders immediately from cache
+      // Subscribe once — single state update path
+      ObserveChatsUseCase.execute() → AnyPublisher<[Chat], Never>
+          → ChatRepository.observe() wraps Realm live query
+          → emits immediately with cached chats if present → state = .success(cached)
+          → re-emits on every subsequent DB write, sorted by lastActivity
+          → ViewModel maps [Chat] → UIModel on each emission
 
-      // Phase 2 — network (background)
-      let response = try await FetchChatsUseCase.execute(policy: .fresh, param: ChatListParam())
-          → ChatRemoteDataSource.fetch()              // GET /chat/all
-          → PagedChatsResponse { chats: [ChatDTO], nextCursor: String? }
-          → ChatLocalDataSource.upsert(dtos)          // upsert by chatId
-          → nextCursor stored in ChatListViewModel
-          → state = .success(merged chats, sorted by lastActivity)
+      // Trigger network fetch — DB write fires the observer above
+      Task:
+        let response = try await FetchChatsUseCase.execute(policy: .fresh, param: ChatListParam())
+            → ChatRepository.fetchChats(policy: .fresh)
+                → ChatRemoteDataSource.fetch()              // GET /chat/all
+                → PagedChatsResponse { chats: [ChatDTO], nextCursor: String? }
+                → ChatLocalDataSource.upsert(dtos)          // DB write → observer emits → state updated
+            ← returns PagedChatsResponse
+        → nextCursor = response.nextCursor
 
       defer: isLoading = false
 ```
@@ -359,12 +382,14 @@ ChatListViewController.viewDidLoad()
 User scrolls to bottom of chat list
   → ChatListViewModel.loadNextPage()
       guard let cursor = nextCursor else { return }   // nil = no more pages
-      → FetchChatsUseCase.execute(policy: .fresh, param: ChatListParam(cursor: cursor))
-          → ChatRemoteDataSource.fetch()               // GET /chat/all?cursor=<cursor>
-          → PagedChatsResponse { chats: [ChatDTO], nextCursor: String? }
-          → ChatLocalDataSource.upsert(dtos)
-          → nextCursor updated (nil = end of list reached)
-          → state appended with next page of chats
+      let response = try await FetchChatsUseCase.execute(policy: .fresh, param: ChatListParam(cursor: cursor))
+          → ChatRepository.fetchChats(policy: .fresh, cursor: cursor)
+              → ChatRemoteDataSource.fetch()               // GET /chat/all?cursor=<cursor>
+              → PagedChatsResponse { chats: [ChatDTO], nextCursor: String? }
+              → ChatLocalDataSource.upsert(dtos)
+          ← returns PagedChatsResponse
+      → nextCursor = response.nextCursor    // nil = end of list reached
+      → state appended with next page of chats
 ```
 
 ### Receive Message via WebSocket (foreground, cross-screen)
@@ -404,8 +429,9 @@ sceneDidBecomeActive / applicationDidBecomeActive
          withThrowingTaskGroup: one FetchMessagesUseCase call per chatId, all concurrent
          FetchMessagesUseCase.execute(policy: .fresh,
              param: MessageParam(chatId:, after: lastKnownTimestamp))
-         → GET /chat/{id}/all/after?timestamp=lastKnown
-         → MessageLocalDataSource.upsert(dtos)        // fill gap from background period
+             → MessageRepository.fetchMessages(policy: .fresh, chatId:, after: lastKnownTimestamp)
+                 → MessageRemoteDataSource.fetch()    // GET /chat/{id}/all/after?timestamp=lastKnown
+                 → MessageLocalDataSource.upsert(dtos)        // fill gap from background period
          → state updated with missed messages
 
       3. MessageSyncService.syncPending()
@@ -424,10 +450,12 @@ User scrolls to top of message thread
       guard let oldestTimestamp = messages.first?.sentTime else { return }
       → FetchMessagesUseCase.execute(policy: .fresh,
              param: MessageParam(chatId:, before: oldestTimestamp))
-          → MessageRemoteDataSource.fetch()            // GET /chat/{id}/all/before?timestamp=
-          → [MessageDTO] → MessageMapper.toDomain() → [Message]
-          → MessageLocalDataSource.upsert(dtos)        // persist for future offline access
-          → state prepended with older messages
+          → MessageRepository.fetchMessages(policy: .fresh, chatId:, before: oldestTimestamp)
+              → MessageRemoteDataSource.fetch()            // GET /chat/{id}/all/before?timestamp=
+              → [MessageDTO] → MessageMapper.toDomain() → [Message]
+              → MessageLocalDataSource.upsert(messages)        // persist for future offline access
+          ← returns [Message]
+      → state prepended with older messages
 
 Note: timestamp is stable here — message threads are append-only at the tail.
       New messages arrive at the bottom; older messages never reorder.
@@ -435,19 +463,22 @@ Note: timestamp is stable here — message threads are append-only at the tail.
 
 ### Mark as Read
 
+`MarkReadUseCase` owns the full flow — optimistic DB write and network call. ViewModel calls one UseCase; state updates reactively through the observer.
+
 ```
 User opens ChatThread (or scrolls to bottom, viewing latest messages)
   → ChatThreadViewModel.markAsRead(visibleMessageIds: [...])
-      → MessageLocalDataSource.update(ids:, readTime: Date())   // optimistic update
-      → state updated immediately (read tick appears)
       → MarkReadUseCase.execute(param: MarkReadParam(chatId:, messageIds:))
-          → MessageRemoteDataSource.post(PATCH /chat/{chat_id}/read)
-          → on success: server confirmed — local state already correct
-          → on failure: readTime remains set locally; reconcile on next delta sync
-
-      → ChatLocalDataSource.update(chatId:, status: .read)
-         → Realm live query fires
-         → ChatListViewModel.state updated             // unread indicator clears on chat list
+          → MessageRepository.markRead(param:)
+              // Optimistic — DB write → MessageLocalDataSource observer emits → read tick appears instantly
+              → MessageLocalDataSource.update(ids:, readTime: Date())
+              // Network
+              → MessageRemoteDataSource.patch(/chat/{chat_id}/read)
+              → on success: server confirmed — local state already correct
+              → on failure: readTime remains set locally; reconcile on next delta sync
+          → ChatRepository.updateStatus(chatId:, status: .read)
+              // DB write → ChatLocalDataSource observer emits → unread indicator clears
+              → ChatLocalDataSource.update(chatId:, status: .read)
 ```
 
 ---
@@ -475,7 +506,7 @@ Lifecycle:
 3. App backgrounds → `messageStreamService.disconnect()` (socket closed to save battery)
 4. App foregrounds → `connect()`, then `FetchMessagesUseCase` with delta endpoint to catch messages missed during the background gap
 
-The ViewModel subscribes to both `FetchMessagesUseCase` and `MessageStreamService` — both feed the same `@Published var state: ViewState<[Message]>`.
+The ViewModel subscribes to both `ObserveMessagesUseCase` and `MessageStreamService` — both feed the same `@Published var state: ViewState<[Message]>`.
 
 ### Three-Tier REST vs FetchPolicy
 

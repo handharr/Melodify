@@ -425,7 +425,7 @@
 <div class="scenario-card">
   <div class="scenario-head">
     <div>
-      <div class="scenario-tag" style="color:var(--accent)">Real-time Chat · WebSocket · Offline Queue · Realm SSOT</div>
+      <div class="scenario-tag" style="color:var(--accent)">WebSocket · Offline Queue · Realm SSOT · Optimistic Send · Three-tier REST · MessageStreamService</div>
       <h2>Messenger</h2>
     </div>
     <a href="scenarios/messenger-system-design.html" class="deck-link">Full deck →</a>
@@ -441,19 +441,18 @@
         <th>Presentation</th>
       </tr></thead>
       <tbody>
-
         <tr class="f1">
           <td class="lbl"><div class="flow-name">Load Thread</div></td>
           <td class="col-external" rowspan="4">
             <div class="comp">
-              <span class="chip st shared">Realm</span>
+              <span class="chip st shared">Storage</span>
               <div class="flow-dots">
                 <span class="flow-dot" style="background:var(--accent)"></span>
                 <span class="flow-dot" style="background:var(--orange)"></span>
                 <span class="flow-dot" style="background:var(--green)"></span>
                 <span class="flow-dot" style="background:var(--red)"></span>
               </div>
-              <div class="sub">SSOT · live query drives all VM updates</div>
+              <div class="sub">Realm — SSOT · live query drives all VM updates</div>
             </div>
             <div class="comp">
               <span class="chip ep shared">API</span>
@@ -463,28 +462,12 @@
                 <span class="flow-dot" style="background:var(--green)"></span>
                 <span class="flow-dot" style="background:var(--red)"></span>
               </div>
-              <div class="sub">GET /chat/:id/all/after?timestamp= · delta only</div>
-              <div class="sub">WS /chat/:id · send (WebSocket-first) · receive (incoming push)</div>
-              <div class="sub">POST /chat/:id/message · REST fallback · offline retry</div>
+              <div class="sub">GET /chat/{id}/all · GET .../after?timestamp= · delta only</div>
+              <div class="sub">WS /chat/{id} · send (WebSocket-first) · receive (incoming push)</div>
+              <div class="sub">POST /chat/{id}/message · REST fallback · offline retry</div>
             </div>
           </td>
-          <td class="col-infra" rowspan="4">
-            <div class="comp">
-              <span class="chip infra">APIClient</span>
-              <div class="flow-dots">
-                <span class="flow-dot" style="background:var(--accent)"></span>
-                <span class="flow-dot" style="background:var(--red)"></span>
-              </div>
-              <div class="sub">REST fallback if socket down</div>
-            </div>
-            <div class="comp">
-              <span class="chip infra">WebSocketClient</span>
-              <div class="flow-dots">
-                <span class="flow-dot" style="background:var(--orange)"></span>
-                <span class="flow-dot" style="background:var(--green)"></span>
-              </div>
-            </div>
-          </td>
+          <td class="col-infra empty" rowspan="4">—</td>
           <td rowspan="4">
             <div class="comp">
               <span class="chip shared">MessageRepo</span>
@@ -494,8 +477,16 @@
                 <span class="flow-dot" style="background:var(--green)"></span>
                 <span class="flow-dot" style="background:var(--red)"></span>
               </div>
-              <div class="sub">MessageLocalDS — upsert by id · never append · isSent flag</div>
+              <div class="sub">MessageLocalDS — upsert by id · isSent flag</div>
               <div class="sub">MessageRemoteDS — delta sync · retry on foreground</div>
+            </div>
+            <div class="comp">
+              <span class="chip">ChatRepo</span>
+              <div class="flow-dots">
+                <span class="flow-dot" style="background:var(--accent)"></span>
+                <span class="flow-dot" style="background:var(--green)"></span>
+              </div>
+              <div class="sub">ChatLocalDS — live query · ChatRemoteDS</div>
             </div>
             <div class="comp">
               <span class="chip ds">MessageStreamDS</span>
@@ -509,8 +500,14 @@
               <div class="flow-dots"><span class="flow-dot" style="background:var(--accent)"></span></div>
             </div>
             <div class="comp">
+              <span class="chip">StageMessageUC</span>
+              <div class="flow-dots"><span class="flow-dot" style="background:var(--orange)"></span></div>
+              <div class="sub">sync DB write → instant UI (isSent: false)</div>
+            </div>
+            <div class="comp">
               <span class="chip">SendMessageUC</span>
               <div class="flow-dots"><span class="flow-dot" style="background:var(--orange)"></span></div>
+              <div class="sub">async network · confirmation DB write</div>
             </div>
             <div class="comp">
               <span class="chip svc">MessageStreamService</span>
@@ -525,29 +522,30 @@
           </td>
           <td rowspan="4">
             <div class="comp">
-              <span class="chip">ChatThreadVM</span>
+              <span class="chip shared">ChatThreadVM</span>
               <div class="flow-dots">
                 <span class="flow-dot" style="background:var(--accent)"></span>
                 <span class="flow-dot" style="background:var(--orange)"></span>
                 <span class="flow-dot" style="background:var(--green)"></span>
               </div>
-              <div class="sub">← observes Realm live query</div>
+              <div class="sub">observes Realm live query</div>
+            </div>
+            <div class="comp">
+              <span class="chip">ChatListVM</span>
+              <div class="flow-dots"><span class="flow-dot" style="background:var(--green)"></span></div>
+              <div class="sub">chat re-sorted on receive</div>
             </div>
           </td>
         </tr>
-
         <tr class="f2">
           <td class="lbl"><div class="flow-name">Send Message</div></td>
         </tr>
-
         <tr class="f3">
           <td class="lbl"><div class="flow-name">Receive via WebSocket</div></td>
         </tr>
-
         <tr class="f4">
           <td class="lbl"><div class="flow-name">Sync Offline Queue</div></td>
         </tr>
-
       </tbody>
     </table>
   </div>
