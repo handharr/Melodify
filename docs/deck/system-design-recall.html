@@ -104,7 +104,7 @@
   /* ── Table ── */
   .arch-wrap { overflow-x: auto; }
   .arch-table {
-    width: 100%; min-width: 1340px;
+    width: 100%; min-width: 1500px;
     border-collapse: collapse;
   }
 
@@ -241,6 +241,23 @@
   tr.f3 { color: var(--green); }
   tr.f4 { color: var(--red); }
   tr.f5 { color: var(--purple); }
+
+  /* ── Column sub-grouping ── */
+  .col-groups {
+    display: flex;
+    flex-direction: row;
+    gap: 16px;
+    align-items: flex-start;
+  }
+  .col-group { display: flex; flex-direction: column; min-width: 0; }
+  .col-group-label {
+    font-size: 9px; font-weight: 700;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--border);
+    margin-bottom: 6px; padding-bottom: 3px;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
 </style>
 </head>
 <body>
@@ -312,12 +329,12 @@
           <td class="lbl"><div class="flow-name">Load Restaurants</div></td>
           <td class="col-external" rowspan="4">
             <div class="comp">
-              <span class="chip st shared" id="ue-storage">Storage</span>
+              <span class="chip st shared" id="ue-coredata">CoreData</span>
               <div class="flow-dots">
                 <span class="flow-dot" style="background:var(--accent)"></span>
                 <span class="flow-dot" style="background:var(--orange)"></span>
               </div>
-              <div class="sub">CoreData — cache · offline restore · basket local mirror</div>
+              <div class="sub">cache · offline restore · basket local mirror</div>
             </div>
             <div class="comp">
               <span class="chip ep shared" id="ue-api">API</span>
@@ -332,56 +349,95 @@
               <div class="sub">SSE /live-order-status/&lt;orderID&gt; · close on viewDidDisappear</div>
             </div>
           </td>
-          <td class="col-infra" rowspan="3">
-            <div class="comp">
-              <span class="chip infra shared" id="ue-api-client">APIClient</span>
-              <div class="flow-dots">
-                <span class="flow-dot" style="background:var(--accent)"></span>
-                <span class="flow-dot" style="background:var(--orange)"></span>
-                <span class="flow-dot" style="background:var(--orange)"></span>
+          <td class="col-infra empty" rowspan="4">—</td>
+          <td rowspan="4">
+            <div class="col-groups">
+              <div class="col-group">
+                <div class="col-group-label">Client</div>
+                <div class="comp">
+                  <span class="chip infra shared" id="ue-api-client">APIClient</span>
+                  <div class="flow-dots">
+                    <span class="flow-dot" style="background:var(--accent)"></span>
+                    <span class="flow-dot" style="background:var(--orange)"></span>
+                    <span class="flow-dot" style="background:var(--orange)"></span>
+                  </div>
+                </div>
+                <div class="comp">
+                  <span class="chip infra" id="ue-sse-client">SSEClient</span>
+                  <div class="flow-dots">
+                    <span class="flow-dot" style="background:var(--green)"></span>
+                  </div>
+                </div>
+              </div>
+              <div class="col-group">
+                <div class="col-group-label">DataSource</div>
+                <div class="comp">
+                  <span class="chip ds" id="ue-restaurant-local-ds">RestaurantLocalDS</span>
+                  <div class="flow-dots"><span class="flow-dot" style="background:var(--accent)"></span></div>
+                  <div class="sub">CoreData · FetchPolicy.cached</div>
+                </div>
+                <div class="comp">
+                  <span class="chip ds" id="ue-basket-local-ds">BasketLocalDS</span>
+                  <div class="flow-dots"><span class="flow-dot" style="background:var(--orange)"></span></div>
+                  <div class="sub">CoreData · local mirror for instant restore</div>
+                </div>
+                <div class="comp">
+                  <span class="chip ds" id="ue-order-remote-ds">OrderRemoteDS</span>
+                  <div class="flow-dots"><span class="flow-dot" style="background:var(--orange)"></span></div>
+                  <div class="sub">POST /orders · GET /orders/&lt;orderID&gt;</div>
+                </div>
+                <div class="comp">
+                  <span class="chip ds" id="ue-order-sse-ds">OrderSSEDataSource</span>
+                  <div class="flow-dots"><span class="flow-dot" style="background:var(--green)"></span></div>
+                  <div class="sub">wraps SSEClient · AsyncStream&lt;OrderSSEEventDTO&gt; · Domain defines protocol</div>
+                </div>
+              </div>
+              <div class="col-group">
+                <div class="col-group-label">Repository</div>
+                <div class="comp">
+                  <span class="chip" id="ue-restaurant-repo">RestaurantRepo</span>
+                  <div class="flow-dots"><span class="flow-dot" style="background:var(--accent)"></span></div>
+                  <div class="sub">RestaurantLocalDS — FetchPolicy.cached · RestaurantRemoteDS</div>
+                </div>
+                <div class="comp">
+                  <span class="chip" id="ue-basket-repo">BasketRepo</span>
+                  <div class="flow-dots"><span class="flow-dot" style="background:var(--orange)"></span></div>
+                  <div class="sub">BasketLocalDS — local mirror · BasketRemoteDS</div>
+                </div>
+                <div class="comp">
+                  <span class="chip" id="ue-order-repo">OrderRepo</span>
+                  <div class="flow-dots"><span class="flow-dot" style="background:var(--orange)"></span></div>
+                  <div class="sub">OrderRemoteDS</div>
+                </div>
               </div>
             </div>
           </td>
           <td rowspan="4">
-            <div class="comp">
-              <span class="chip" id="ue-restaurant-repo">RestaurantRepo</span>
-              <div class="flow-dots"><span class="flow-dot" style="background:var(--accent)"></span></div>
-              <div class="sub">RestaurantLocalDS — FetchPolicy.cached · RestaurantRemoteDS</div>
-            </div>
-            <div class="comp">
-              <span class="chip" id="ue-basket-repo">BasketRepo</span>
-              <div class="flow-dots"><span class="flow-dot" style="background:var(--orange)"></span></div>
-              <div class="sub">BasketLocalDS — local mirror · BasketRemoteDS</div>
-            </div>
-            <div class="comp">
-              <span class="chip" id="ue-order-repo">OrderRepo</span>
-              <div class="flow-dots"><span class="flow-dot" style="background:var(--orange)"></span></div>
-              <div class="sub">OrderRemoteDS</div>
-            </div>
-            <div class="comp">
-              <span class="chip ds" id="ue-order-sse-ds">OrderSSEDataSource</span>
-              <div class="flow-dots"><span class="flow-dot" style="background:var(--green)"></span></div>
-              <div class="sub">wraps SSEClient · AsyncStream&lt;OrderSSEEventDTO&gt; · Domain defines protocol</div>
-            </div>
-          </td>
-          <td rowspan="4">
-            <div class="comp">
-              <span class="chip" id="ue-fetch-restaurants-uc">FetchRestaurantsUC</span>
-              <div class="flow-dots"><span class="flow-dot" style="background:var(--accent)"></span></div>
-            </div>
-            <div class="comp">
-              <span class="chip" id="ue-create-basket-uc">CreateBasketUC</span>
-              <div class="flow-dots"><span class="flow-dot" style="background:var(--orange)"></span></div>
-              <div class="sub">UpdateBasketUC on PATCH</div>
-            </div>
-            <div class="comp">
-              <span class="chip" id="ue-create-order-uc">CreateOrderUC</span>
-              <div class="flow-dots"><span class="flow-dot" style="background:var(--orange)"></span></div>
-            </div>
-            <div class="comp">
-              <span class="chip svc" id="ue-order-svc">OrderService</span>
-              <div class="flow-dots"><span class="flow-dot" style="background:var(--green)"></span></div>
-              <div class="sub">scoped to OrderCoordinator · AnyPublisher&lt;Order, AppError&gt;</div>
+            <div class="col-groups">
+              <div class="col-group">
+                <div class="col-group-label">UseCase</div>
+                <div class="comp">
+                  <span class="chip" id="ue-fetch-restaurants-uc">FetchRestaurantsUC</span>
+                  <div class="flow-dots"><span class="flow-dot" style="background:var(--accent)"></span></div>
+                </div>
+                <div class="comp">
+                  <span class="chip" id="ue-create-basket-uc">CreateBasketUC</span>
+                  <div class="flow-dots"><span class="flow-dot" style="background:var(--orange)"></span></div>
+                  <div class="sub">UpdateBasketUC on PATCH</div>
+                </div>
+                <div class="comp">
+                  <span class="chip" id="ue-create-order-uc">CreateOrderUC</span>
+                  <div class="flow-dots"><span class="flow-dot" style="background:var(--orange)"></span></div>
+                </div>
+              </div>
+              <div class="col-group">
+                <div class="col-group-label">Service</div>
+                <div class="comp">
+                  <span class="chip svc" id="ue-order-svc">OrderService</span>
+                  <div class="flow-dots"><span class="flow-dot" style="background:var(--green)"></span></div>
+                  <div class="sub">scoped to OrderCoordinator · AnyPublisher&lt;Order, AppError&gt;</div>
+                </div>
+              </div>
             </div>
           </td>
           <td rowspan="4">
@@ -413,7 +469,6 @@
 
         <tr class="f3">
           <td class="lbl"><div class="flow-name">Track Courier</div></td>
-          <td class="col-infra empty">—</td>
         </tr>
 
       </tbody>
@@ -445,14 +500,14 @@
           <td class="lbl"><div class="flow-name">Load Thread</div></td>
           <td class="col-external" rowspan="4">
             <div class="comp">
-              <span class="chip st shared" id="ms-storage">Storage</span>
+              <span class="chip st shared" id="ms-realm">Realm</span>
               <div class="flow-dots">
                 <span class="flow-dot" style="background:var(--accent)"></span>
                 <span class="flow-dot" style="background:var(--orange)"></span>
                 <span class="flow-dot" style="background:var(--green)"></span>
                 <span class="flow-dot" style="background:var(--red)"></span>
               </div>
-              <div class="sub">Realm — SSOT · live query drives all VM updates</div>
+              <div class="sub">SSOT · live query drives all VM updates</div>
             </div>
             <div class="comp">
               <span class="chip ep shared" id="ms-api">API</span>
@@ -469,55 +524,104 @@
           </td>
           <td class="col-infra empty" rowspan="4">—</td>
           <td rowspan="4">
-            <div class="comp">
-              <span class="chip shared" id="ms-msg-repo">MessageRepo</span>
-              <div class="flow-dots">
-                <span class="flow-dot" style="background:var(--accent)"></span>
-                <span class="flow-dot" style="background:var(--orange)"></span>
-                <span class="flow-dot" style="background:var(--green)"></span>
-                <span class="flow-dot" style="background:var(--red)"></span>
+            <div class="col-groups">
+              <div class="col-group">
+                <div class="col-group-label">Client</div>
+                <div class="comp">
+                  <span class="chip infra" id="ms-api-client">APIClient</span>
+                  <div class="flow-dots">
+                    <span class="flow-dot" style="background:var(--accent)"></span>
+                    <span class="flow-dot" style="background:var(--orange)"></span>
+                    <span class="flow-dot" style="background:var(--red)"></span>
+                  </div>
+                </div>
+                <div class="comp">
+                  <span class="chip infra" id="ms-ws-client">WebSocketClient</span>
+                  <div class="flow-dots">
+                    <span class="flow-dot" style="background:var(--green)"></span>
+                  </div>
+                </div>
               </div>
-              <div class="sub">MessageLocalDS — upsert by id · isSent flag</div>
-              <div class="sub">MessageRemoteDS — delta sync · retry on foreground</div>
-            </div>
-            <div class="comp">
-              <span class="chip" id="ms-chat-repo">ChatRepo</span>
-              <div class="flow-dots">
-                <span class="flow-dot" style="background:var(--accent)"></span>
-                <span class="flow-dot" style="background:var(--green)"></span>
+              <div class="col-group">
+                <div class="col-group-label">DataSource</div>
+                <div class="comp">
+                  <span class="chip ds" id="ms-msg-local-ds">MessageLocalDS</span>
+                  <div class="flow-dots">
+                    <span class="flow-dot" style="background:var(--accent)"></span>
+                    <span class="flow-dot" style="background:var(--orange)"></span>
+                    <span class="flow-dot" style="background:var(--red)"></span>
+                  </div>
+                  <div class="sub">Realm · upsert by id · isSent flag</div>
+                </div>
+                <div class="comp">
+                  <span class="chip ds" id="ms-chat-local-ds">ChatLocalDS</span>
+                  <div class="flow-dots">
+                    <span class="flow-dot" style="background:var(--accent)"></span>
+                  </div>
+                  <div class="sub">Realm · live query</div>
+                </div>
+                <div class="comp">
+                  <span class="chip ds" id="ms-msg-stream-ds">MessageStreamDS</span>
+                  <div class="flow-dots"><span class="flow-dot" style="background:var(--green)"></span></div>
+                  <div class="sub">wraps WebSocketClient · decodes frames → MessageDTO</div>
+                </div>
               </div>
-              <div class="sub">ChatLocalDS — live query · ChatRemoteDS</div>
-            </div>
-            <div class="comp">
-              <span class="chip ds" id="ms-msg-stream-ds">MessageStreamDS</span>
-              <div class="flow-dots"><span class="flow-dot" style="background:var(--green)"></span></div>
-              <div class="sub">wraps WebSocketClient · decodes frames → MessageDTO</div>
+              <div class="col-group">
+                <div class="col-group-label">Repository</div>
+                <div class="comp">
+                  <span class="chip shared" id="ms-msg-repo">MessageRepo</span>
+                  <div class="flow-dots">
+                    <span class="flow-dot" style="background:var(--accent)"></span>
+                    <span class="flow-dot" style="background:var(--orange)"></span>
+                    <span class="flow-dot" style="background:var(--green)"></span>
+                    <span class="flow-dot" style="background:var(--red)"></span>
+                  </div>
+                  <div class="sub">MessageLocalDS — upsert by id · isSent flag</div>
+                  <div class="sub">MessageRemoteDS — delta sync · retry on foreground</div>
+                </div>
+                <div class="comp">
+                  <span class="chip" id="ms-chat-repo">ChatRepo</span>
+                  <div class="flow-dots">
+                    <span class="flow-dot" style="background:var(--accent)"></span>
+                    <span class="flow-dot" style="background:var(--green)"></span>
+                  </div>
+                  <div class="sub">ChatLocalDS — live query · ChatRemoteDS</div>
+                </div>
+              </div>
             </div>
           </td>
           <td rowspan="4">
-            <div class="comp">
-              <span class="chip" id="ms-fetch-msgs-uc">FetchMessagesUC</span>
-              <div class="flow-dots"><span class="flow-dot" style="background:var(--accent)"></span></div>
-            </div>
-            <div class="comp">
-              <span class="chip" id="ms-stage-msg-uc">StageMessageUC</span>
-              <div class="flow-dots"><span class="flow-dot" style="background:var(--orange)"></span></div>
-              <div class="sub">sync DB write → instant UI (isSent: false)</div>
-            </div>
-            <div class="comp">
-              <span class="chip" id="ms-send-msg-uc">SendMessageUC</span>
-              <div class="flow-dots"><span class="flow-dot" style="background:var(--orange)"></span></div>
-              <div class="sub">async network · confirmation DB write</div>
-            </div>
-            <div class="comp">
-              <span class="chip svc" id="ms-msg-stream-svc">MessageStreamService</span>
-              <div class="flow-dots"><span class="flow-dot" style="background:var(--green)"></span></div>
-              <div class="sub">app-scoped · AnyPublisher&lt;Message, Never&gt;</div>
-            </div>
-            <div class="comp">
-              <span class="chip svc" id="ms-msg-sync-svc">MessageSyncService</span>
-              <div class="flow-dots"><span class="flow-dot" style="background:var(--red)"></span></div>
-              <div class="sub">app-scoped · fires on sceneDidBecomeActive</div>
+            <div class="col-groups">
+              <div class="col-group">
+                <div class="col-group-label">UseCase</div>
+                <div class="comp">
+                  <span class="chip" id="ms-fetch-msgs-uc">FetchMessagesUC</span>
+                  <div class="flow-dots"><span class="flow-dot" style="background:var(--accent)"></span></div>
+                </div>
+                <div class="comp">
+                  <span class="chip" id="ms-stage-msg-uc">StageMessageUC</span>
+                  <div class="flow-dots"><span class="flow-dot" style="background:var(--orange)"></span></div>
+                  <div class="sub">sync DB write → instant UI (isSent: false)</div>
+                </div>
+                <div class="comp">
+                  <span class="chip" id="ms-send-msg-uc">SendMessageUC</span>
+                  <div class="flow-dots"><span class="flow-dot" style="background:var(--orange)"></span></div>
+                  <div class="sub">async network · confirmation DB write</div>
+                </div>
+              </div>
+              <div class="col-group">
+                <div class="col-group-label">Service</div>
+                <div class="comp">
+                  <span class="chip svc" id="ms-msg-stream-svc">MessageStreamService</span>
+                  <div class="flow-dots"><span class="flow-dot" style="background:var(--green)"></span></div>
+                  <div class="sub">app-scoped · AnyPublisher&lt;Message, Never&gt;</div>
+                </div>
+                <div class="comp">
+                  <span class="chip svc" id="ms-msg-sync-svc">MessageSyncService</span>
+                  <div class="flow-dots"><span class="flow-dot" style="background:var(--red)"></span></div>
+                  <div class="sub">app-scoped · fires on sceneDidBecomeActive</div>
+                </div>
+              </div>
             </div>
           </td>
           <td rowspan="4">
@@ -576,13 +680,28 @@
           <td class="lbl"><div class="flow-name">Load Library</div></td>
           <td class="col-external" rowspan="4">
             <div class="comp">
-              <span class="chip st" id="mst-storage">Storage</span>
+              <span class="chip infra" id="mst-avplayer">AVPlayer</span>
               <div class="flow-dots">
-                <span class="flow-dot" style="background:var(--accent)"></span>
+                <span class="flow-dot" style="background:var(--green)"></span>
                 <span class="flow-dot" style="background:var(--red)"></span>
               </div>
-              <div class="sub">GRDB — render instant · Combine publisher on update</div>
-              <div class="sub">disk file:// — user saves never evicted by streaming pressure</div>
+              <div class="sub">HLS · file:// playback engine</div>
+            </div>
+            <div class="comp">
+              <span class="chip st" id="mst-grdb">GRDB</span>
+              <div class="flow-dots">
+                <span class="flow-dot" style="background:var(--accent)"></span>
+                <span class="flow-dot" style="background:var(--green)"></span>
+                <span class="flow-dot" style="background:var(--red)"></span>
+              </div>
+              <div class="sub">render instant · Combine publisher on update</div>
+            </div>
+            <div class="comp">
+              <span class="chip st" id="mst-disk">disk file://</span>
+              <div class="flow-dots">
+                <span class="flow-dot" style="background:var(--red)"></span>
+              </div>
+              <div class="sub">user saves never evicted by streaming pressure</div>
             </div>
             <div class="comp">
               <span class="chip ep" id="mst-api">API</span>
@@ -595,72 +714,104 @@
               <div class="sub">GET /item/:id/stream-info · → HLS CDN .m3u8 (stream) · background on expiry</div>
             </div>
           </td>
-          <td class="col-infra" rowspan="4">
-            <div class="comp">
-              <span class="chip infra" id="mst-api-client">APIClient</span>
-              <div class="flow-dots">
-                <span class="flow-dot" style="background:var(--accent)"></span>
-                <span class="flow-dot" style="background:var(--green)"></span>
-                <span class="flow-dot" style="background:var(--red)"></span>
+          <td class="col-infra empty" rowspan="4">—</td>
+          <td rowspan="4">
+            <div class="col-groups">
+              <div class="col-group">
+                <div class="col-group-label">Client</div>
+                <div class="comp">
+                  <span class="chip infra shared" id="mst-api-client">APIClient</span>
+                  <div class="flow-dots">
+                    <span class="flow-dot" style="background:var(--accent)"></span>
+                    <span class="flow-dot" style="background:var(--green)"></span>
+                    <span class="flow-dot" style="background:var(--red)"></span>
+                  </div>
+                </div>
               </div>
-            </div>
-            <div class="comp">
-              <span class="chip infra" id="mst-avplayer">AVPlayer</span>
-              <div class="flow-dots">
-                <span class="flow-dot" style="background:var(--green)"></span>
-                <span class="flow-dot" style="background:var(--red)"></span>
+              <div class="col-group">
+                <div class="col-group-label">DataSource</div>
+                <div class="comp">
+                  <span class="chip ds" id="mst-library-local-ds">LibraryLocalDS</span>
+                  <div class="flow-dots"><span class="flow-dot" style="background:var(--accent)"></span></div>
+                  <div class="sub">GRDB · Combine publisher</div>
+                </div>
+                <div class="comp">
+                  <span class="chip ds" id="mst-playable-local-ds">PlayableItemLocalDS</span>
+                  <div class="flow-dots"><span class="flow-dot" style="background:var(--red)"></span></div>
+                  <div class="sub">GRDB · .strict policy · queue build only</div>
+                </div>
+                <div class="comp">
+                  <span class="chip ds" id="mst-media-remote-ds">MediaRemoteDS</span>
+                  <div class="flow-dots">
+                    <span class="flow-dot" style="background:var(--green)"></span>
+                    <span class="flow-dot" style="background:var(--red)"></span>
+                  </div>
+                  <div class="sub">signed manifest · short-lived expiresAt</div>
+                </div>
+                <div class="comp">
+                  <span class="chip ds" id="mst-download-local-ds">DownloadLocalDS</span>
+                  <div class="flow-dots"><span class="flow-dot" style="background:var(--red)"></span></div>
+                  <div class="sub">disk file:// · itemId → filePath</div>
+                </div>
               </div>
-              <div class="sub">HLS · file:// playback engine</div>
+              <div class="col-group">
+                <div class="col-group-label">Repository</div>
+                <div class="comp">
+                  <span class="chip" id="mst-library-repo">LibraryRepo</span>
+                  <div class="flow-dots"><span class="flow-dot" style="background:var(--accent)"></span></div>
+                  <div class="sub">LibraryLocalDS · LibraryRemoteDS background refresh</div>
+                </div>
+                <div class="comp">
+                  <span class="chip" id="mst-playable-item-repo">PlayableItemRepo</span>
+                  <div class="flow-dots">
+                    <span class="flow-dot" style="background:var(--green)"></span>
+                    <span class="flow-dot" style="background:var(--red)"></span>
+                  </div>
+                  <div class="sub">PlayableItemLocalDS — .strict policy · queue build only</div>
+                </div>
+                <div class="comp">
+                  <span class="chip" id="mst-download-repo">DownloadRepo</span>
+                  <div class="flow-dots">
+                    <span class="flow-dot" style="background:var(--green)"></span>
+                    <span class="flow-dot" style="background:var(--red)"></span>
+                  </div>
+                  <div class="sub">MediaRemoteDS · DownloadLocalDS</div>
+                </div>
+              </div>
             </div>
           </td>
           <td rowspan="4">
-            <div class="comp">
-              <span class="chip" id="mst-library-repo">LibraryRepo</span>
-              <div class="flow-dots"><span class="flow-dot" style="background:var(--accent)"></span></div>
-              <div class="sub">LibraryLocalDS · LibraryRemoteDS background refresh</div>
-            </div>
-            <div class="comp">
-              <span class="chip" id="mst-playable-item-repo">PlayableItemRepo</span>
-              <div class="flow-dots">
-                <span class="flow-dot" style="background:var(--green)"></span>
-                <span class="flow-dot" style="background:var(--red)"></span>
+            <div class="col-groups">
+              <div class="col-group">
+                <div class="col-group-label">UseCase</div>
+                <div class="comp">
+                  <span class="chip" id="mst-fetch-library-uc">FetchLibraryUC</span>
+                  <div class="flow-dots"><span class="flow-dot" style="background:var(--accent)"></span></div>
+                </div>
+                <div class="comp">
+                  <span class="chip" id="mst-fetch-stream-info-uc">FetchStreamInfoUC</span>
+                  <div class="flow-dots">
+                    <span class="flow-dot" style="background:var(--green)"></span>
+                    <span class="flow-dot" style="background:var(--red)"></span>
+                  </div>
+                </div>
               </div>
-              <div class="sub">PlayableItemLocalDS — .strict policy · queue build only</div>
-            </div>
-            <div class="comp">
-              <span class="chip" id="mst-download-repo">DownloadRepo</span>
-              <div class="flow-dots">
-                <span class="flow-dot" style="background:var(--green)"></span>
-                <span class="flow-dot" style="background:var(--red)"></span>
+              <div class="col-group">
+                <div class="col-group-label">Service</div>
+                <div class="comp">
+                  <span class="chip svc" id="mst-player-svc">PlayerService</span>
+                  <div class="flow-dots">
+                    <span class="flow-dot" style="background:var(--green)"></span>
+                    <span class="flow-dot" style="background:var(--red)"></span>
+                  </div>
+                  <div class="sub">app-scoped — music stops if VC-owned</div>
+                </div>
+                <div class="comp">
+                  <span class="chip svc" id="mst-stream-refresh-svc">StreamRefreshService</span>
+                  <div class="flow-dots"><span class="flow-dot" style="background:var(--red)"></span></div>
+                  <div class="sub">pure logic — checks expiresAt threshold</div>
+                </div>
               </div>
-              <div class="sub">MediaRemoteDS — signed manifest · short-lived expiresAt</div>
-              <div class="sub">DownloadLocalDS — itemId → filePath</div>
-            </div>
-          </td>
-          <td rowspan="4">
-            <div class="comp">
-              <span class="chip" id="mst-fetch-library-uc">FetchLibraryUC</span>
-              <div class="flow-dots"><span class="flow-dot" style="background:var(--accent)"></span></div>
-            </div>
-            <div class="comp">
-              <span class="chip" id="mst-fetch-stream-info-uc">FetchStreamInfoUC</span>
-              <div class="flow-dots">
-                <span class="flow-dot" style="background:var(--green)"></span>
-                <span class="flow-dot" style="background:var(--red)"></span>
-              </div>
-            </div>
-            <div class="comp">
-              <span class="chip svc" id="mst-player-svc">PlayerService</span>
-              <div class="flow-dots">
-                <span class="flow-dot" style="background:var(--green)"></span>
-                <span class="flow-dot" style="background:var(--red)"></span>
-              </div>
-              <div class="sub">app-scoped — music stops if VC-owned</div>
-            </div>
-            <div class="comp">
-              <span class="chip svc" id="mst-stream-refresh-svc">StreamRefreshService</span>
-              <div class="flow-dots"><span class="flow-dot" style="background:var(--red)"></span></div>
-              <div class="sub">pure logic — checks expiresAt threshold</div>
             </div>
           </td>
           <td rowspan="4">
@@ -750,34 +901,71 @@
               </div>
               <div class="sub">PostDTO.photoURLs · resolved by FeedImageDataSource</div>
             </div>
-          </td>
-          <td class="col-infra" rowspan="3">
             <div class="comp">
-              <span class="chip infra" id="ig-api-client">APIClient</span>
+              <span class="chip infra" id="ig-sdwebimage">SDWebImage</span>
               <div class="flow-dots">
-                <span class="flow-dot" style="background:var(--accent)"></span>
-                <span class="flow-dot" style="background:var(--accent)"></span>
-                <span class="flow-dot" style="background:var(--orange)"></span>
+                <span class="flow-dot" style="background:var(--red)"></span>
+              </div>
+              <div class="sub">decoded UIImage · memory + disk cache</div>
+            </div>
+          </td>
+          <td class="col-infra empty" rowspan="3">—</td>
+          <td rowspan="2">
+            <div class="col-groups">
+              <div class="col-group">
+                <div class="col-group-label">Client</div>
+                <div class="comp">
+                  <span class="chip infra shared" id="ig-api-client">APIClient</span>
+                  <div class="flow-dots">
+                    <span class="flow-dot" style="background:var(--accent)"></span>
+                    <span class="flow-dot" style="background:var(--accent)"></span>
+                    <span class="flow-dot" style="background:var(--orange)"></span>
+                  </div>
+                </div>
+              </div>
+              <div class="col-group">
+                <div class="col-group-label">DataSource</div>
+                <div class="comp">
+                  <span class="chip ds shared" id="ig-feed-local-ds">FeedLocalDS</span>
+                  <div class="flow-dots">
+                    <span class="flow-dot" style="background:var(--accent)"></span>
+                    <span class="flow-dot" style="background:var(--accent)"></span>
+                  </div>
+                  <div class="sub">CoreData · 2-min TTL · write-through</div>
+                </div>
+                <div class="comp">
+                  <span class="chip ds shared" id="ig-feed-remote-ds">FeedRemoteDS</span>
+                  <div class="flow-dots">
+                    <span class="flow-dot" style="background:var(--accent)"></span>
+                    <span class="flow-dot" style="background:var(--accent)"></span>
+                  </div>
+                  <div class="sub">fetch if stale · cancel on prefetch cancel</div>
+                </div>
+              </div>
+              <div class="col-group">
+                <div class="col-group-label">Repository</div>
+                <div class="comp">
+                  <span class="chip shared" id="ig-news-feed-repo">NewsFeedRepo</span>
+                  <div class="flow-dots">
+                    <span class="flow-dot" style="background:var(--accent)"></span>
+                    <span class="flow-dot" style="background:var(--accent)"></span>
+                  </div>
+                  <div class="sub">FeedLocalDS · FeedRemoteDS</div>
+                </div>
               </div>
             </div>
           </td>
           <td rowspan="2">
-            <div class="comp">
-              <span class="chip shared" id="ig-news-feed-repo">NewsFeedRepo</span>
-              <div class="flow-dots">
-                <span class="flow-dot" style="background:var(--accent)"></span>
-                <span class="flow-dot" style="background:var(--accent)"></span>
-              </div>
-              <div class="sub">FeedLocalDS — 2-min TTL check · write-through</div>
-              <div class="sub">FeedRemoteDS — fetch if stale · cancel on prefetch cancel</div>
-            </div>
-          </td>
-          <td rowspan="2">
-            <div class="comp">
-              <span class="chip shared" id="ig-fetch-feed-uc">FetchFeedUC</span>
-              <div class="flow-dots">
-                <span class="flow-dot" style="background:var(--accent)"></span>
-                <span class="flow-dot" style="background:var(--accent)"></span>
+            <div class="col-groups">
+              <div class="col-group">
+                <div class="col-group-label">UseCase</div>
+                <div class="comp">
+                  <span class="chip shared" id="ig-fetch-feed-uc">FetchFeedUC</span>
+                  <div class="flow-dots">
+                    <span class="flow-dot" style="background:var(--accent)"></span>
+                    <span class="flow-dot" style="background:var(--accent)"></span>
+                  </div>
+                </div>
               </div>
             </div>
           </td>
@@ -800,16 +988,26 @@
         <tr class="f2">
           <td class="lbl"><div class="flow-name">Like Post</div></td>
           <td>
-            <div class="comp">
-              <span class="chip" id="ig-like-repo">LikeRepo</span>
-              <div class="sub">FeedLocalDS — Like{successfullySent=false}</div>
-              <div class="sub">LikeRemoteDS — flush on connectivity restore</div>
+            <div class="col-groups">
+              <div class="col-group">
+                <div class="col-group-label">Repository</div>
+                <div class="comp">
+                  <span class="chip" id="ig-like-repo">LikeRepo</span>
+                  <div class="sub">FeedLocalDS — Like{successfullySent=false}</div>
+                  <div class="sub">LikeRemoteDS — flush on connectivity restore</div>
+                </div>
+              </div>
             </div>
           </td>
           <td>
-            <div class="comp">
-              <span class="chip svc" id="ig-like-svc">LikeService</span>
-              <div class="sub">app-scoped · retry queue survives app kill</div>
+            <div class="col-groups">
+              <div class="col-group">
+                <div class="col-group-label">Service</div>
+                <div class="comp">
+                  <span class="chip svc" id="ig-like-svc">LikeService</span>
+                  <div class="sub">app-scoped · retry queue survives app kill</div>
+                </div>
+              </div>
             </div>
           </td>
           <td>
@@ -822,16 +1020,16 @@
 
         <tr class="f4">
           <td class="lbl"><div class="flow-name">Load Images</div></td>
-          <td class="col-infra">
-            <div class="comp">
-              <span class="chip infra" id="ig-sdwebimage">SDWebImage</span>
-              <div class="sub">decoded UIImage · memory + disk cache</div>
-            </div>
-          </td>
+          <td class="col-infra empty">—</td>
           <td>
-            <div class="comp">
-              <span class="chip ds" id="ig-feed-image-ds">FeedImageDataSource</span>
-              <div class="sub">ThirdPartyDataSource — wraps SDWebImage behind protocol</div>
+            <div class="col-groups">
+              <div class="col-group">
+                <div class="col-group-label">DataSource</div>
+                <div class="comp">
+                  <span class="chip ds" id="ig-feed-image-ds">FeedImageDataSource</span>
+                  <div class="sub">ThirdPartyDataSource — wraps SDWebImage behind protocol</div>
+                </div>
+              </div>
             </div>
           </td>
           <td class="empty">—</td>
@@ -901,20 +1099,13 @@
               </div>
               <div class="sub">Stripe SDK → token · app never handles raw card data</div>
             </div>
+            <div class="comp">
+              <span class="chip st" id="hb-timer">Timer (Foundation)</span>
+              <div class="flow-dots"><span class="flow-dot" style="background:var(--purple)"></span></div>
+              <div class="sub">cosmetic countdown — server clock is authoritative</div>
+            </div>
           </td>
           <td class="col-infra" rowspan="4">
-            <div class="comp">
-              <span class="chip infra" id="hb-api-client">APIClient</span>
-              <div class="flow-dots">
-                <span class="flow-dot" style="background:var(--accent)"></span>
-                <span class="flow-dot" style="background:var(--orange)"></span>
-              </div>
-            </div>
-            <div class="comp">
-              <span class="chip infra" id="hb-timer">Timer (Foundation)</span>
-              <div class="flow-dots"><span class="flow-dot" style="background:var(--purple)"></span></div>
-              <div class="sub">cosmetic countdown only — server clock is authoritative</div>
-            </div>
             <div class="comp">
               <span class="chip infra" id="hb-stripe">StripePaymentGateway</span>
               <div class="flow-dots"><span class="flow-dot" style="background:var(--purple)"></span></div>
@@ -922,46 +1113,92 @@
             </div>
           </td>
           <td rowspan="4">
-            <div class="comp">
-              <span class="chip" id="hb-hotel-repo">HotelRepo</span>
-              <div class="flow-dots"><span class="flow-dot" style="background:var(--accent)"></span></div>
-              <div class="sub">HotelLocalDS · HotelRemoteDS if stale</div>
-            </div>
-            <div class="comp">
-              <span class="chip" id="hb-reservation-repo">ReservationRepo</span>
-              <div class="flow-dots"><span class="flow-dot" style="background:var(--orange)"></span></div>
-              <div class="sub">ReservationRemoteDS · ReservationLocalDS — write offline record before Payment</div>
-            </div>
-            <div class="comp">
-              <span class="chip" id="hb-payment-repo">PaymentRepo</span>
-              <div class="flow-dots"><span class="flow-dot" style="background:var(--purple)"></span></div>
-              <div class="sub">PaymentRemoteDS</div>
+            <div class="col-groups">
+              <div class="col-group">
+                <div class="col-group-label">Client</div>
+                <div class="comp">
+                  <span class="chip infra shared" id="hb-api-client">APIClient</span>
+                  <div class="flow-dots">
+                    <span class="flow-dot" style="background:var(--accent)"></span>
+                    <span class="flow-dot" style="background:var(--orange)"></span>
+                  </div>
+                </div>
+              </div>
+              <div class="col-group">
+                <div class="col-group-label">DataSource</div>
+                <div class="comp">
+                  <span class="chip ds" id="hb-hotel-local-ds">HotelLocalDS</span>
+                  <div class="flow-dots"><span class="flow-dot" style="background:var(--accent)"></span></div>
+                  <div class="sub">CoreData · search cache</div>
+                </div>
+                <div class="comp">
+                  <span class="chip ds" id="hb-reservation-local-ds">ReservationLocalDS</span>
+                  <div class="flow-dots"><span class="flow-dot" style="background:var(--orange)"></span></div>
+                  <div class="sub">CoreData · offline record before Payment</div>
+                </div>
+                <div class="comp">
+                  <span class="chip ds" id="hb-reservation-remote-ds">ReservationRemoteDS</span>
+                  <div class="flow-dots"><span class="flow-dot" style="background:var(--orange)"></span></div>
+                  <div class="sub">POST /reservations · 409 Conflict handling</div>
+                </div>
+                <div class="comp">
+                  <span class="chip ds" id="hb-payment-remote-ds">PaymentRemoteDS</span>
+                  <div class="flow-dots"><span class="flow-dot" style="background:var(--purple)"></span></div>
+                  <div class="sub">POST /reservations/payment</div>
+                </div>
+              </div>
+              <div class="col-group">
+                <div class="col-group-label">Repository</div>
+                <div class="comp">
+                  <span class="chip" id="hb-hotel-repo">HotelRepo</span>
+                  <div class="flow-dots"><span class="flow-dot" style="background:var(--accent)"></span></div>
+                  <div class="sub">HotelLocalDS · HotelRemoteDS if stale</div>
+                </div>
+                <div class="comp">
+                  <span class="chip" id="hb-reservation-repo">ReservationRepo</span>
+                  <div class="flow-dots"><span class="flow-dot" style="background:var(--orange)"></span></div>
+                  <div class="sub">ReservationRemoteDS · ReservationLocalDS</div>
+                </div>
+                <div class="comp">
+                  <span class="chip" id="hb-payment-repo">PaymentRepo</span>
+                  <div class="flow-dots"><span class="flow-dot" style="background:var(--purple)"></span></div>
+                  <div class="sub">PaymentRemoteDS</div>
+                </div>
+              </div>
             </div>
           </td>
           <td rowspan="4">
-            <div class="comp">
-              <span class="chip" id="hb-search-hotels-uc">SearchHotelsUC</span>
-              <div class="flow-dots"><span class="flow-dot" style="background:var(--accent)"></span></div>
-            </div>
-            <div class="comp">
-              <span class="chip" id="hb-create-reservation-uc">CreateReservationUC</span>
-              <div class="flow-dots"><span class="flow-dot" style="background:var(--orange)"></span></div>
-              <div class="sub">local_id = UUID() at Param call site</div>
-            </div>
-            <div class="comp">
-              <span class="chip svc" id="hb-reservation-svc">ReservationService</span>
-              <div class="flow-dots"><span class="flow-dot" style="background:var(--purple)"></span></div>
-              <div class="sub">startHold(expiration_time) — client never owns the clock</div>
-            </div>
-            <div class="comp">
-              <span class="chip svc" id="hb-payment-svc">PaymentService</span>
-              <div class="flow-dots"><span class="flow-dot" style="background:var(--purple)"></span></div>
-              <div class="sub">calls PaymentGatewayProtocol → delegates to ProcessPaymentUC</div>
-            </div>
-            <div class="comp">
-              <span class="chip" id="hb-process-payment-uc">ProcessPaymentUC</span>
-              <div class="flow-dots"><span class="flow-dot" style="background:var(--purple)"></span></div>
-              <div class="sub">PaymentRepo → PaymentRemoteDS independently testable</div>
+            <div class="col-groups">
+              <div class="col-group">
+                <div class="col-group-label">UseCase</div>
+                <div class="comp">
+                  <span class="chip" id="hb-search-hotels-uc">SearchHotelsUC</span>
+                  <div class="flow-dots"><span class="flow-dot" style="background:var(--accent)"></span></div>
+                </div>
+                <div class="comp">
+                  <span class="chip" id="hb-create-reservation-uc">CreateReservationUC</span>
+                  <div class="flow-dots"><span class="flow-dot" style="background:var(--orange)"></span></div>
+                  <div class="sub">local_id = UUID() at Param call site</div>
+                </div>
+                <div class="comp">
+                  <span class="chip" id="hb-process-payment-uc">ProcessPaymentUC</span>
+                  <div class="flow-dots"><span class="flow-dot" style="background:var(--purple)"></span></div>
+                  <div class="sub">PaymentRepo → PaymentRemoteDS independently testable</div>
+                </div>
+              </div>
+              <div class="col-group">
+                <div class="col-group-label">Service</div>
+                <div class="comp">
+                  <span class="chip svc" id="hb-reservation-svc">ReservationService</span>
+                  <div class="flow-dots"><span class="flow-dot" style="background:var(--purple)"></span></div>
+                  <div class="sub">startHold(expiration_time) — client never owns the clock</div>
+                </div>
+                <div class="comp">
+                  <span class="chip svc" id="hb-payment-svc">PaymentService</span>
+                  <div class="flow-dots"><span class="flow-dot" style="background:var(--purple)"></span></div>
+                  <div class="sub">calls PaymentGatewayProtocol → delegates to ProcessPaymentUC</div>
+                </div>
+              </div>
             </div>
           </td>
           <td rowspan="4">
@@ -1030,13 +1267,12 @@
           <td class="lbl"><div class="flow-name">Initial Load</div></td>
           <td class="col-external" rowspan="4">
             <div class="comp">
-              <span class="chip st shared" id="sv-storage">Storage</span>
+              <span class="chip st shared" id="sv-coredata">CoreData</span>
               <div class="flow-dots">
                 <span class="flow-dot" style="background:var(--accent)"></span>
                 <span class="flow-dot" style="background:var(--accent)"></span>
               </div>
-              <div class="sub">CoreData — merge deltas · filter expireAt &lt; now on every read</div>
-              <div class="sub">SDWebImage disk cache — decoded UIImage ready before user swipes</div>
+              <div class="sub">merge deltas · filter expireAt &lt; now on every read</div>
             </div>
             <div class="comp">
               <span class="chip ep shared" id="sv-api">API</span>
@@ -1050,17 +1286,8 @@
               <div class="sub">GET /stories?after=latestID · new stories bubble to front</div>
               <div class="sub">S3 CDN · image binary via StoryImageDataSource (Swipe + Prefetch)</div>
             </div>
-          </td>
-          <td class="col-infra" rowspan="4">
             <div class="comp">
-              <span class="chip infra shared" id="sv-api-client">APIClient</span>
-              <div class="flow-dots">
-                <span class="flow-dot" style="background:var(--accent)"></span>
-                <span class="flow-dot" style="background:var(--accent)"></span>
-              </div>
-            </div>
-            <div class="comp">
-              <span class="chip infra" id="sv-timer">Timer (Foundation)</span>
+              <span class="chip st" id="sv-timer">Timer (Foundation)</span>
               <div class="flow-dots"><span class="flow-dot" style="background:var(--purple)"></span></div>
               <div class="sub">starts after image download — not on transition</div>
             </div>
@@ -1070,48 +1297,91 @@
                 <span class="flow-dot" style="background:var(--purple)"></span>
                 <span class="flow-dot" style="background:var(--red)"></span>
               </div>
-              <div class="sub">wraps decoded UIImage · background download</div>
+              <div class="sub">image loading · memory + disk cache</div>
+            </div>
+          </td>
+          <td class="col-infra empty" rowspan="4">—</td>
+          <td rowspan="4">
+            <div class="col-groups">
+              <div class="col-group">
+                <div class="col-group-label">Client</div>
+                <div class="comp">
+                  <span class="chip infra shared" id="sv-api-client">APIClient</span>
+                  <div class="flow-dots">
+                    <span class="flow-dot" style="background:var(--accent)"></span>
+                    <span class="flow-dot" style="background:var(--accent)"></span>
+                  </div>
+                </div>
+              </div>
+              <div class="col-group">
+                <div class="col-group-label">DataSource</div>
+                <div class="comp">
+                  <span class="chip ds shared" id="sv-story-local-ds">StoryLocalDS</span>
+                  <div class="flow-dots">
+                    <span class="flow-dot" style="background:var(--accent)"></span>
+                    <span class="flow-dot" style="background:var(--accent)"></span>
+                  </div>
+                  <div class="sub">CoreData · merge deltas · filter expireAt &lt; now</div>
+                </div>
+                <div class="comp">
+                  <span class="chip ds shared" id="sv-story-remote-ds">StoryRemoteDS</span>
+                  <div class="flow-dots">
+                    <span class="flow-dot" style="background:var(--accent)"></span>
+                    <span class="flow-dot" style="background:var(--accent)"></span>
+                  </div>
+                  <div class="sub">GET /stories · GET /stories?after=latestID</div>
+                </div>
+                <div class="comp">
+                  <span class="chip ds" id="sv-story-image-ds">StoryImageDataSource</span>
+                  <div class="flow-dots">
+                    <span class="flow-dot" style="background:var(--purple)"></span>
+                    <span class="flow-dot" style="background:var(--red)"></span>
+                  </div>
+                  <div class="sub">wraps SDWebImage · load(url:into:completion:) · prefetch(url:)</div>
+                </div>
+              </div>
+              <div class="col-group">
+                <div class="col-group-label">Repository</div>
+                <div class="comp">
+                  <span class="chip shared" id="sv-story-repo">StoryRepo</span>
+                  <div class="flow-dots">
+                    <span class="flow-dot" style="background:var(--accent)"></span>
+                    <span class="flow-dot" style="background:var(--accent)"></span>
+                    <span class="flow-dot" style="background:var(--purple)"></span>
+                    <span class="flow-dot" style="background:var(--red)"></span>
+                  </div>
+                  <div class="sub">10-min throttle guard · filters expireAt &lt; now</div>
+                  <div class="sub">StoryLocalDS · StoryRemoteDS — merge deltas · filter expired</div>
+                  <div class="sub">prefetchImage(url:) → StoryImageDataSource</div>
+                </div>
+              </div>
             </div>
           </td>
           <td rowspan="4">
-            <div class="comp">
-              <span class="chip shared" id="sv-story-repo">StoryRepo</span>
-              <div class="flow-dots">
-                <span class="flow-dot" style="background:var(--accent)"></span>
-                <span class="flow-dot" style="background:var(--accent)"></span>
-                <span class="flow-dot" style="background:var(--purple)"></span>
-                <span class="flow-dot" style="background:var(--red)"></span>
+            <div class="col-groups">
+              <div class="col-group">
+                <div class="col-group-label">UseCase</div>
+                <div class="comp">
+                  <span class="chip shared" id="sv-fetch-stories-uc">FetchStoriesUC</span>
+                  <div class="flow-dots">
+                    <span class="flow-dot" style="background:var(--accent)"></span>
+                    <span class="flow-dot" style="background:var(--accent)"></span>
+                  </div>
+                </div>
+                <div class="comp">
+                  <span class="chip" id="sv-prefetch-story-uc">PrefetchStoryImageUC</span>
+                  <div class="flow-dots"><span class="flow-dot" style="background:var(--red)"></span></div>
+                  <div class="sub">execute(url:) → StoryRepo.prefetchImage</div>
+                </div>
               </div>
-              <div class="sub">10-min throttle guard · filters expireAt &lt; now</div>
-              <div class="sub">StoryLocalDS · StoryRemoteDS — merge deltas · filter expired</div>
-              <div class="sub">prefetchImage(url:) → StoryImageDataSource</div>
-            </div>
-            <div class="comp">
-              <span class="chip ds" id="sv-story-image-ds">StoryImageDataSource</span>
-              <div class="flow-dots">
-                <span class="flow-dot" style="background:var(--purple)"></span>
-                <span class="flow-dot" style="background:var(--red)"></span>
+              <div class="col-group">
+                <div class="col-group-label">Service</div>
+                <div class="comp">
+                  <span class="chip svc" id="sv-story-order-svc">StoryOrderService</span>
+                  <div class="flow-dots"><span class="flow-dot" style="background:var(--purple)"></span></div>
+                  <div class="sub">stateful · markAsSeen · unseen-first sort · Set&lt;Story.ID&gt;</div>
+                </div>
               </div>
-              <div class="sub">wraps SDWebImage · load(url:into:completion:) · prefetch(url:)</div>
-            </div>
-          </td>
-          <td rowspan="4">
-            <div class="comp">
-              <span class="chip shared" id="sv-fetch-stories-uc">FetchStoriesUC</span>
-              <div class="flow-dots">
-                <span class="flow-dot" style="background:var(--accent)"></span>
-                <span class="flow-dot" style="background:var(--accent)"></span>
-              </div>
-            </div>
-            <div class="comp">
-              <span class="chip" id="sv-prefetch-story-uc">PrefetchStoryImageUC</span>
-              <div class="flow-dots"><span class="flow-dot" style="background:var(--red)"></span></div>
-              <div class="sub">execute(url:) → StoryRepo.prefetchImage</div>
-            </div>
-            <div class="comp">
-              <span class="chip svc" id="sv-story-order-svc">StoryOrderService</span>
-              <div class="flow-dots"><span class="flow-dot" style="background:var(--purple)"></span></div>
-              <div class="sub">stateful · markAsSeen · unseen-first sort · Set&lt;Story.ID&gt;</div>
             </div>
           </td>
           <td rowspan="4">
@@ -1173,64 +1443,71 @@
   const PATHS = [
 
     // ── UBER EATS ─────────────────────────────────────────────────────
-    // f1: Load Restaurants  Storage → RestaurantRepo → FetchRestaurantsUC → RestaurantListVM
-    { flow: 'f1', ids: ['ue-storage', 'ue-restaurant-repo', 'ue-fetch-restaurants-uc', 'ue-restaurant-list-vm'] },
-    // f2: Manage Basket     Storage → BasketRepo → CreateBasketUC → BasketVM
-    { flow: 'f2', ids: ['ue-storage', 'ue-basket-repo', 'ue-create-basket-uc', 'ue-basket-vm'] },
-    // f2: Place Order       APIClient → OrderRepo → CreateOrderUC → BasketVM
-    { flow: 'f2', ids: ['ue-api-client', 'ue-order-repo', 'ue-create-order-uc', 'ue-basket-vm'] },
-    // f3: Track Courier     API → OrderSSEDataSource → OrderService → OrderStatusVM
-    { flow: 'f3', ids: ['ue-api', 'ue-order-sse-ds', 'ue-order-svc', 'ue-order-status-vm'] },
+    // f1: Load Restaurants  CoreData → RestaurantLocalDS → RestaurantRepo → FetchRestaurantsUC → RestaurantListVM
+    { flow: 'f1', ids: ['ue-coredata', 'ue-restaurant-local-ds', 'ue-restaurant-repo', 'ue-fetch-restaurants-uc', 'ue-restaurant-list-vm'] },
+    // f2: Manage Basket     CoreData → BasketLocalDS → BasketRepo → CreateBasketUC → BasketVM
+    { flow: 'f2', ids: ['ue-coredata', 'ue-basket-local-ds', 'ue-basket-repo', 'ue-create-basket-uc', 'ue-basket-vm'] },
+    // f2: Place Order       API → APIClient → OrderRemoteDS → OrderRepo → CreateOrderUC → BasketVM
+    { flow: 'f2', ids: ['ue-api', 'ue-api-client', 'ue-order-remote-ds', 'ue-order-repo', 'ue-create-order-uc', 'ue-basket-vm'] },
+    // f3: Track Courier     API → SSEClient → OrderSSEDataSource → OrderService → OrderStatusVM
+    { flow: 'f3', ids: ['ue-api', 'ue-sse-client', 'ue-order-sse-ds', 'ue-order-svc', 'ue-order-status-vm'] },
 
     // ── MESSENGER ─────────────────────────────────────────────────────
-    // f1: Load Thread       Storage → MessageRepo → FetchMessagesUC → ChatThreadVM
-    { flow: 'f1', ids: ['ms-storage',  'ms-msg-repo',  'ms-fetch-msgs-uc', 'ms-chat-thread-vm'] },
-    // f1: (chat list)       Storage → ChatRepo → FetchMessagesUC → ChatThreadVM
-    { flow: 'f1', ids: ['ms-storage',  'ms-chat-repo', 'ms-fetch-msgs-uc', 'ms-chat-thread-vm'] },
-    // f2: Send Message      Storage → MessageRepo → StageMessageUC → ChatThreadVM
-    { flow: 'f2', ids: ['ms-storage',  'ms-msg-repo', 'ms-stage-msg-uc',  'ms-chat-thread-vm'] },
+    // f1: Load Thread       Realm → MessageLocalDS → MessageRepo → FetchMessagesUC → ChatThreadVM
+    { flow: 'f1', ids: ['ms-realm', 'ms-msg-local-ds', 'ms-msg-repo', 'ms-fetch-msgs-uc', 'ms-chat-thread-vm'] },
+    // f1: (chat list)       Realm → ChatLocalDS → ChatRepo → FetchMessagesUC → ChatThreadVM
+    { flow: 'f1', ids: ['ms-realm', 'ms-chat-local-ds', 'ms-chat-repo', 'ms-fetch-msgs-uc', 'ms-chat-thread-vm'] },
+    // f2: Send Message      Realm → MessageLocalDS → MessageRepo → StageMessageUC → ChatThreadVM
+    { flow: 'f2', ids: ['ms-realm', 'ms-msg-local-ds', 'ms-msg-repo', 'ms-stage-msg-uc', 'ms-chat-thread-vm'] },
     // f2: (network leg)     MessageRepo → SendMessageUC → ChatThreadVM
     { flow: 'f2', ids: ['ms-msg-repo', 'ms-send-msg-uc', 'ms-chat-thread-vm'] },
-    // f3: Receive WS        API → MessageStreamDS → MessageStreamService → ChatThreadVM
-    { flow: 'f3', ids: ['ms-api', 'ms-msg-stream-ds', 'ms-msg-stream-svc', 'ms-chat-thread-vm'] },
+    // f3: Receive WS        API → WebSocketClient → MessageStreamDS → MessageStreamService → ChatThreadVM
+    { flow: 'f3', ids: ['ms-api', 'ms-ws-client', 'ms-msg-stream-ds', 'ms-msg-stream-svc', 'ms-chat-thread-vm'] },
     // f3: (chat re-sort)    API → ChatRepo → MessageStreamService → ChatListVM
     { flow: 'f3', ids: ['ms-api', 'ms-chat-repo', 'ms-msg-stream-svc', 'ms-chat-list-vm'] },
-    // f4: Sync offline      Storage → MessageRepo → MessageSyncService
-    { flow: 'f4', ids: ['ms-storage', 'ms-msg-repo', 'ms-msg-sync-svc'] },
+    // f4: Sync offline      Realm → MessageLocalDS → MessageRepo → MessageSyncService
+    { flow: 'f4', ids: ['ms-realm', 'ms-msg-local-ds', 'ms-msg-repo', 'ms-msg-sync-svc'] },
 
     // ── MUSIC STREAMING ───────────────────────────────────────────────
-    // f1: Load Library      Storage → LibraryRepo → FetchLibraryUC → LibraryVM
-    { flow: 'f1', ids: ['mst-storage', 'mst-library-repo', 'mst-fetch-library-uc', 'mst-library-vm'] },
-    // f3: Stream online     API → DownloadRepo → FetchStreamInfoUC → PlayerService → PlayerVM
-    { flow: 'f3', ids: ['mst-api', 'mst-download-repo', 'mst-fetch-stream-info-uc', 'mst-player-svc', 'mst-player-vm'] },
-    // f4: Play offline      Storage → PlayableItemRepo → PlayerService → PlayerVM
-    { flow: 'f4', ids: ['mst-storage', 'mst-playable-item-repo', 'mst-player-svc', 'mst-player-vm'] },
-    // f4: Refresh URL       API → APIClient → DownloadRepo → StreamRefreshService → PlayerVM
-    { flow: 'f4', ids: ['mst-api', 'mst-api-client', 'mst-download-repo', 'mst-stream-refresh-svc', 'mst-player-vm'] },
+    // f1: Load Library      GRDB → LibraryLocalDS → LibraryRepo → FetchLibraryUC → LibraryVM
+    { flow: 'f1', ids: ['mst-grdb', 'mst-library-local-ds', 'mst-library-repo', 'mst-fetch-library-uc', 'mst-library-vm'] },
+    // f3: Stream online     API → APIClient → MediaRemoteDS → DownloadRepo → FetchStreamInfoUC → PlayerService → PlayerVM
+    { flow: 'f3', ids: ['mst-api', 'mst-api-client', 'mst-media-remote-ds', 'mst-download-repo', 'mst-fetch-stream-info-uc', 'mst-player-svc', 'mst-player-vm'] },
+    // f4: Play offline      disk → DownloadLocalDS → DownloadRepo + GRDB → PlayableItemLocalDS → PlayableItemRepo → PlayerService → PlayerVM
+    { flow: 'f4', ids: ['mst-disk', 'mst-download-local-ds', 'mst-download-repo', 'mst-player-svc', 'mst-player-vm'] },
+    { flow: 'f4', ids: ['mst-grdb', 'mst-playable-local-ds', 'mst-playable-item-repo', 'mst-player-svc', 'mst-player-vm'] },
+    // f4: Refresh URL       API → APIClient → MediaRemoteDS → DownloadRepo → StreamRefreshService → PlayerVM
+    { flow: 'f4', ids: ['mst-api', 'mst-api-client', 'mst-media-remote-ds', 'mst-download-repo', 'mst-stream-refresh-svc', 'mst-player-vm'] },
 
     // ── INSTAGRAM NEWS FEED ───────────────────────────────────────────
-    // f1: Load Feed         APIClient → NewsFeedRepo → FetchFeedUC → FeedVM
-    { flow: 'f1', ids: ['ig-api-client', 'ig-news-feed-repo', 'ig-fetch-feed-uc', 'ig-feed-vm'] },
-    // f2: Like Post         CoreData → LikeRepo → LikeService → FeedVM
-    { flow: 'f2', ids: ['ig-coredata', 'ig-like-repo', 'ig-like-svc', 'ig-feed-vm'] },
+    // f1: Load Feed (cache) CoreData → FeedLocalDS → NewsFeedRepo → FetchFeedUC → FeedVM
+    { flow: 'f1', ids: ['ig-coredata', 'ig-feed-local-ds', 'ig-news-feed-repo', 'ig-fetch-feed-uc', 'ig-feed-vm'] },
+    // f1: Load Feed (net)   APIClient → FeedRemoteDS → NewsFeedRepo → FetchFeedUC → FeedVM
+    { flow: 'f1', ids: ['ig-api-client', 'ig-feed-remote-ds', 'ig-news-feed-repo', 'ig-fetch-feed-uc', 'ig-feed-vm'] },
+    // f2: Like Post         CoreData → FeedLocalDS → LikeRepo → LikeService → FeedVM
+    { flow: 'f2', ids: ['ig-coredata', 'ig-feed-local-ds', 'ig-like-repo', 'ig-like-svc', 'ig-feed-vm'] },
     // f4: Load Images       S3 CDN → SDWebImage → FeedImageDataSource → UICollectionViewCell
     { flow: 'f4', ids: ['ig-s3-ep', 'ig-sdwebimage', 'ig-feed-image-ds', 'ig-cell'] },
 
     // ── HOTEL BOOKING ─────────────────────────────────────────────────
-    // f1: Search Hotels     CoreData → HotelRepo → SearchHotelsUC → HotelListVM
-    { flow: 'f1', ids: ['hb-coredata', 'hb-hotel-repo', 'hb-search-hotels-uc', 'hb-hotel-list-vm'] },
-    // f2: Reserve Room      APIClient → ReservationRepo → CreateReservationUC → ReservationVM
-    { flow: 'f2', ids: ['hb-api-client', 'hb-reservation-repo', 'hb-create-reservation-uc', 'hb-reservation-vm'] },
+    // f1: Search Hotels     CoreData → HotelLocalDS → HotelRepo → SearchHotelsUC → HotelListVM
+    { flow: 'f1', ids: ['hb-coredata', 'hb-hotel-local-ds', 'hb-hotel-repo', 'hb-search-hotels-uc', 'hb-hotel-list-vm'] },
+    // f2: Reserve Room (net)  APIClient → ReservationRemoteDS → ReservationRepo → CreateReservationUC → ReservationVM
+    { flow: 'f2', ids: ['hb-api-client', 'hb-reservation-remote-ds', 'hb-reservation-repo', 'hb-create-reservation-uc', 'hb-reservation-vm'] },
+    // f2: Reserve Room (local) CoreData → ReservationLocalDS → ReservationRepo → CreateReservationUC → ReservationVM
+    { flow: 'f2', ids: ['hb-coredata', 'hb-reservation-local-ds', 'hb-reservation-repo', 'hb-create-reservation-uc', 'hb-reservation-vm'] },
     // f5: Hold Timer        Timer → ReservationService → ReservationVM
     { flow: 'f5', ids: ['hb-timer', 'hb-reservation-svc', 'hb-reservation-vm'] },
-    // f5: Payment           Stripe → PaymentRepo → PaymentService → PaymentVM
-    { flow: 'f5', ids: ['hb-stripe', 'hb-payment-repo', 'hb-payment-svc', 'hb-payment-vm'] },
+    // f5: Payment           Stripe → PaymentRemoteDS → PaymentRepo → PaymentService → PaymentVM
+    { flow: 'f5', ids: ['hb-stripe', 'hb-payment-remote-ds', 'hb-payment-repo', 'hb-payment-svc', 'hb-payment-vm'] },
 
     // ── STORY VIEWER ──────────────────────────────────────────────────
-    // f1: Initial Load      Storage → APIClient → StoryRepo → FetchStoriesUC → StoryVM
-    { flow: 'f1', ids: ['sv-storage', 'sv-api-client', 'sv-story-repo', 'sv-fetch-stories-uc', 'sv-story-vm'] },
-    // f1: Delta Refresh     API → StoryRepo → FetchStoriesUC → StoryVM
-    { flow: 'f1', ids: ['sv-api', 'sv-story-repo', 'sv-fetch-stories-uc', 'sv-story-vm'] },
+    // f1: Initial Load (cache)  CoreData → StoryLocalDS → StoryRepo → FetchStoriesUC → StoryVM
+    { flow: 'f1', ids: ['sv-coredata', 'sv-story-local-ds', 'sv-story-repo', 'sv-fetch-stories-uc', 'sv-story-vm'] },
+    // f1: Initial Load (net)    API → APIClient → StoryRemoteDS → StoryRepo → FetchStoriesUC → StoryVM
+    { flow: 'f1', ids: ['sv-api', 'sv-api-client', 'sv-story-remote-ds', 'sv-story-repo', 'sv-fetch-stories-uc', 'sv-story-vm'] },
+    // f1: Delta Refresh         API → APIClient → StoryRemoteDS → StoryRepo → FetchStoriesUC → StoryVM
+    { flow: 'f1', ids: ['sv-api', 'sv-api-client', 'sv-story-remote-ds', 'sv-story-repo', 'sv-fetch-stories-uc', 'sv-story-vm'] },
     // f5: Swipe & Advance   Timer → StoryOrderService → StoryVC
     { flow: 'f5', ids: ['sv-timer', 'sv-story-order-svc', 'sv-story-vc'] },
     // f4: Prefetch          SDWebImage → StoryImageDataSource → PrefetchStoryImageUC → StoryVM
