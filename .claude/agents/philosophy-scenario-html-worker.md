@@ -54,6 +54,8 @@ Derive the output filename from the `.md` filename — strip the `ios-` prefix a
 
 ## HTML Generation Rules
 
+For naming conventions, layer rules, and SDK wrapper rules, read `docs/conventions/scenario-conventions.md`. The HTML-specific rules below are additive.
+
 ### CSS
 
 Copy the `<style>` block **verbatim** from `docs/deck/scenarios/music-streaming-system-design.html`. Never modify, abbreviate, or summarize it.
@@ -80,10 +82,12 @@ Copy the `<style>` block **verbatim** from `docs/deck/scenarios/music-streaming-
 | `.ty` | Type names: `TrackRepository`, `FetchPolicy`, `URL` |
 | `.st` | String values: `"HLS"`, `file://` |
 | `.cm` | Comments |
-| `.nm` | Method and property names |
+| `.nm` | Architectural component references — both PascalCase type names (`PaymentService`, `HotelRepository`) **and** camelCase variable names that reference an injected component (`paymentGateway`, `imageService`, `reservationService`). Apply to any name that resolves to a UseCase, Service, Repository, Gateway, DataSource, or ViewModel in the architecture. |
 | `.gr` | HTTP verbs: `GET`, `POST`, `PUT` |
 
 ### Layer Breakdown — always exactly 6 rows
+
+**Every component name in every row must be wrapped in `<code>` chips** — this includes type names in Presentation, Domain, Infrastructure, Data, and External rows. Plain text component names are never acceptable.
 
 The Architecture layer breakdown **must always render as exactly 6 `.stack-row` items** — one per main layer, in this order:
 
@@ -91,7 +95,7 @@ The Architecture layer breakdown **must always render as exactly 6 `.stack-row` 
 2. **Domain** — UseCases, Services, Models, Params all in one row, grouped with `<strong>` labels (`<strong>UseCases:</strong>`, `<strong>Services:</strong>`, etc.)
 3. **Infrastructure** — Gateways (or "None" if this scenario has none)
 4. **Data** — Repositories, DataSources, DTOs, Mappers all in one row, grouped with `<strong>` labels
-5. **External** — SDK names only, no wrapper class names, no arrows (e.g. `CoreData · URLSession · SDWebImage`)
+5. **External** — SDK names only, no wrapper class names, no arrows. **Every name must be wrapped in `<code>` chips** (e.g. `<code>CoreData</code> · <code>URLSession</code> · <code>SDWebImage</code>`)
 6. **Application** — AppDelegate, Coordinator, DI
 
 Never split Domain or Data into separate sub-rows (`Domain — UseCase`, `Domain — Service`, `Data — Repository`, etc.). Always one row per layer.

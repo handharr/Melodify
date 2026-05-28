@@ -21,31 +21,18 @@ Use when the input file is already a clean scenario `.md` inside `docs/scenarios
 Read:
 1. The existing scenario `.md` at the provided path
 2. `docs/ios-app-system-design-philosophy.md` — source of truth for current naming and patterns
-3. The existing HTML deck at `docs/deck/scenarios/<scenario-name>.html`
-4. `docs/deck/scenarios/music-streaming-system-design.html` — CSS/style reference
+3. `docs/conventions/scenario-conventions.md` — authoritative rules for naming, layer, SDK wrapper, and blocklist checks
+4. The existing HTML deck at `docs/deck/scenarios/<scenario-name>.html`
+5. `docs/deck/scenarios/music-streaming-system-design.html` — CSS/style reference
 
 #### R-Step 2 — Identify what needs updating
 
-**Naming drift** — components whose names no longer match current conventions:
-- DataSources not domain-prefixed (bare `RemoteDataSource` / `LocalDataSource` as class names)
-- Gateways not vendor-prefixed
-- Repositories, UseCases, or Services using old naming patterns
+Apply naming, layer, SDK wrapper, and blocklist checks per `docs/conventions/scenario-conventions.md` (Sections 1–5).
 
-**Content drift** — sections that are stale or incomplete:
-- "Same as generic architecture" list missing patterns now in the philosophy doc, or existing entries that no longer match
-- Delta table "Generic" column descriptions that no longer match the philosophy doc
-- Architecture section missing one or more of the five required layers (Presentation / Domain / Data / Infrastructure / External)
-- DataSources listed without domain prefix in layer breakdowns or data flow pseudocode
-
-**SDK wrapper compliance** — External SDK usage that violates wrapper placement rules:
-- External SDK (other than UIKit/SwiftUI/Combine) used directly without a named wrapper
-- Single-layer SDK (touches one layer) wrapped as a `Gateway` instead of `DataSource`/`APIClient` (Data) or `Service` (Domain)
-- Multi-layer SDK (touches two or more layers) wrapped as a `DataSource` or `Service` instead of a `*Gateway` in Infrastructure
-
-**Redundant generic content** — explanations that belong only in the philosophy doc:
-- "Why MVVM over MVP?" / "Why MVVM over VIPER?" / "Why Clean Architecture over MVC?"
-- "Why FetchPolicy over hardcoding?"
-- "UseCase vs Domain Service" or "Domain Service vs Gateway" comparison tables
+**Naming drift** — component names not matching Section 1 conventions
+**Content drift** — delta/architecture sections not matching Section 3 structure
+**SDK wrapper compliance** — violations of Section 4 wrapper placement rules
+**Redundant generic content** — items in Section 5 blocklist found in the scenario
 
 **Structural gaps** — missing required sections:
 - No `## Delta` section
@@ -91,14 +78,7 @@ The prompt specifies the input file path + approved changes from the analyze pha
 
 #### R-Step 4 — Cross-check
 
-Verify the updated doc against every category from R-Step 2:
-- All five layers present (Presentation / Domain / Data / Infrastructure / External), unused layers marked `None`
-- All DataSources are domain-prefixed in every section
-- No naming drift remains
-- No generic "Why" explanations remain
-- Delta "Same as generic" list is accurate and complete against the current philosophy doc
-- No dependency rule violations (or annotated with `⚠️ + correct fix`)
-- Every External SDK (except SwiftUI/UIKit/Combine) has a named wrapper; single-layer in Data/Domain, multi-layer in Infrastructure as `*Gateway`
+Verify the updated doc passes every rule in `docs/conventions/scenario-conventions.md` before writing.
 
 #### R-Step 5 — Write the updated .md file
 
@@ -144,7 +124,8 @@ Use when the input file is raw notes located anywhere outside `docs/scenarios/`.
 Read:
 1. The raw notes file provided by the user
 2. `docs/ios-app-system-design-philosophy.md` — generic architecture (source of truth)
-3. `docs/deck/scenarios/music-streaming-system-design.html` — style reference
+3. `docs/conventions/scenario-conventions.md` — authoritative rules for naming, layer, SDK wrapper, and blocklist checks
+4. `docs/deck/scenarios/music-streaming-system-design.html` — style reference
 
 #### C-Step 2 — Vocabulary mapping
 
@@ -153,27 +134,13 @@ Scan the raw notes for every architectural component, layer, or pattern named. B
 | Their term | User's term | Notes |
 |---|---|---|
 
-Apply the philosophy doc naming conventions as source of truth:
-- Remote access → `<Domain>RemoteDataSource` — always domain-prefixed, never bare `RemoteDataSource`
-- Local/cache → `<Domain>LocalDataSource` — always domain-prefixed
-- Business logic → `UseCase` (stateless) or `Domain Service` (stateful)
-- Data mirror of API shape → `DTO`
-- Conversion between DTO and Domain → `Mapper`
-- Navigation → `Coordinator`
-- Infrastructure SDK wrappers → `<Vendor><Domain>Gateway` — conforms to `<Domain>GatewayProtocol` in Domain
-- External SDKs: always wrap except UIKit / SwiftUI / Combine. One layer → `DataSource`/`APIClient`/`WebSocketClient` (Data) or `Service` (Domain); two or more layers → `Gateway` (Infrastructure)
+Apply naming conventions per `docs/conventions/scenario-conventions.md` Section 1.
 
 Flag any component with no clear equivalent — likely scenario-specific delta candidates.
 
 #### C-Step 3 — Layer audit
 
-Check every component against the dependency rule: **Presentation → Domain ← Data. Infrastructure conforms to Domain protocols. Domain depends on nothing. External is the outermost ring — only wrapper layers (Gateway, DataSource, Service) import from it.**
-
-Flag violations but do not remove them — annotate with `⚠️` and the correct fix:
-- A ViewModel calling a Repository directly (should go via UseCase)
-- A UseCase importing networking types (should use Repository protocol)
-- A Repository returning DTOs to a UseCase (should map to Domain model first)
-- A Domain model importing UIKit or Foundation networking types
+Check every component against the layer dependency rule per `docs/conventions/scenario-conventions.md` Section 2. Flag violations but do not remove them — annotate with `⚠️` and the correct fix.
 
 #### C-Step 4 — Delta identification
 
@@ -264,15 +231,7 @@ All five layers must always appear — write `None` for unused sublists. Never o
 
 #### C-Step 6 — Cross-check before writing
 
-Verify:
-- No scenario component violates the dependency rule (or annotated with `⚠️`)
-- All naming follows conventions; all DataSources are domain-prefixed
-- The delta table is complete — nothing scenario-specific leaked into "same as generic"
-- **No generic "Why" explanations in the output.** Strip:
-  - "Why MVVM over MVP?" / "Why MVVM over VIPER?" / "Why Clean Architecture over MVC?"
-  - "Why FetchPolicy over hardcoding?"
-  - "UseCase vs Domain Service" or "Domain Service vs Gateway" tables
-- Every External SDK (except SwiftUI/UIKit/Combine) has a named wrapper
+Verify the doc passes every rule in `docs/conventions/scenario-conventions.md` before writing.
 
 #### C-Step 7 — Write the .md file
 

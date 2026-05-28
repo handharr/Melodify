@@ -3,6 +3,8 @@
 My default architecture for any iOS app. Carry this into every interview.  
 Scenario-specific docs extend this — they describe the delta, not a replacement.
 
+Machine-readable naming and layer conventions: [`docs/conventions/scenario-conventions.md`](conventions/scenario-conventions.md)
+
 ---
 
 ## Architecture Pattern

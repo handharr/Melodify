@@ -19,6 +19,7 @@ You handle ONE scenario at a time. The prompt will specify:
 Read:
 1. The scenario `.md` at the specified path
 2. `docs/ios-app-system-design-philosophy.md` — source of truth for current naming and patterns
+3. `docs/conventions/scenario-conventions.md` — authoritative rules for Pass B checks
 
 ### Step 2 — Pass A: Delta propagation
 
@@ -31,55 +32,16 @@ Compare the scenario's "Same as generic architecture" list against the current p
 
 ### Step 3 — Pass B: Standing-rules audit
 
-Independently check every standing rule. Not all may have issues, but all must be checked.
+Read `docs/conventions/scenario-conventions.md`. Independently check every rule in that file:
 
-**B1. Architecture section — 5-layer completeness**
-The `## Architecture` section must list all five layers in order: Presentation → Domain → Data → Infrastructure → External. Every layer must appear even if unused — unused layers are marked `None`.
+- **B1** — Architecture section 5-layer completeness → Section 3 (Architecture Layer Structure)
+- **B2** — Naming conventions → Section 1 (Naming Conventions)
+- **B3** — Redundant generic content → Section 5 (Generic Content Blocklist)
+- **B4** — External SDK wrapper compliance → Section 4 (SDK Wrapper Placement)
+- **B5** — "Same as generic" accuracy → Section 6 (Delta Section Requirements)
+- **B6** — Layer dependency rule → Section 2 (Layer Dependency Rule)
 
-Flag if:
-- Any of the five layers is missing entirely
-- A layer is omitted instead of showing `None`
-- The section only contains a general pattern statement with no named components
-
-**B2. Naming conventions**
-Check every component name:
-- Remote access: `*RemoteDataSource` — always domain-prefixed (`RestaurantRemoteDataSource`, not bare `RemoteDataSource` as a class name)
-- Local access: `*LocalDataSource` — always domain-prefixed (`MessageLocalDataSource`, not bare `LocalDataSource` as a class name in layer breakdowns, data flows, or code examples)
-- Business logic: `*UseCase` (stateless) or `*Service` (stateful Domain Service)
-- DTOs: `*DTO` — Mappers: `*Mapper`
-- Navigation: `*Coordinator`
-- Infrastructure wrappers: `*Gateway` — always vendor-prefixed (`StripePaymentGateway`, not bare `Gateway`)
-
-**Exception:** bare `LocalDataSource` / `RemoteDataSource` is acceptable in the delta table's "Generic" column, pattern-level warning callouts, and type-annotation diagrams — NOT as a class name in layer breakdowns, data flow pseudocode, or vocabulary tables.
-
-**B3. Redundant generic content**
-Flag as ❌ Redundant:
-- "Why MVVM over MVP?" or "Why MVVM over VIPER?"
-- "Why Clean Architecture over MVC?"
-- "Why FetchPolicy over hardcoding network/cache logic per ViewModel?"
-- UseCase vs Domain Service comparison table
-- Domain Service vs Gateway comparison table
-
-Test: would this explanation appear unchanged in every other scenario? If yes → generic → flag it.
-
-**B4. External SDK wrapper compliance**
-For every External SDK listed in the Architecture section:
-- No-wrapper exceptions: UIKit, SwiftUI, Combine only
-- Every other SDK must have a named wrapper
-- Single-layer SDK → `DataSource`/`APIClient`/`WebSocketClient` (Data) or `Service` (Domain)
-- Multi-layer SDK → `*Gateway` in Infrastructure
-
-Flag if a multi-layer SDK is wrapped as a DataSource/Service, or a single-layer SDK is wrapped as a Gateway.
-
-**B5. "Same as generic" accuracy**
-Verify the existing "Same as generic architecture" list is still accurate against the current philosophy doc. Flag entries that no longer match.
-
-**B6. Layer dependency rule**
-Flag:
-- ViewModels calling Repositories directly (should go via UseCase)
-- UseCases referencing network types (should use Repository protocol)
-- Repositories returning DTOs beyond their own layer (should map first)
-- Domain models mentioning UIKit or networking types
+Not all may have issues, but all must be checked.
 
 ### Step 4 — Return merged proposal
 
