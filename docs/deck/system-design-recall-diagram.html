@@ -1184,15 +1184,17 @@
 
     // ── MESSENGER ─────────────────────────────────────────────────────
     // f1: Load Thread       Storage → MessageRepo → FetchMessagesUC → ChatThreadVM
-    { flow: 'f1', ids: ['ms-storage',  'ms-msg-repo', 'ms-fetch-msgs-uc', 'ms-chat-thread-vm'] },
+    { flow: 'f1', ids: ['ms-storage',  'ms-msg-repo',  'ms-fetch-msgs-uc', 'ms-chat-thread-vm'] },
+    // f1: (chat list)       Storage → ChatRepo → FetchMessagesUC → ChatThreadVM
+    { flow: 'f1', ids: ['ms-storage',  'ms-chat-repo', 'ms-fetch-msgs-uc', 'ms-chat-thread-vm'] },
     // f2: Send Message      Storage → MessageRepo → StageMessageUC → ChatThreadVM
     { flow: 'f2', ids: ['ms-storage',  'ms-msg-repo', 'ms-stage-msg-uc',  'ms-chat-thread-vm'] },
     // f2: (network leg)     MessageRepo → SendMessageUC → ChatThreadVM
     { flow: 'f2', ids: ['ms-msg-repo', 'ms-send-msg-uc', 'ms-chat-thread-vm'] },
     // f3: Receive WS        API → MessageStreamDS → MessageStreamService → ChatThreadVM
     { flow: 'f3', ids: ['ms-api', 'ms-msg-stream-ds', 'ms-msg-stream-svc', 'ms-chat-thread-vm'] },
-    // f3: (list update)     MessageStreamService → ChatListVM
-    { flow: 'f3', ids: ['ms-msg-stream-svc', 'ms-chat-list-vm'] },
+    // f3: (chat re-sort)    API → ChatRepo → MessageStreamService → ChatListVM
+    { flow: 'f3', ids: ['ms-api', 'ms-chat-repo', 'ms-msg-stream-svc', 'ms-chat-list-vm'] },
     // f4: Sync offline      Storage → MessageRepo → MessageSyncService
     { flow: 'f4', ids: ['ms-storage', 'ms-msg-repo', 'ms-msg-sync-svc'] },
 
