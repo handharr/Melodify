@@ -64,6 +64,19 @@ All standard Clean Architecture + MVVM patterns as per the philosophy doc — no
 - **Real-time:** WebSocket after initial REST sync
 - MVP excludes: push notifications, typing indicators
 
+### Strategy Bridge
+
+State the technical strategy for each requirement before drawing any boxes. This is how you pre-motivate every component in the architecture.
+
+| Requirement | Strategy | Key terms |
+|---|---|---|
+| Offline-first | Local DB as SSOT — Realm **live queries** fire on every write; ViewModel subscribes once, never polls | live queries, observable, SSOT |
+| Real-time | Single multiplexed WebSocket (`WS /events`) — **subscribe frames** per chatId on connect; `subscribe(chatId:)` returns a filtered publisher, never opens a new socket | single socket, subscribe frame, filtered publisher |
+| Battery / bandwidth | **Delta sync** via `sequenceId` on foreground — payload proportional to activity, not list size; no polling timer | delta sync, sequenceId, proportional payload |
+| Offline send queue | `isSent: Bool` **sync flag** on `Message` — staged optimistically by `StageMessageUseCase`, flushed by `MessageSyncService` on `sceneDidBecomeActive` | isSent flag, optimistic stage, foreground flush |
+| Media — images | Two-level cache (memory → disk) via SDWebImage; **lazy loaded per cell**, never eagerly on thread open | two-level cache, lazy load, never eager |
+| Media — files | **Disk-first** lookup — `AttachmentLocalFileDataSource` checked before any network call; ViewModel receives a local `URL`, never a raw binary | disk-first, local URL, cache miss fallback |
+
 ---
 
 ## API Design
@@ -333,7 +346,7 @@ ChatThreadViewController.viewDidLoad()
 
 ### Send Message (with offline queue)
 
-Two UseCases — stage is synchronous for instant UI; send is async for the network call. Both write to DB; the `ObserveMessagesUseCase` publisher drives all state updates.
+Two UseCases — stage is synchronous for instant UI; send is async. Send is **WebSocket-first**: goes over the socket when live, falls back to REST only when unavailable.
 
 ```
 User taps send
@@ -344,16 +357,26 @@ User taps send
           → MessageRepository.save(Message(id: localId, text: text, isSent: false, ...))
               → MessageLocalDataSource.upsert(...)    // DB write → observer emits → state updated
 
-      // UseCase 2 — async, fires in background
+      // UseCase 2 — async, WebSocket-first
       Task:
         try await SendMessageUseCase.execute(param: SendMessageParam(chatId:, localId:))
             → MessageRepository.sendMessage(param:)
-                → MessageRemoteDataSource.post(/chat/{chat_id}/message)
-                → on success: MessageLocalDataSource.upsert(confirmed)  // DB write → observer emits → isSent: true
-                → on failure: isSent remains false → MessageSyncService will retry on next foreground
+
+                if socket is live:
+                  MessageStreamDataSource.send(WSEvent<MessageSendDTO>)
+                      → wire: { "type": "message_send", "payload": { chatId, text, localId } }
+                  await confirmation frame { type: .messageSent, payload: confirmedMessageDTO }
+                  MessageLocalDataSource.upsert(confirmed)   // localId → serverId, isSent: true
+
+                if socket is unavailable:
+                  MessageRemoteDataSource.post(/chat/{chat_id}/message)  // REST fallback
+                  MessageLocalDataSource.upsert(confirmed)   // isSent: true
+
+                on failure either way:
+                  isSent remains false → MessageSyncService retries on next foreground
 ```
 
-The ViewModel never manually sets state. `StageMessageUseCase` owns the optimistic DB write; `SendMessageUseCase` owns the network call and confirmation write — ViewModel never touches Repository or DataSource directly.
+The ViewModel never manually sets state. `StageMessageUseCase` owns the optimistic DB write; `SendMessageUseCase` owns the send path and confirmation write.
 
 ### Background Sync (MessageSyncService)
 
@@ -400,6 +423,8 @@ ChatListViewController.viewDidLoad()
 ```
 
 ### Chat List Scroll Pagination (cursor-based)
+
+**Why cursor here — not timestamp, not sequenceId.** The chat list is sorted by `last_activity` descending — a live-sorted list. Between page 1 and page 2, a new message in Chat_D moves it to the top. A `timestamp` anchor would skip it. A `sequenceId` is an event counter — it tracks global server writes, not your position in a ranked list. An opaque cursor, issued by the server at page 1 time, anchors the snapshot: page 2 always continues from where page 1 stopped, regardless of new arrivals.
 
 ```
 User scrolls to bottom of chat list
@@ -450,6 +475,9 @@ sceneDidBecomeActive / applicationDidBecomeActive
          → reads chatIds from ChatLocalDataSource (Realm, local-only — instant)
          → sends subscribe frames for all cached chatIds   // optimistic coverage
 
+      // sequenceId here is NOT a pagination cursor.
+      // It's an event counter: "give me everything that changed since server event N."
+      // The question is not "where am I in a ranked list?" but "what happened while I was gone?"
       2. GET /chat/all/delta?sequenceId=<lastKnown>        // NOT full /chat/all — proportional to activity
          → FetchChatsUseCase.execute(policy: .fresh, param: ChatListParam(sequenceId: lastKnown))
              → ChatRemoteDataSource.fetch()
@@ -473,6 +501,8 @@ when no sequenceId exists in UserDefaults yet.
 ```
 
 ### Chat Thread Scroll Pagination (scroll up for older messages)
+
+**Why timestamp here — not cursor.** Message threads are append-only at the tail: new messages always arrive at the bottom. When scrolling up to see older messages, the oldest visible `sentTime` is a stable anchor — nothing will ever insert itself above it, so the "gap shift" problem that breaks timestamp pagination on the chat list simply cannot occur here. Cursor overhead is unnecessary for a sequence that never reorders.
 
 ```
 User scrolls to top of message thread
@@ -546,33 +576,310 @@ User taps file attachment (PDF, video)
 
 ## Deep Dives
 
+### Local DB as SSOT: Observe vs Fetch
+
+The architecture has two kinds of UseCases and they serve completely different purposes. Mixing them up is the most common source of confusion.
+
+| UseCase | Type | ViewModel's job |
+|---|---|---|
+| `ObserveMessagesUseCase` | Returns a persistent `AnyPublisher<[Message], Never>` — keeps emitting on every DB write | **Subscribe once in `viewDidLoad`. Hold the cancellable for the ViewModel's lifetime. Never call again.** |
+| `FetchMessagesUseCase` | One-shot `async throws` — fetches from network, writes to DB, returns | **Call to trigger a refresh. Ignore the return value — the observer handles the state update.** |
+
+The ViewModel never sets `state` from `FetchMessagesUseCase`'s return value. It triggers the fetch, the fetch writes to DB, the DB write fires the observer the ViewModel already subscribed to. State always arrives through the same single pipe.
+
+#### Subscription chain
+
+```
+ViewModel
+  └── subscribes once to ObserveMessagesUseCase.execute(chatId:)
+           └── calls MessageRepository.observe(chatId:)
+                    └── wraps MessageLocalDataSource — Realm notification token
+                             └── fires on ANY write to matching Message objects
+```
+
+The publisher never completes. It keeps emitting a fresh `[Message]` every time anything writes to `MessageLocalDataSource` — regardless of which source triggered the write.
+
+#### Every writer fires the same observer
+
+```
+REST fetch completes     → MessageLocalDataSource.upsert() → Realm fires → ObserveUseCase emits → state updated
+WebSocket frame arrives  → MessageLocalDataSource.upsert() → Realm fires → ObserveUseCase emits → state updated
+Optimistic send          → MessageLocalDataSource.upsert() → Realm fires → ObserveUseCase emits → state updated
+Delta sync on foreground → MessageLocalDataSource.upsert() → Realm fires → ObserveUseCase emits → state updated
+```
+
+The ViewModel doesn't know which source triggered the emission. It just receives the latest `[Message]` and maps it to `[MessageUIModel]`.
+
+#### The notification delivers data — not a signal
+
+This is the key property of Realm live queries. When the token fires, the updated data is already inside the callback. There is no second fetch.
+
+```swift
+// Inside MessageLocalDataSource
+func observe(chatId: String) -> AnyPublisher<[MessageObject], Never> {
+    let realm = try! Realm()
+    let results = realm.objects(MessageObject.self)
+                       .filter("chatId == %@", chatId)  // live, auto-updating collection
+                                                         // chatId filter is baked in here — never changes
+
+    return Publishers.create { subscriber in
+        let token = results.observe { changes in
+            switch changes {
+            case .initial(let objects):    // fires immediately with current DB state
+                subscriber.send(Array(objects))
+            case .update(let objects, ...):  // fires on every write — objects already updated
+                subscriber.send(Array(objects))
+            }
+        }
+        return AnyCancellable { token.invalidate() }
+    }
+}
+```
+
+`results` is a live collection — Realm updates it atomically when a write transaction commits, then fires the notification with the already-updated objects inside. The chatId filter is set once at query creation and never re-evaluated — Realm only fires the token when a `MessageObject` with that `chatId` changes. Writes to other chatIds are invisible to this subscriber.
+
+#### Write-to-UI chain (one atomic step)
+
+```
+MessageLocalDataSource.upsert(message)         ← write transaction commits
+  → Realm updates Results<MessageObject> in memory
+  → notification token fires with updated objects already inside
+  → publisher emits [MessageObject]
+  → MessageMapper.toDomain() → [Message]
+  → ViewModel .sink receives [MessageUIModel]
+  → state = .success(uiModels)                 ← UI updates
+```
+
+No polling, no second query, no manual "now go load."
+
+#### Concrete ViewModel
+
+```swift
+@MainActor
+class ChatThreadViewModel: ObservableObject {
+    @Published var state: ViewState<[MessageUIModel]> = .loading
+
+    private var observeCancellable: AnyCancellable?
+
+    func load(chatId: String) {
+        state = .loading
+
+        // Subscribe ONCE — lives until ViewModel deallocates
+        observeCancellable = observeMessagesUseCase
+            .execute(chatId: chatId)               // AnyPublisher<[Message], Never>
+            .map { messages in messages.map(MessageUIModel.init) }
+            .sink { [weak self] uiModels in
+                self?.state = .success(uiModels)   // every DB write ends up here
+            }
+
+        // Trigger network fetch — its DB write fires the observer above
+        Task {
+            try? await fetchMessagesUseCase.execute(policy: .fresh, param: ChatParam(chatId: chatId))
+            // return value intentionally ignored — observer handles state
+        }
+    }
+}
+```
+
+`observeCancellable` is what's "subscribed." `FetchMessagesUseCase` is just a trigger — its only job is to write to the DB.
+
+---
+
 ### WebSocket Lifecycle
 
-`MessageStreamService` is a Domain Service (app-scoped singleton):
+#### WebSocket is bidirectional — both directions matter
+
+WebSocket gives you a raw full-duplex byte stream. The app both sends and receives over the same connection.
+
+| Direction | What | When |
+|---|---|---|
+| Client → Server | Subscribe frame | On every connect/reconnect — tells server which chatIds to fan out |
+| Client → Server | Message send frame | Every send when socket is live (WebSocket-first) |
+| Client → Server | Future: typing indicator | On keypress (debounced ~1s) |
+| Server → Client | `messageReceived` | Incoming message from other user |
+| Server → Client | `messageSent` confirmation | Ack after client sends a message frame |
+| Server → Client | Future: `typingIndicator` | Other user is typing |
+
+#### MessageStreamDataSourceProtocol — both directions
+
+```swift
+protocol MessageStreamDataSourceProtocol {
+    func connect(to url: URL)
+    func send(_ event: Encodable) async throws    // outgoing — subscribe frames + message sends
+    func receive() -> AsyncStream<Data>           // incoming — all server-pushed events
+    func disconnect()
+}
+```
+
+`WebSocketClient` is not just a receiver — `send()` is how subscribe frames and message sends travel to the server.
+
+#### MessageStreamService
 
 ```swift
 class MessageStreamService {
     private let streamDataSource: MessageStreamDataSourceProtocol   // Data — injected via DI
-    private let messageRepository: MessageRepositoryProtocol        // Domain protocol
-    private let chatRepository: ChatRepositoryProtocol              // fetches known chatIds on connect
+    private let messageRepository: MessageRepositoryProtocol
+    private let chatRepository: ChatRepositoryProtocol
 
-    func connect()    // opens socket to WS /events + sends subscribe frames for all known chatIds
+    func connect()    // opens socket + sends subscribe frames for all known chatIds
+    func send(_ event: Encodable) async throws   // routes outgoing frames (message sends, future typing)
     func subscribe(to chatId: String) -> AnyPublisher<Message, Never>  // filtered publisher — no new socket
     func disconnect()
 }
 ```
 
-Lifecycle:
+#### Lifecycle
+
 1. App foreground → `AppCoordinator` calls `messageStreamService.connect()`
-2. `connect()` opens one socket to `WS /events`, reads all cached chatIds from `ChatLocalDataSource` (local Realm read, no network), sends subscribe frames — chat list gets real-time updates before any thread is opened
+2. `connect()` opens one socket to `WS /events`, reads all cached chatIds from `ChatLocalDataSource` (local Realm read, no network), **sends subscribe frames** — chat list gets real-time updates before any thread is opened
 3. `GET /chat/all/delta?sequenceId=` completes → `refreshSubscriptions()` sends frames for any newly discovered chatIds
 4. View appears → ViewModel calls `messageStreamService.subscribe(to: chatId)` — attaches a filtered `AnyPublisher` on the already-active stream; cancels on `viewWillDisappear`
-5. App backgrounds → `messageStreamService.disconnect()` (socket closed to save battery)
-6. App foregrounds → repeat from step 1
-
-The ViewModel subscribes to both `ObserveMessagesUseCase` and `MessageStreamService` — both feed the same `@Published var state: ViewState<[Message]>`.
+5. User sends message → `SendMessageUseCase` calls `messageStreamService.send(WSEvent<MessageSendDTO>)` — awaits `messageSent` confirmation frame
+6. App backgrounds → `messageStreamService.disconnect()` (socket closed to save battery)
+7. App foregrounds → repeat from step 1
 
 **Why not one socket per chat?** One `URLSessionWebSocketTask` per chat would multiply TCP connections by N — battery and socket overhead with no benefit. A single multiplexed connection carries all chats; the per-chatId filter in `subscribe(chatId:)` is just a publisher `.filter` on the client side.
+
+---
+
+### Typing Indicators — Low-Level WebSocket Detail
+
+#### Wire frames
+
+**Client → Server (user is typing):**
+```json
+{ "type": "typing_indicator", "payload": { "chatId": "abc123", "userId": "user456" } }
+```
+
+**Server → other participant:**
+```json
+{ "type": "typing_indicator", "payload": { "chatId": "abc123", "userId": "user456" } }
+```
+
+Server fans it out immediately. Never written to DB — ephemeral by design. No `MessageLocalDataSource` involved.
+
+#### WebSocket frame anatomy (RFC 6455)
+
+```
+Byte 0:   FIN=1  RSV=0  opcode=0x1  (text frame — JSON payload)
+Byte 1:   MASK=1  payload_len=N
+Bytes 2-5: masking key (4 random bytes, client→server only)
+Bytes 6+:  masked payload (each byte XOR'd with masking key)
+```
+
+Three rules to know:
+- **Client→Server frames MUST be masked** — RFC 6455 requirement. `URLSessionWebSocketTask` handles this automatically.
+- **Server→Client frames are NOT masked** — reverse direction, no masking.
+- **Text (0x1) vs Binary (0x2)** — JSON uses text frames. Protobuf/MessagePack use binary — smaller payload, faster decode. Start with JSON, migrate to binary at scale.
+
+`URLSessionWebSocketTask` exposes both cleanly:
+
+```swift
+// Sending
+try await task.send(.string(jsonString))   // text frame — opcode 0x1
+try await task.send(.data(binaryData))     // binary frame — opcode 0x2
+
+// Receiving
+let message = try await task.receive()
+switch message {
+case .string(let json):  // decode JSON
+case .data(let bytes):   // decode binary
+}
+```
+
+#### Ping / Pong — keepalive
+
+WebSocket has built-in ping (opcode `0x9`) / pong (`0xA`) frames. Server sends a ping; client must respond with pong — if it doesn't within the timeout, server closes the connection.
+
+`URLSessionWebSocketTask` responds to pongs automatically. You can send manual pings to detect a dead connection faster than waiting for a TCP timeout:
+
+```swift
+task.sendPing { error in
+    if error != nil {
+        // connection dead — trigger MessageStreamService reconnect
+    }
+}
+```
+
+#### Debounce — why it matters at scale
+
+Without debounce, every keystroke fires a frame:
+
+```
+"h" → frame  "e" → frame  "l" → frame  "l" → frame  "o" → frame
+```
+
+At scale: **1M concurrent typing users × 5 keystrokes/sec = 5M frames/sec** hitting the server. The debounce caps it at 1 frame/sec per user regardless of typing speed.
+
+```swift
+// ChatThreadViewModel
+private var typingDebounceTask: Task<Void, Never>?
+
+func userDidType() {
+    typingDebounceTask?.cancel()                       // reset on every keystroke
+    typingDebounceTask = Task {
+        try? await Task.sleep(for: .seconds(1))        // 1s of silence before firing
+        guard !Task.isCancelled else { return }
+        await messageStreamService.send(
+            WSEvent(type: .typingIndicator, payload: TypingDTO(chatId: chatId))
+        )
+    }
+}
+```
+
+#### Stop-typing detection — two approaches
+
+**Option A: explicit `typingStop` frame** — client sends `{ "type": "typing_stop" }` when the user stops or sends the message.
+
+**Option B: server TTL (used here)** — if no new `typingIndicator` frame arrives within 3s, server stops fanning out. No extra frame type needed. The ViewModel mirrors this with a matching 3s auto-clear:
+
+```swift
+// ChatThreadViewModel
+@Published var isTypingVisible = false
+private var typingTimeoutTask: Task<Void, Never>?
+
+func handleTypingEvent() {
+    isTypingVisible = true
+    typingTimeoutTask?.cancel()
+    typingTimeoutTask = Task {
+        try? await Task.sleep(for: .seconds(3))
+        guard !Task.isCancelled else { return }
+        isTypingVisible = false
+    }
+}
+```
+
+The 3s timeout on the ViewModel matches the server TTL — if frames stop arriving, both sides clear independently without any coordination.
+
+#### Full flow
+
+```
+User types a character
+  → ChatThreadViewModel.userDidType()
+      → typingDebounceTask.cancel() + restart 1s timer
+
+1 second of silence
+  → debounce fires
+  → messageStreamService.send(WSEvent<TypingDTO>)
+      → MessageStreamDataSource.send() → WebSocketClient.send(.string(json))
+      → wire: masked text frame (opcode 0x1) → server
+
+Server receives frame
+  → fans out { type: "typing_indicator" } to other participant's socket (no DB write)
+
+Other participant's MessageStreamService receives frame
+  → WebSocketClient.receive() → AsyncStream<Data> emits
+  → MessageStreamDataSource decodes → WSEvent<TypingDTO>
+  → typingSubject.send(dto)
+  → ChatThreadViewModel.handleTypingEvent()
+      → isTypingVisible = true
+      → 3s auto-clear timer resets
+
+3s with no new frame
+  → ViewModel timer fires → isTypingVisible = false
+  → server TTL expires → stops fanning out
+  (both sides clear independently, no coordination needed)
+```
 
 ### Three-Tier REST vs FetchPolicy
 
@@ -586,20 +893,41 @@ The ViewModel subscribes to both `ObserveMessagesUseCase` and `MessageStreamServ
 
 Delta sync is the battery-efficiency win: instead of re-fetching 50 messages, fetch only the 3 that arrived while the app was in the background.
 
-### Pagination Inconsistency (Interviewer-Flagged Weakness)
+### Pagination: Three Mechanisms, Three Jobs
 
-Timestamp-based pagination is fragile when new messages arrive mid-scroll:
+Quick decision guide — pick the right tool for each flow:
+
+| Mechanism | Used when | Example in this design |
+|---|---|---|
+| **Opaque cursor** | Browsing a live-sorted list — inserts can shift positions between pages | Chat list scroll: `GET /chat/all?cursor=<cursor>` |
+| **`before?timestamp=`** | Paging through an append-only sequence — nothing ever reorders | Thread scroll-up: `GET /chat/{id}/all/before?timestamp=` |
+| **`sequenceId`** | Fetching everything that *changed* since a known server event — not a position in a list | Gap recovery: `GET /chat/all/delta?sequenceId=<lastKnown>` |
+
+---
+
+**The core confusion: cursor vs sequenceId look identical on the wire (both are opaque strings), but they answer different questions.**
+
+- Cursor answers: *"where am I in this ranked list?"*
+- sequenceId answers: *"what happened on the server since event N?"*
+
+---
+
+#### Why cursor for chat list scroll (not timestamp, not sequenceId)
+
+The chat list is sorted by `last_activity` descending. Between page 1 and page 2, a new message arrives in Chat_D and it jumps to the top of the list. A `timestamp` anchor of `t=80` asks the server "give me chats with `last_activity < 80`" — Chat_D at `t=95` is silently skipped.
 
 ```
 Chat list, Page 1: [Chat_A (t=100), Chat_B (t=90), Chat_C (t=80)]
                              ↑
               New message arrives in Chat_D → Chat_D.last_activity = t=95
 
-Page 2 request: after?timestamp=80
+Page 2 request with timestamp anchor: last_activity < 80
 Server returns:  [Chat_E (t=70), ...]  ← Chat_D (t=95) was missed
 ```
 
-Fix (applied in API design above): server-issued opaque cursor instead of client-supplied timestamp. The server anchors the page boundary at query time — new inserts don't shift the anchor. The client stores the cursor and echoes it; never parses it.
+A `sequenceId` doesn't help here either — it tracks the global order of server-side writes, not your position in a list sorted by `last_activity`. The two sort orders aren't the same.
+
+An **opaque server-issued cursor** anchors the snapshot at page 1 query time. The server records "this cursor = after Chat_C in the snapshot I took when you fetched page 1." New inserts between pages don't shift that anchor. The client stores the cursor and echoes it; never parses it.
 
 ```swift
 struct PagedChatsResponse: Decodable {
@@ -607,7 +935,6 @@ struct PagedChatsResponse: Decodable {
     let nextCursor: String?   // nil = no more pages
 }
 
-// ViewModel stores cursor between scroll events
 @MainActor
 class ChatListViewModel: ObservableObject {
     private var nextCursor: String? = nil
@@ -619,7 +946,284 @@ class ChatListViewModel: ObservableObject {
 }
 ```
 
-**Why thread scroll-up keeps `before?timestamp=`:** Message threads are append-only at the tail — new messages arrive at the bottom, not interspersed with older ones. Scrolling up to see older messages visits positions that never reorder, so timestamp is stable here. The inconsistency risk only applies to live-sorting lists (chat list, social feed).
+#### Why timestamp for thread scroll-up (not cursor)
+
+Message threads are append-only at the tail — new messages always arrive at the bottom. When you scroll up to see older messages, the oldest visible `sentTime` is a stable anchor: nothing will ever insert itself above it. The "gap shift" problem cannot occur here because positions never reorder. Cursor overhead is unnecessary.
+
+#### Why sequenceId for gap recovery (not cursor, not timestamp)
+
+`GET /chat/all/delta?sequenceId=<lastKnown>` is not paginating a list — it is asking "what changed on the server since event N?" The server maintains a monotonically increasing counter; every write increments it. The client persists the last seen value and echoes it on foreground. The response payload is proportional to activity during the background period, not to list size — fetching 3 changed chats instead of the full 15-item first page.
+
+### Real-time Transport: WebSocket vs Alternatives
+
+Before picking WebSocket, the realistic alternatives and why each was ruled out:
+
+| Option | Mechanism | Verdict |
+|---|---|---|
+| Long Polling | Client holds open HTTP request; server responds on event or timeout, then client immediately re-requests | ❌ Ruled out |
+| Server-Sent Events (SSE) | Server pushes events over a persistent HTTP/2 stream (one direction only) | ❌ Ruled out |
+| WebSocket | Full-duplex TCP after HTTP upgrade handshake; both sides send frames at will | ✅ Chosen |
+| APNS only | OS-level push notifications | ❌ Complements, does not replace |
+
+**Long polling — why ruled out:**
+- Every message delivery = a full HTTP round-trip (request headers, response headers, TCP ACK). 200–800 bytes overhead per event vs. 2–14 bytes for a WebSocket frame.
+- Latency equals the polling interval — not truly real-time.
+- Battery drain: the radio wakes for every poll cycle, even on idle chats.
+
+**SSE — why ruled out:**
+- SSE is **server→client only**. `MessageStreamService.connect()` must send subscribe frames (client→server) to tell the server which chatIds to fan-out. SSE has no client→server channel — you'd need a parallel REST endpoint just for subscribe/unsubscribe, which reintroduces coordination complexity.
+- Typing indicators (future) and read receipts both require bidirectional frames. Designing around SSE's limitation now forecloses those features or forces a hybrid.
+
+**Why WebSocket wins:**
+- **Bidirectional from the start.** Subscribe frames, future typing events, and read-receipt ACKs all travel on the same connection — no second channel needed.
+- **Per-frame overhead is minimal.** After the one-time HTTP upgrade handshake (~1 KB), each message frame carries only 2–14 bytes of framing overhead. Long polling would pay full HTTP headers on every event.
+- **Single multiplexed connection.** One `URLSessionWebSocketTask` carries all chatIds via subscribe frames. The per-chatId filter in `subscribe(chatId:)` is a publisher `.filter` in memory — zero additional connections.
+- **Future-proof.** `WSEventType` is an enum — adding `.typingIndicator`, `.readReceipt`, `.presenceUpdate` is additive. None of those require protocol changes.
+
+**APNS — why it doesn't replace WebSocket:**
+- APNS delivers to the OS, not the app. While the app is foregrounded, APNS is unreliable for in-session delivery (rate-limited, batched by the OS).
+- APNS payloads are capped at 4 KB — unsuitable as a message delivery channel.
+- The correct model: WebSocket delivers messages while the app is active; APNS wakes the app from background so it can reconnect the WebSocket and run delta sync.
+
+**URLSessionWebSocketTask vs Starscream:**
+
+| | `URLSessionWebSocketTask` | `Starscream` |
+|---|---|---|
+| Dependency | Zero — part of Foundation | Third-party |
+| Reconnect | Manual | Built-in with config |
+| Proxy/TLS | System-managed | Configurable |
+| Verdict | Prefer for new projects; less surface area | Use if needing custom reconnect logic or non-standard TLS |
+
+In this design, `WebSocketClient` wraps either — the rest of the architecture is indifferent because `MessageStreamDataSource` calls `WebSocketClient` via its own protocol.
+
+---
+
+### Local DB: Realm vs CoreData vs SQLite
+
+The choice of local database determines how `ObserveMessagesUseCase` and `ObserveChatsUseCase` expose live publishers. That's the deciding constraint.
+
+| Option | Live Query Support | Upsert | Boilerplate | Dependency |
+|---|---|---|---|---|
+| Realm | First-class — notification tokens fire on any write; trivial to wrap as `AnyPublisher` | `realm.add(object, update: .modified)` — atomic, one call | Low | Third-party |
+| CoreData | `NSFetchedResultsController` — UIKit-coupled; wrapping as Combine publisher requires significant glue | Fetch-then-insert-or-update; no built-in upsert | High | Zero (first-party) |
+| SQLite (GRDB) | `ValueObservation` — clean Combine bridge | `upsert` operator available | Medium | Third-party |
+| Raw SQLite | None — manual polling or triggers | Manual | Very high | Zero |
+
+**Why Realm:**
+- **Live queries are the architecture's load-bearing feature.** The entire "local DB as SSOT" pattern depends on `ObserveMessagesUseCase` emitting a new `[Message]` every time any DataSource writes. Realm's notification tokens fire on any write to a matching query — one call in the Repository wraps this as `AnyPublisher<[Message], Never>`. CoreData's equivalent (`NSFetchedResultsController`) is tightly coupled to `UITableView`/`UICollectionView`; bridging it to Combine requires a non-trivial adapter.
+- **Upsert is atomic and idempotent.** `realm.add(object, update: .modified)` in a write transaction is the whole operation. No "does this ID exist? if yes, update; if no, insert" branching needed. This matters because messages arrive from three sources (REST fetch, WebSocket, delta sync) and all three paths call the same `upsert()`.
+- **Performance.** Realm writes are lazy-copy — mutations happen in a transaction without blocking reads. For a chat app with concurrent WebSocket writes and scroll-triggered reads, this is significant.
+
+**The tradeoff — Realm objects are not plain structs:**
+- Realm objects must inherit `Object` (RealmSwift). This is a leaky abstraction — it bleeds the storage framework into the model definition.
+- **Mitigation in this architecture:** Realm objects live exclusively in the Data layer (`MessageLocalDataSource`). `MessageMapper.toDomain()` converts them to plain `struct Message` (Domain model) before they cross the layer boundary. The Domain layer never imports RealmSwift.
+- If the team has a strict "no third-party DB" policy, GRDB is the closest alternative — its `ValueObservation` has a clean Combine bridge and supports upsert. The Repository implementation changes; the Domain layer is untouched.
+
+#### DAU is the wrong scalability lens for a client-side DB
+
+Realm runs **on the device** — not on a shared server. There is no "Realm instance" being hammered by 10M users simultaneously. Each user has their own isolated Realm file on their own phone. A 50M DAU app using Realm is just 50M independent local caches, each fast and isolated.
+
+**Scalability splits into two completely separate axes:**
+
+| Axis | Where it lives | What DAU affects |
+|---|---|---|
+| **Client-side scalability** | Per-device data volume + query complexity | Not DAU — measured in messages/device, chats/device, query depth |
+| **Server-side scalability** | WebSocket servers, fan-out, backend storage, push throughput | This is where DAU matters |
+
+**Client-side DB constraints (per device, not per DAU):**
+
+| Constraint | Realm's practical limit | When it becomes a problem |
+|---|---|---|
+| Messages stored per device | Handles millions comfortably | Almost never — apps purge old messages (keep last ~1,000 per chat) |
+| Write throughput | ~1,000 writes/sec sustained | Only in extreme high-frequency group chats |
+| Concurrent read/write | Non-blocking (lazy copy) | Not typically a problem |
+| Full-text search | Limited FTS support | If users need to search across all message history |
+| Complex joins | Object graph only, no SQL | If schema needs multi-entity aggregations |
+
+**What DAU actually stresses — the server side:**
+- **WebSocket server** — maintaining millions of persistent connections simultaneously
+- **Message fan-out** — delivering one message to N recipients with low latency
+- **Backend storage** — storing and querying billions of messages server-side
+- **Push notification throughput** — APNS/FCM at scale
+- **API rate limiting and load balancing** — REST endpoints under concurrent load
+
+**In an interview:** if the interviewer asks "how does this scale to 10M DAU?" — clarify which layer they mean. Client-side DB is a per-device concern. Server-side infrastructure is where DAU creates pressure. Answering both in sequence signals you understand the difference.
+
+#### Why real apps moved away from Realm — it was never DAU
+
+| App | Moved to | Real reason |
+|---|---|---|
+| Signal | GRDB | Better Swift type safety + complex search queries (FTS5) |
+| Telegram | Custom C++ TDLib + SQLite | Cross-platform (iOS/Android/Desktop share same logic) + custom MTProto encryption |
+| WhatsApp | CoreData (rumored) | First-party, no dependency risk at Meta's scale |
+
+#### The actual client-side migration triggers
+
+1. **Full-text search** — users search "all messages containing X" — Realm's FTS is limited; GRDB/SQLite gives full FTS5
+2. **Complex queries** — e.g., "unread messages across all chats grouped by sender" — Realm's object graph struggles with multi-entity aggregations
+3. **Cross-platform** — iOS + Android + Desktop sharing business logic pushes toward C++ SQLite (Telegram's approach)
+4. **Custom encryption** — enterprise compliance requiring DB-layer encryption Realm doesn't support
+
+None of these are triggered by DAU. And because Domain never imports Realm, the migration stays in the Data layer regardless of the trigger.
+
+#### What real apps actually use
+
+Not every messenger uses Realm — the live query requirement is universal, but how teams solve it varies:
+
+| App | Local DB | Live query mechanism |
+|---|---|---|
+| Signal iOS | GRDB (SQLite wrapper) | `ValueObservation` — clean Combine bridge |
+| Telegram iOS | Custom C++ engine (TDLib) + SQLite | Custom notification layer built on top |
+| WhatsApp iOS | CoreData (rumored) | `NSFetchedResultsController` |
+| iMessage | CoreData | `NSFetchedResultsController` |
+| Facebook Messenger | Custom (Relay + internal store) | Entirely custom reactive store |
+
+Realm is popular in indie and mid-size iOS apps because it ships live queries with minimal boilerplate, mapping cleanly onto Combine. Large companies (Meta, Telegram) build custom storage layers because they have scale, cross-platform consistency requirements, and the engineering budget to justify it.
+
+**For an interview:** Realm is a defensible, mid-level answer — pick it, explain why (live queries, atomic upsert, low boilerplate), and know the tradeoff (object inheritance, third-party dependency). If the interviewer pushes back with "no third-party DBs" — GRDB is the correct fallback. CoreData is the safe first-party answer but you'd need to explain bridging `NSFetchedResultsController` to Combine, which is non-trivial and the interviewer will probe it.
+
+#### Migrating the local DB doesn't break Domain or Presentation
+
+Because Domain never imports Realm — it only knows `MessageRepositoryProtocol` and plain Swift structs — swapping the local DB is scoped entirely to the Data layer.
+
+**What changes on migration (e.g., Realm → GRDB):**
+
+```
+Data layer only:
+  MessageLocalDataSource   — rewrite query + notification implementation
+  ChatLocalDataSource      — same
+  MessageRepository        — minor updates if query API shape changes
+```
+
+**What is completely untouched:**
+
+```
+Domain:
+  MessageRepositoryProtocol   — protocol contract doesn't change
+  ObserveMessagesUseCase      — still returns AnyPublisher<[Message], Never>
+  FetchMessagesUseCase        — still async throws -> [Message]
+  Message, Chat               — plain structs, zero storage dependency
+
+Presentation:
+  ChatThreadViewModel         — subscribes to the same UseCase interface
+  ChatListViewModel           — same
+  All ViewControllers         — never knew Realm existed
+```
+
+The protocol is the firewall. `ObserveMessagesUseCase` returns `AnyPublisher<[Message], Never>` regardless of whether the DB underneath is Realm, GRDB, CoreData, or a custom store. The ViewModel only ever sees that publisher — the storage engine is an implementation detail behind the Repository protocol.
+
+**Storage is a plugin.** Swap it at any scale without touching business logic or UI.
+
+---
+
+### Analytics: Measuring Both Scalability Axes
+
+You can't validate which scalability axis is stressed without measurement. Client-side write performance is invisible without instrumentation; server-side DAU pressure is guesswork without event tracking. Both axes need separate metrics.
+
+#### Two categories of metrics
+
+**Client-side — per-device write scalability:**
+
+| Metric | What it measures | Where to instrument |
+|---|---|---|
+| DB write latency | How long `MessageLocalDataSource.upsert()` takes | `MessageLocalDataSource` |
+| DB size on device | Total messages stored locally | `MessageLocalDataSource` |
+| Cache hit rate | Does `ObserveMessagesUseCase` emit cached data on first load, or empty? | `MessageRepository.observe()` |
+| Pending queue size | How many `isSent: false` messages are waiting | `MessageSyncService.syncPending()` |
+| Sync duration | How long foreground gap recovery takes end-to-end | `AppCoordinator.handleForeground()` |
+| WebSocket reconnect count | How often the socket drops and reconnects per session | `MessageStreamService.connect()` |
+| Image cache hit rate | Memory vs disk vs network fetch ratio | `ImageDataSource` |
+
+**Server-side — DAU and infrastructure health:**
+
+| Metric | What it measures |
+|---|---|
+| DAU / MAU | Derived from `app_open` events — how many unique users per day/month |
+| Messages sent per day | Throughput — `message_sent` event on every `SendMessageUseCase` success |
+| Message delivery latency | Time from `sentTime` to `receivedTime` — measures fan-out speed |
+| WebSocket connection count | Peak concurrent connections — measures infra pressure |
+| Delta sync payload size | Are `sequenceId` deltas small as expected, or ballooning? |
+| Failed send rate | How often `MessageSyncService` has to retry — signals reliability issues |
+| Push notification delivery rate | APNS/FCM success rate at scale |
+
+#### Which layer it lives in
+
+`AnalyticsService` spans three layers — and the split matters:
+
+**Protocol + event types → Domain**
+
+```swift
+// Domain — pure Swift, zero SDK import
+protocol AnalyticsServiceProtocol {
+    func track(_ event: AnalyticsEvent)
+}
+
+enum AnalyticsEvent {
+    // Server-side DAU signals
+    case appOpened
+    case messageSent(chatId: String)
+    case messageDelivered(latencyMs: Int)
+
+    // Client-side write scalability
+    case dbWriteCompleted(latencyMs: Int)
+    case syncCompleted(pendingCount: Int, durationMs: Int)
+    case wsReconnected(chatIdCount: Int)
+    case imageCacheHit(source: CacheSource)
+}
+
+enum CacheSource { case memory, disk, network }
+```
+
+Domain defines *what* gets tracked. Any Domain Service or DataSource calls `analyticsService.track()` through this protocol without importing Firebase or Amplitude.
+
+**Concrete SDK wrapper → External**
+
+```swift
+// External layer — imports the actual SDK
+class FirebaseAnalyticsService: AnalyticsServiceProtocol {
+    func track(_ event: AnalyticsEvent) {
+        switch event {
+        case .messageSent(let chatId):
+            Analytics.logEvent("message_sent", parameters: ["chat_id": chatId])
+        // ...
+        }
+    }
+}
+```
+
+Same pattern as `WebSocketClient` wrapping `URLSessionWebSocketTask`, or `ImageDataSource` wrapping SDWebImage. The SDK is always wrapped at the External layer — Domain never imports it.
+
+**Registration → Application**
+
+```swift
+// AppCoordinator
+let analyticsService: AnalyticsServiceProtocol = FirebaseAnalyticsService()
+
+let messageStreamService = MessageStreamService(
+    streamDataSource: ...,
+    analyticsService: analyticsService   // injected via init
+)
+```
+
+#### Calling sites across layers
+
+| Layer | Who calls it | Events tracked |
+|---|---|---|
+| Domain Services | `MessageStreamService`, `MessageSyncService` | WS connect/reconnect, sync duration, pending count |
+| Data | `MessageLocalDataSource`, `ImageDataSource` | DB write latency, cache hit/miss |
+| Presentation | `ChatThreadViewModel`, `ChatListViewModel` | User actions — message sent, thread opened |
+
+All calling sites only see `AnalyticsServiceProtocol` — none import the SDK.
+
+**Rule:** data-pipeline events (write latency, sync duration, cache hits) are instrumented at the DataSource/Service level. User-action events (screen open, send tapped) are instrumented at the ViewModel level. Nothing analytics-related ever touches the View.
+
+#### Why not Infrastructure?
+
+`Infrastructure` is for cross-layer SDKs that need a `Gateway` — components that span Presentation, Domain, and Data simultaneously. Analytics doesn't coordinate *between* layers; it's called *from* multiple layers independently. The protocol belongs in Domain so Domain Services can call it without an upward dependency. The concrete SDK wrapper belongs in External, same as every other third-party library.
+
+Swapping `FirebaseAnalyticsService` for `AmplitudeAnalyticsService` is one file in External — nothing else changes.
+
+---
 
 ### ViewState Machine
 

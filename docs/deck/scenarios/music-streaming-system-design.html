@@ -265,25 +265,32 @@
   <a href="#requirements">Requirements</a>
   <a href="#api">API Design</a>
   <a href="#model">Data Model</a>
-  <a href="#hls">Streaming — HLS (Adaptive Bitrate)</a>
   <a href="#architecture">Architecture</a>
-  <a href="#services">Domain Services</a>
-  <a href="#streaming">Streaming &amp; Playback</a>
+  <a href="#dataflow">Data Flow</a>
+  <a class="toc-sub" href="#dataflow">Library Screen</a>
+  <a class="toc-sub" href="#dataflow">Collection Detail</a>
+  <a class="toc-sub" href="#dataflow">Pagination</a>
+  <a class="toc-sub" href="#dataflow">Download (Offline)</a>
+  <a class="toc-sub" href="#dataflow">Playback — Initial Play</a>
+  <a class="toc-sub" href="#dataflow">Playback — Seek</a>
+  <a class="toc-sub" href="#dataflow">Playback — Chunk Lifecycle</a>
+  <a class="toc-sub" href="#dataflow">Playback — Queue Advance</a>
   <a href="#deepdive">Technical Deep Dives</a>
   <a class="toc-sub" href="#pagination">1. Pagination — offset vs cursor</a>
-  <a class="toc-sub" href="#hls-why">2. What is HLS and why does it exist?</a>
-  <a class="toc-sub" href="#hls-how">3. How HLS works step by step</a>
-  <a class="toc-sub" href="#avplayer">4. AVPlayer and HLS on iOS</a>
-  <a class="toc-sub" href="#audiosession">5. AVAudioSession</a>
-  <a class="toc-sub" href="#storage">6. File storage — three tiers</a>
-  <a class="toc-sub" href="#offline">7. Offline playback</a>
-  <a class="toc-sub" href="#expiry">8. Short-lived URLs</a>
-  <a class="toc-sub" href="#lru">9. LRU Cache</a>
-  <a class="toc-sub" href="#badnetwork">10. Bad network — adaptive bitrate</a>
-  <a class="toc-sub" href="#failure">11. Complete network failure</a>
-  <a class="toc-sub" href="#failures">12. Common failure modes</a>
-  <a class="toc-sub" href="#seeking">13. Seeking during streaming</a>
-  <a class="toc-sub" href="#ownership">14. What you own vs AVPlayer</a>
+  <a class="toc-sub" href="#streaming-flow">2. Streaming &amp; Playback Flow</a>
+  <a class="toc-sub" href="#hls-why">3. What is HLS and why does it exist?</a>
+  <a class="toc-sub" href="#hls-how">4. How HLS works step by step</a>
+  <a class="toc-sub" href="#avplayer">5. AVPlayer and HLS on iOS</a>
+  <a class="toc-sub" href="#audiosession">6. AVAudioSession</a>
+  <a class="toc-sub" href="#storage">7. File storage — three tiers</a>
+  <a class="toc-sub" href="#offline">8. Offline playback</a>
+  <a class="toc-sub" href="#expiry">9. Short-lived URLs</a>
+  <a class="toc-sub" href="#lru">10. LRU Cache</a>
+  <a class="toc-sub" href="#badnetwork">11. Bad network — adaptive bitrate</a>
+  <a class="toc-sub" href="#failure">12. Complete network failure</a>
+  <a class="toc-sub" href="#failures">13. Common failure modes</a>
+  <a class="toc-sub" href="#seeking">14. Seeking during streaming</a>
+  <a class="toc-sub" href="#ownership">15. What you own vs AVPlayer</a>
   <a href="#interviewer-feedback">Interviewer Feedback</a>
   <a href="#feedback">Key Takeaways</a>
 </div>
@@ -319,15 +326,17 @@
       <tr><td>File storage</td><td>Not in generic</td><td><code>MediaFileDataSource</code> — binary audio files on disk, LRU 5 GB cap</td></tr>
       <tr><td>Offline saves</td><td>Not in generic</td><td><code>DownloadLocalDataSource</code> — maps <code>itemId → localFilePath</code></td></tr>
       <tr><td>Domain Services</td><td>Generic (SessionService example)</td><td><code>PlayerService</code> (app-scoped, owns queue + playback state) · <code>StreamRefreshService</code> (manifest expiry logic)</td></tr>
+      <tr><td>Audio playback</td><td>Not in generic</td><td><code>AudioPlayerProtocol</code> (Domain) · <code>AudioPlayerDataSource: AudioPlayerProtocol</code> (Data) — wraps AVPlayer + AVAudioSession; same pattern as any DataSource wrapping an external framework</td></tr>
       <tr><td>Streaming</td><td>Not in generic</td><td>HLS via <code>AVPlayer</code> — adaptive bitrate, chunk-based, short-lived signed URLs</td></tr>
       <tr><td>Pagination</td><td>Not in generic</td><td>Cursor-based (not offset) — library syncs live across devices</td></tr>
-      <tr><td>Playback asset resolution</td><td>Not in generic</td><td>logic inside <code>PlayerService</code>: offline file → HLS manifest → <code>AVPlayer</code></td></tr>
+      <tr><td>Playback asset resolution</td><td>Not in generic</td><td>logic inside <code>PlayerService</code>: offline file → HLS manifest → <code>AudioPlayerDataSource</code> (<code>AudioPlayerProtocol</code>) → AVPlayer</td></tr>
       <tr><td>UI framework</td><td>SwiftUI default for new apps; UIKit when scroll lifecycle, AVPlayer, or custom transitions needed; hybrid valid screen-by-screen</td><td>UIKit throughout — <code>AVPlayer</code> integration, scroll lifecycle for library list, custom transitions for playback screen</td></tr>
     </table>
   </div>
 
   <h3>Key decisions unique to this scenario</h3>
   <div class="rule"><strong><code>PlayerService</code> must be app-scoped.</strong> If owned by <code>PlayerViewModel</code>, it deallocates when the Player screen pops — music stops. Register at app startup in the DI composition root.</div>
+  <div class="rule"><strong><code>AudioPlayerDataSource</code> lives in Data, not Domain.</strong> It imports AVFoundation. <code>AudioPlayerProtocol</code> stays in Domain so <code>PlayerService</code> depends on nothing external — same rule as any other DataSource wrapping an external framework.</div>
   <div class="rule"><strong>Two separate <code>MediaFileDataSource</code> instances.</strong> Streaming LRU cache and explicit offline saves must never share storage — cache pressure must not evict user-saved tracks.</div>
   <div class="callout"><strong><code>stream-info</code> is a separate endpoint.</strong> Manifest URL is short-lived. Decoupled from item metadata so it can be refreshed without invalidating the rest of the model.</div>
   <div class="callout"><strong>Queue is client-owned.</strong> Built via <code>PlayableItemRepository</code> (.strict policy, local-only) by <code>PlayerService</code> — no server round-trip on every playback action.</div>
@@ -459,25 +468,6 @@
   <div class="callout"><strong>Why Track and Episode are separate types:</strong> <code>Episode</code> requires <code>resumeTimestamp</code> — it must resume from where the user left off. <code>Track</code> always starts from zero. The enum makes the compiler enforce this distinction at every call site.</div>
 </section>
 
-<!-- STREAMING — HLS -->
-<section id="hls">
-  <h2>Streaming — HLS (Adaptive Bitrate)</h2>
-
-  <div class="callout"><strong>Why HLS over progressive download (plain MP3/AAC)?</strong> Progressive download streams a single file from start to finish — no quality switching. If the network drops, playback stalls immediately. HLS chunks the audio and lets the player switch quality levels between chunks. At 100M DAU on mobile networks, adaptive bitrate is non-negotiable. Progressive download is fine for short clips or controlled environments; not for a global music app.</div>
-  <div class="callout"><strong>Why HLS over DASH (Dynamic Adaptive Streaming over HTTP)?</strong> Both are adaptive bitrate protocols. HLS is Apple's standard — <code>AVPlayer</code> has first-class native support with zero extra libraries. DASH requires a third-party player (e.g. ExoPlayer on Android). On iOS, always default to HLS unless there's a specific reason (e.g. cross-platform SDK requirement).</div>
-
-<pre><code><span class="cm">// Client calls /item/{id}/stream-info → gets manifestUrl (.m3u8 file)</span>
-
-Manifest:
-  { highQuality: [<span class="ty">URL</span>, ...], medium: [<span class="ty">URL</span>, ...], ... }
-
-Each quality bucket → chunks:
-  .../[quality]/[chunkId]   <span class="cm">← 2–10 second audio segments</span></code></pre>
-
-  <p><strong>Why short-lived URLs (<code>expiresAt</code>)?</strong> Direct audio URLs can be extracted from a packet sniffer and shared. Signing them with an expiry means a leaked URL becomes useless quickly. Client refreshes <code>stream-info</code> before expiry during playback.</p>
-  <p><strong>Adaptive bitrate:</strong> Player monitors bandwidth and switches quality levels mid-stream by requesting chunks from a lower/higher quality playlist — no full restart needed.</p>
-</section>
-
 <!-- HIGH-LEVEL ARCHITECTURE -->
 <section id="architecture">
   <h2>Architecture</h2>
@@ -489,8 +479,8 @@ Each quality bucket → chunks:
   <h3>Layer Breakdown</h3>
   <div class="stack">
     <div class="stack-row"><div class="stack-name">Presentation</div><div class="stack-desc"><code>LibraryViewController</code> → <code>LibraryViewModel</code> → <code>FetchLibraryUseCase</code><br><code>CollectionDetailViewController</code> → <code>CollectionDetailViewModel</code> → <code>FetchCollectionUseCase</code>, <code>FetchPlayableItemsUseCase</code><br><code>PlayerViewController</code> → <code>PlayerViewModel</code> → <code>PlayerService</code> (app-scoped), <code>ResolvePlaybackAssetUseCase</code></div></div>
-    <div class="stack-row"><div class="arrow">↓</div><div class="stack-name">Domain</div><div class="stack-desc">UseCases: <code>FetchLibraryUseCase</code>, <code>FetchCollectionUseCase</code>, <code>FetchPlayableItemsUseCase</code>, <code>FetchStreamInfoUseCase</code>, <code>DownloadTrackUseCase</code><br>Domain Services: <code>PlayerService</code> (stateful, app-scoped — calls <code>AudioPlayerProtocol</code> for actual playback), <code>StreamRefreshService</code> (pure logic, no I/O)<br><code>AVPlayerAdapter: AudioPlayerProtocol</code> — wraps AVPlayer + AVAudioSession; exposes play(url:), pause(), stop(), seek(to:), configure(audioSessionCategory:)</div></div>
-    <div class="stack-row"><div class="arrow">↓</div><div class="stack-name">Data</div><div class="stack-desc"><code>LibraryRepository</code>: <code>LibraryRemoteDataSource</code> + <code>LibraryLocalDataSource</code> (GRDB)<br><code>CollectionRepository</code>: <code>CollectionRemoteDataSource</code> + <code>CollectionLocalDataSource</code> (GRDB)<br><code>PlayableItemRepository</code>: <code>PlayableItemRemoteDataSource</code> + <code>PlayableItemLocalDataSource</code> (GRDB)<br><code>DownloadRepository</code>: <code>MediaRemoteDataSource</code> (HLS CDN) + <code>DownloadLocalDataSource</code> (itemId→path) + <code>MediaFileDataSource</code> (disk, LRU 5 GB)<br>Mappers: <code>LibraryItemMapper</code>, <code>CollectionMapper</code>, <code>PlayableItemMapper</code> (handles Track vs Episode), <code>StreamInfoMapper</code></div></div>
+    <div class="stack-row"><div class="arrow">↓</div><div class="stack-name">Domain</div><div class="stack-desc">UseCases: <code>FetchLibraryUseCase</code>, <code>FetchCollectionUseCase</code>, <code>FetchPlayableItemsUseCase</code>, <code>FetchStreamInfoUseCase</code>, <code>DownloadTrackUseCase</code><br>Domain Services: <code>PlayerService</code> (stateful, app-scoped — calls <code>AudioPlayerProtocol</code> for actual playback), <code>StreamRefreshService</code> (pure logic, no I/O)<br>Protocol: <code>AudioPlayerProtocol</code> — play(url:), pause(), stop(), seek(to:), updateManifest(_:) — defined in Domain so <code>PlayerService</code> depends on nothing external</div></div>
+    <div class="stack-row"><div class="arrow">↓</div><div class="stack-name">Data</div><div class="stack-desc"><code>AudioPlayerDataSource: AudioPlayerProtocol</code> — wraps AVPlayer + AVAudioSession, imports AVFoundation. Concrete implementation of Domain protocol — same rule as <code>LibraryRepository</code> implements <code>LibraryRepositoryProtocol</code>.<br><code>LibraryRepository</code>: <code>LibraryRemoteDataSource</code> + <code>LibraryLocalDataSource</code> (GRDB)<br><code>CollectionRepository</code>: <code>CollectionRemoteDataSource</code> + <code>CollectionLocalDataSource</code> (GRDB)<br><code>PlayableItemRepository</code>: <code>PlayableItemRemoteDataSource</code> + <code>PlayableItemLocalDataSource</code> (GRDB)<br><code>DownloadRepository</code>: <code>MediaRemoteDataSource</code> (HLS CDN) + <code>DownloadLocalDataSource</code> (itemId→path) + <code>MediaFileDataSource</code> (disk, LRU 5 GB)<br>Mappers: <code>LibraryItemMapper</code>, <code>CollectionMapper</code>, <code>PlayableItemMapper</code> (handles Track vs Episode), <code>StreamInfoMapper</code></div></div>
     <div class="stack-row"><div class="stack-name">Infrastructure</div><div class="stack-desc">None</div></div>
     <div class="stack-row"><div class="stack-name">External</div><div class="stack-desc"><code>AVFoundation</code> · <code>GRDB</code> · <code>URLSession</code></div></div>
     <div class="stack-row"><div class="stack-name">Application</div><div class="stack-desc"><code>AppCoordinator</code> (composition root — builds full dependency graph, registers app-scoped services) · <code>AppDelegate</code> (entry point — wires window, registers <code>PlayerService</code> at app scope) · Manual init injection — no DI framework; Coordinators compose all dependencies via init</div></div>
@@ -505,6 +495,27 @@ Each quality bucket → chunks:
     <li><strong>Deep link / direct access</strong> — a track URL can open without collection context</li>
     <li><strong>Granular cache invalidation</strong> — refresh one episode's <code>resumeTimestamp</code> without busting the whole collection cache</li>
   </ol>
+
+  <div class="warn"><strong>Common gotcha — <code>PlayerService</code> scope:</strong> if owned by <code>PlayerViewModel</code>, it deallocates when the Player screen pops — the music stops. Register it in your DI container at app startup, not inside a ViewController. <code>StreamRefreshService</code> — pure logic, stateful (holds expiry thresholds, manages timing) and long-lived; it is a Domain Service, not a UseCase.</div>
+
+  <h3>Concept Translation</h3>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Video term</th><th>Your Clean Architecture equivalent</th></tr>
+      <tr><td><code>LibraryRepo</code></td><td><code>LibraryRepository: LibraryRepositoryProtocol</code></td></tr>
+      <tr><td><code>APIClient</code></td><td><code>LibraryRemoteDataSource</code>, <code>CollectionRemoteDataSource</code>, <code>PlayableItemRemoteDataSource</code>, <code>MediaRemoteDataSource</code></td></tr>
+      <tr><td><code>LocalDB / GRDB</code></td><td><code>LibraryLocalDataSource</code>, <code>CollectionLocalDataSource</code>, <code>PlayableItemLocalDataSource</code>, <code>DownloadLocalDataSource</code></td></tr>
+      <tr><td><code>LibraryStore</code> / <code>PlayableItemStore</code></td><td>Gone — this is just what <code>LibraryLocalDataSource</code>, <code>PlayableItemLocalDataSource</code>, etc. return</td></tr>
+      <tr><td><code>PlaybackAssetResolver</code></td><td>Logic inside <code>PlayerService</code> (Domain Service)</td></tr>
+      <tr><td><code>DownloadStore</code></td><td><code>DownloadLocalDataSource</code> — maps <code>itemId → localFilePath</code></td></tr>
+      <tr><td><code>DownloadService</code></td><td><code>DownloadTrackUseCase</code> + <code>MediaRemoteDataSource</code> + <code>MediaFileDataSource</code></td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- DATA FLOW -->
+<section id="dataflow">
+  <h2>Data Flow</h2>
 
   <h3>Data Flow — Library Screen</h3>
   <p>Pattern A — two awaits in the ViewModel. <code>async/await</code> returns once; a single <code>execute()</code> cannot update state twice.</p>
@@ -528,85 +539,135 @@ Each quality bucket → chunks:
 
   <div class="rule"><strong>GRDB as Single Source of Truth:</strong> ViewModels never read directly from the network. Phase 1 serves from <code>LibraryLocalDataSource</code> (GRDB) immediately. Phase 2 writes the API response back into GRDB then updates state — the DB is always the intermediary.</div>
 
-  <h3>Data Flow — Playback</h3>
+  <h3>Data Flow — Collection Detail Screen</h3>
+  <p>Two use cases run concurrently — collection metadata and track list share one API endpoint but cache independently.</p>
+<pre><code><span class="nm">CollectionDetailViewModel</span>.load(collectionId)
+    → isLoading = <span class="kw">true</span>
+
+    <span class="cm">// Phase 1 — cache (instant)</span>
+    <span class="kw">async let</span> cachedCollection = <span class="nm">FetchCollectionUseCase</span>.execute(policy: .strict, param:)
+    <span class="kw">async let</span> cachedItems      = <span class="nm">FetchPlayableItemsUseCase</span>.execute(policy: .strict, param:)
+    <span class="kw">if let</span> (collection, items) = <span class="kw">try</span>? <span class="kw">await</span> (cachedCollection, cachedItems)
+        → UI renders immediately from cache
+
+    <span class="cm">// Phase 2 — network (background, concurrent)</span>
+    <span class="kw">async let</span> freshCollection = <span class="nm">FetchCollectionUseCase</span>.execute(policy: .fresh, param:)
+    <span class="kw">async let</span> freshItems       = <span class="nm">FetchPlayableItemsUseCase</span>.execute(policy: .fresh, param:)
+    <span class="kw">let</span> (collection, page) = <span class="kw">try await</span> (freshCollection, freshItems)
+        → <span class="nm">CollectionRepository</span> → <span class="nm">CollectionRemoteDataSource</span> → GET /collections/{id}
+        → <span class="ty">CollectionMapper</span> → CollectionSummary + CollectionDetail → <span class="nm">CollectionLocalDataSource</span>.save()
+        → <span class="ty">PlayableItemMapper</span> → [<span class="ty">PlayableItem</span>] → <span class="nm">PlayableItemLocalDataSource</span>.save()
+        → nextCursor = page.nextCursor
+        → @Published state updated → UI refreshes
+
+    → <span class="kw">defer</span>: isLoading = <span class="kw">false</span></code></pre>
+  <div class="callout"><strong>Why <code>async let</code> here?</strong> Collection metadata and items have no ordering dependency — running them concurrently saves one full round-trip latency vs two sequential awaits.</div>
+
+  <h3>Data Flow — Pagination (Load More)</h3>
+<pre><code><span class="nm">LibraryViewModel</span>.loadNextPage()
+    <span class="kw">guard let</span> cursor = nextCursor <span class="kw">else</span> { <span class="kw">return</span> }  <span class="cm">// nil → no more pages</span>
+
+    isPaginating = <span class="kw">true</span>
+    <span class="kw">let</span> page = <span class="kw">try await</span> <span class="nm">FetchLibraryUseCase</span>.execute(policy: .fresh, param: .init(cursor: cursor))
+        → <span class="nm">LibraryRepository</span> → <span class="nm">LibraryRemoteDataSource</span> (cursor: cursor)
+        → DTOs → <span class="ty">LibraryItemMapper</span> → [<span class="ty">LibraryItem</span>]
+        → <span class="nm">LibraryLocalDataSource</span>.append(items)     <span class="cm">// append — do not replace existing rows</span>
+
+    → @Published items += page.items               <span class="cm">// append to existing list</span>
+    → nextCursor = page.nextCursor                 <span class="cm">// nil if last page</span>
+    → <span class="kw">defer</span>: isPaginating = <span class="kw">false</span></code></pre>
+  <div class="callout"><strong>Why append to LocalDataSource, not replace?</strong> The user may have scrolled to page 3 — overwriting GRDB would wipe rows 1–2 from the cache on next cold launch. Append preserves the full list locally.</div>
+
+  <h3>Data Flow — Download Track (Save for Offline)</h3>
+<pre><code><span class="nm">CollectionDetailViewModel</span>.saveForOffline(itemId)
+    → <span class="nm">DownloadTrackUseCase</span>.execute(param: .init(itemId:))
+        1. <span class="nm">PlayableItemRepository</span> (policy: .strict) → <span class="nm">PlayableItemLocalDataSource</span>
+               confirms item exists locally before attempting download
+        2. <span class="nm">MediaRemoteDataSource</span>.downloadFile(for: itemId)
+               → full audio file from CDN  <span class="cm">// complete file, not HLS chunks</span>
+        3. <span class="nm">MediaFileDataSource</span> (explicit offline store).save(data, for: itemId)
+               → separate store — never subject to LRU eviction
+        4. <span class="nm">DownloadLocalDataSource</span>.save(itemId → localFilePath)
+               → records itemId → <span class="st">file://</span> path mapping
+    → @Published downloadState[itemId] = .saved → UI shows "Saved ✓"</code></pre>
+  <div class="callout"><strong>Why confirm item exists locally first (step 1)?</strong> Prevents downloading a track whose metadata was never cached — the offline library would have no title, artwork, or artist to display.</div>
+  <div class="warn"><strong>Why a separate <code>MediaFileDataSource</code>, not the LRU cache?</strong> The LRU evicts under storage pressure. An explicitly saved track must survive indefinitely until the user deletes it. Two separate stores guarantee cache pressure can never remove an offline save.</div>
+
+  <h3>Data Flow — Playback (Initial Play)</h3>
 <pre><code><span class="nm">PlayerViewModel</span>.play(item, at: index)
   → <span class="nm">PlayerService</span>  <span class="cm">// Domain Service — app-scoped singleton</span>
-      1. build queue via <span class="nm">PlayableItemRepository</span> (<span class="ty">PlayableItemRepositoryProtocol</span>, policy: .strict)
-      2. resolve asset:
-           <span class="nm">DownloadRepository</span> (<span class="ty">DownloadRepositoryProtocol</span>): downloaded?
-             ├─ yes → <span class="st">file://</span> URL → <span class="nm">AVPlayerAdapter</span> (<span class="ty">AudioPlayerProtocol</span>)
-             └─ no  → <span class="nm">FetchStreamInfoUseCase</span> → <span class="nm">DownloadRepository</span> (<span class="ty">DownloadRepositoryProtocol</span>) → <span class="nm">MediaRemoteDataSource</span> → HLS CDN
-      3. delegate expiry to <span class="nm">StreamRefreshService</span>
-           near expiry? → <span class="nm">FetchStreamInfoUseCase</span> → <span class="nm">DownloadRepository</span> (<span class="ty">DownloadRepositoryProtocol</span>) → <span class="nm">MediaRemoteDataSource</span>
-                          buffered chunks keep playing uninterrupted</code></pre>
 
-  <h3>Concept Translation</h3>
-  <div class="table-wrap">
-    <table>
-      <tr><th>Video term</th><th>Your Clean Architecture equivalent</th></tr>
-      <tr><td><code>LibraryRepo</code></td><td><code>LibraryRepository: LibraryRepositoryProtocol</code></td></tr>
-      <tr><td><code>APIClient</code></td><td><code>LibraryRemoteDataSource</code>, <code>CollectionRemoteDataSource</code>, <code>PlayableItemRemoteDataSource</code>, <code>MediaRemoteDataSource</code></td></tr>
-      <tr><td><code>LocalDB / GRDB</code></td><td><code>LibraryLocalDataSource</code>, <code>CollectionLocalDataSource</code>, <code>PlayableItemLocalDataSource</code>, <code>DownloadLocalDataSource</code></td></tr>
-      <tr><td><code>LibraryStore</code> / <code>PlayableItemStore</code></td><td>Gone — this is just what <code>LibraryLocalDataSource</code>, <code>PlayableItemLocalDataSource</code>, etc. return</td></tr>
-      <tr><td><code>PlaybackAssetResolver</code></td><td>Logic inside <code>PlayerService</code> (Domain Service)</td></tr>
-      <tr><td><code>DownloadStore</code></td><td><code>DownloadLocalDataSource</code> — maps <code>itemId → localFilePath</code></td></tr>
-      <tr><td><code>DownloadService</code></td><td><code>DownloadTrackUseCase</code> + <code>MediaRemoteDataSource</code> + <code>MediaFileDataSource</code></td></tr>
-    </table>
-  </div>
-</section>
+      <span class="cm">// Step 1 — build queue from cached metadata only (no CDN URL yet)</span>
+      <span class="nm">PlayableItemRepository</span> (policy: .strict) → <span class="nm">PlayableItemLocalDataSource</span>
+          returns [<span class="ty">PlayableItem</span>] { id, title, artist, resumeTimestamp }
+          <span class="cm">// metadata only — no manifest URL, no audio data</span>
+          <span class="cm">// .strict because items are already cached from Collection Detail screen load</span>
 
-<!-- DOMAIN SERVICES -->
-<section id="services">
-  <h2>Domain Services</h2>
-  <h3>PlayerService</h3>
-  <p>Owns <code>PlaybackState</code>, queue, shuffle/repeat logic. App-scoped singleton — must outlive any single screen.</p>
-  <div class="warn"><strong>Common gotcha:</strong> if <code>PlayerService</code> is owned by <code>PlayerViewModel</code>, it deallocates when the Player screen pops — the music stops. Register it in your DI container at app startup, not inside a ViewController.</div>
+      <span class="cm">// Step 2 — resolve asset for the item about to play (lazy, per-item)</span>
+      <span class="nm">DownloadRepository</span>: is this item downloaded offline?
+          ├─ yes → <span class="st">file://</span> URL → <span class="nm">AudioPlayerDataSource</span> (<span class="ty">AudioPlayerProtocol</span>)
+          │         <span class="cm">// skip CDN entirely</span>
+          └─ no  → <span class="nm">FetchStreamInfoUseCase</span> → GET /item/{id}/stream-info
+                     → manifestUrl (HLS .m3u8) + expiresAt
+                     <span class="cm">// fetched NOW, not at queue-build time —</span>
+                     <span class="cm">// manifest is short-lived (~1hr); fetching upfront for all</span>
+                     <span class="cm">// queue items would expire before user reaches them</span>
+                   → <span class="nm">AudioPlayerDataSource</span> (<span class="ty">AudioPlayerProtocol</span>) → AVPlayer(url: manifestUrl)
+                   → AVPlayer streams chunks from CDN adaptively
 
-  <h3>StreamRefreshService</h3>
-  <p>Pure logic — given <code>StreamInfo.expiresAt</code>, decides when to trigger <code>FetchStreamInfoUseCase</code>. No network calls itself. Checks if the current time is within a refresh threshold (e.g. 60s before expiry).</p>
-  <p>Domain Service (not a UseCase) — it is stateful (holds expiry thresholds, manages timing) and long-lived; fails both UseCase criteria (stateless, triggered per user action).</p>
-  <div class="rule"><strong>Background audio and PlayerService scope are the same problem.</strong> Both require the service to outlive any single screen. Solve the scope problem once and both are solved.</div>
-</section>
+      <span class="cm">// Step 3 — hand expiry management to StreamRefreshService</span>
+      <span class="nm">StreamRefreshService</span> monitors expiresAt in background
+          → near expiry → <span class="nm">FetchStreamInfoUseCase</span> → fresh manifestUrl
+          → <span class="ty">AudioPlayerProtocol</span>.updateManifest(_:) — buffered chunks play uninterrupted</code></pre>
+  <div class="callout"><strong>Why <code>PlayableItemRepository</code> never returns a CDN URL:</strong> <code>PlayableItem</code> is metadata — title, artist, artwork. <code>PlayableAsset</code> is the streaming representation — manifest URL, expiry. They are intentionally separate types. The CDN URL is fetched lazily at the moment of playback so it never expires before use. Fetching it upfront for all queue items would mean early tracks' URLs expire before the user reaches them.</div>
 
-<!-- STREAMING & PLAYBACK -->
-<section id="streaming">
-  <h2>Streaming &amp; Playback</h2>
+  <h3>Data Flow — Seek</h3>
+<pre><code><span class="nm">PlayerViewController</span> seek bar drag ends
+  → <span class="nm">PlayerViewModel</span>.seek(to: fraction)
+    → <span class="nm">PlayerService</span>.seek(to: <span class="ty">TimeInterval</span>)
+        1. <span class="kw">guard</span> state.status == .playing || .paused <span class="kw">else</span> { <span class="kw">return</span> }
+        2. wasPlaying = (state.status == .playing)
+        3. state = state.with(status: .seeking)    <span class="cm">// transient — UI shows seeking indicator</span>
+        4. <span class="nm">AudioPlayerProtocol</span>.seek(to: time) { [<span class="kw">weak self</span>] <span class="kw">in</span>
+               self?.state = state.with(status: wasPlaying ? .playing : .paused)  <span class="cm">// always restore</span>
+           }
+        <span class="cm">// AVPlayer owns everything below — chunk lookup, CDN fetch, buffer management</span></code></pre>
+  <div class="warn"><strong>Why <code>.seeking</code> must be transient:</strong> always restore state in the completion handler — <code>.playing</code> or <code>.paused</code>, never leave it stuck at <code>.seeking</code>.</div>
 
-  <h3>HLS Flow (recap)</h3>
-<pre><code><span class="nm">PlayerService</span> triggers playback
-  → logic inside <span class="nm">PlayerService</span> checks <span class="nm">DownloadRepository</span> (<span class="ty">DownloadRepositoryProtocol</span>)
-      ├─ downloaded? → <span class="st">file://</span> URL → <span class="nm">AVPlayerAdapter</span> (<span class="ty">AudioPlayerProtocol</span>)
-      └─ not downloaded? → <span class="nm">FetchStreamInfoUseCase</span> → <span class="nm">DownloadRepository</span> (<span class="ty">DownloadRepositoryProtocol</span>) → <span class="nm">MediaRemoteDataSource</span> → HLS CDN
-                             → manifest (.m3u8)
-                             → quality buckets → chunks (2–10s each)
-                             → AVPlayer streams chunks adaptively</code></pre>
+  <h3>Data Flow — Chunk Lifecycle</h3>
+<pre><code>AVPlayer needs chunk_N for continuous playback
 
-  <h3>manifest <code>expiresAt</code> — Refresh During Playback</h3>
-  <ul>
-    <li><code>PlayerService</code> (via <code>AudioPlayerProtocol</code> → <code>AVPlayerAdapter</code>) monitors chunk-boundary; <code>StreamRefreshService</code> checks <code>expiresAt</code> before the next chunk request</li>
-    <li>If near expiry → background task fetches a fresh <code>stream-info</code> via <code>FetchStreamInfoUseCase</code> → <code>MediaRemoteDataSource</code></li>
-    <li>Refresh happens <strong>without interrupting the active audio buffer</strong> — chunks already buffered keep playing while the new manifest loads</li>
-    <li>Owner: <code>PlayerService</code> (via <code>AudioPlayerProtocol</code> + <code>StreamRefreshService</code>), not the ViewModel</li>
-  </ul>
+  ├─ LRU cache hit (<span class="nm">MediaFileDataSource</span>, Tier 2)
+  │    → serve chunk from disk — no network round-trip
+  │
+  └─ LRU cache miss
+       → AVPlayer fetches chunk_N from CDN
+       → chunk decoded → written to Tier 1 memory buffer  <span class="cm">// AVPlayer owns — you never touch this</span>
+       → <span class="nm">MediaFileDataSource</span>.write(chunk_N) → LRU disk cache (Tier 2)
+           cache size > 5 GB? → evict least-recently-used chunk
+       → chunk plays out → memory buffer advances to chunk_N+1
 
-  <h3>Offline Playback — Two Paths</h3>
-  <div class="table-wrap">
-    <table>
-      <tr><th>Scenario</th><th>Approach</th></tr>
-      <tr><td>Standard downloaded files</td><td>logic inside <code>PlayerService</code> returns <code>file://</code> URL directly to <code>AVPlayer</code> — no extra work</td></tr>
-      <tr><td>Protected / chunked format</td><td>Custom <code>AVAssetResourceLoadingDelegate</code> intercepts requests and serves local binary data</td></tr>
-    </table>
-  </div>
-  <p><code>DownloadLocalDataSource</code> holds the <code>itemId → localFilePath</code> mapping; logic inside <code>PlayerService</code> accesses it via <code>DownloadRepository</code>.</p>
-  <div class="callout"><strong>Why <code>file://</code> URL over <code>AVAssetResourceLoadingDelegate</code>?</strong> <code>AVAssetResourceLoadingDelegate</code> lets you intercept every network request AVPlayer makes and serve data yourself — useful for DRM, encryption, or proprietary chunk formats. But it adds significant complexity (manage loading requests, handle cancellation, byte-range requests). For standard downloaded audio files a plain <code>file://</code> URL is sufficient and far simpler. Use the delegate only when the file format or protection requires it.</div>
+<span class="nm">StreamRefreshService</span> runs in parallel:
+  → checks StreamInfo.expiresAt - refreshThreshold (e.g. 60s)
+  → near expiry → <span class="nm">FetchStreamInfoUseCase</span> (background)
+       → new manifestUrl swapped via <span class="nm">AudioPlayerProtocol</span>.updateManifest(_:)
+       → Tier 1 buffer plays uninterrupted — swap is invisible to the user</code></pre>
+  <div class="callout"><strong>Why cache chunks to disk (Tier 2)?</strong> Without it, replaying a track or seeking backward forces AVPlayer to re-fetch from CDN. Tier 2 turns replays into disk reads — no network, no stall.</div>
 
-  <h3>Background Audio</h3>
-  <ul>
-    <li>App must declare <code>audio</code> background mode in project settings</li>
-    <li><code>AVAudioSession</code> category set to <code>.playback</code> — allows audio to continue when app backgrounds</li>
-    <li><code>PlayerService</code> must be <strong>app-level singleton</strong> (not owned by a ViewModel) so the audio thread stays alive across screen transitions and backgrounding</li>
-  </ul>
-  <div class="rule"><strong>Background audio and <code>PlayerService</code> scope are the same problem.</strong> Both require the service to outlive any single screen. Solve the scope problem once and both are solved.</div>
+  <h3>Data Flow — Queue Advance (Track Ends)</h3>
+<pre><code>AVPlayer fires .AVPlayerItemDidPlayToEndTime
+  → <span class="nm">AudioPlayerDataSource</span> → <span class="nm">AudioPlayerProtocol</span>.onTrackEnded() → <span class="nm">PlayerService</span>
+      1. Episode only: <span class="nm">UpdateEpisodeProgressUseCase</span> saves resumeTimestamp = 0
+               <span class="cm">// marks complete — next play starts from beginning</span>
+      2. queue.advance() → next <span class="ty">PlayableItem</span>
+      3. queue exhausted?
+             └─ yes → state = state.with(status: .idle)
+      4. has next item → resolve asset (same decision as initial play):
+             <span class="nm">DownloadRepository</span>: downloaded?
+               ├─ yes → <span class="st">file://</span> URL → <span class="nm">AudioPlayerDataSource</span>
+               └─ no  → <span class="nm">FetchStreamInfoUseCase</span> → <span class="nm">MediaRemoteDataSource</span> → HLS manifest
+      5. <span class="nm">AudioPlayerDataSource</span>.play(url:) with next asset</code></pre>
+  <div class="callout"><strong>Why Episode saves <code>resumeTimestamp = 0</code> on completion, not on pause?</strong> On pause the timestamp is the current position. On natural completion it resets to zero — next play starts from the beginning. <code>Track</code> has no <code>resumeTimestamp</code> at all; the enum makes the compiler enforce this distinction.</div>
 </section>
 
 <!-- TECHNICAL DEEP DIVES -->
@@ -651,8 +712,49 @@ Page 2 using cursor→J:  [K, L, M, ...]  ← starts after J, unaffected</code><
 
   <hr class="divider">
 
-  <!-- 2. WHAT IS HLS -->
-  <h3 id="hls-why">2. What is HLS and why does it exist?</h3>
+  <!-- 2. STREAMING & PLAYBACK FLOW -->
+  <h3 id="streaming-flow">2. Streaming &amp; Playback Flow</h3>
+
+  <h4>HLS Flow</h4>
+<pre><code><span class="nm">PlayerService</span> triggers playback
+  → logic inside <span class="nm">PlayerService</span> checks <span class="nm">DownloadRepository</span> (<span class="ty">DownloadRepositoryProtocol</span>)
+      ├─ downloaded? → <span class="st">file://</span> URL → <span class="nm">AudioPlayerDataSource</span> (<span class="ty">AudioPlayerProtocol</span>)
+      └─ not downloaded? → <span class="nm">FetchStreamInfoUseCase</span> → <span class="nm">DownloadRepository</span> (<span class="ty">DownloadRepositoryProtocol</span>) → <span class="nm">MediaRemoteDataSource</span> → HLS CDN
+                             → manifest (.m3u8)
+                             → quality buckets → chunks (2–10s each)
+                             → AVPlayer streams chunks adaptively</code></pre>
+
+  <h4>manifest <code>expiresAt</code> — Refresh During Playback</h4>
+  <ul>
+    <li><code>PlayerService</code> (via <code>AudioPlayerProtocol</code> → <code>AudioPlayerDataSource</code>) monitors chunk-boundary; <code>StreamRefreshService</code> checks <code>expiresAt</code> before the next chunk request</li>
+    <li>If near expiry → background task fetches a fresh <code>stream-info</code> via <code>FetchStreamInfoUseCase</code> → <code>MediaRemoteDataSource</code></li>
+    <li>Refresh happens <strong>without interrupting the active audio buffer</strong> — chunks already buffered keep playing while the new manifest loads</li>
+    <li>Owner: <code>PlayerService</code> (via <code>AudioPlayerProtocol</code> + <code>StreamRefreshService</code>), not the ViewModel</li>
+  </ul>
+
+  <h4>Offline Playback — Two Paths</h4>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Scenario</th><th>Approach</th></tr>
+      <tr><td>Standard downloaded files</td><td>logic inside <code>PlayerService</code> returns <code>file://</code> URL directly to <code>AVPlayer</code> — no extra work</td></tr>
+      <tr><td>Protected / chunked format</td><td>Custom <code>AVAssetResourceLoadingDelegate</code> intercepts requests and serves local binary data</td></tr>
+    </table>
+  </div>
+  <p><code>DownloadLocalDataSource</code> holds the <code>itemId → localFilePath</code> mapping; logic inside <code>PlayerService</code> accesses it via <code>DownloadRepository</code>.</p>
+  <div class="callout"><strong>Why <code>file://</code> URL over <code>AVAssetResourceLoadingDelegate</code>?</strong> Useful for DRM, encryption, or proprietary chunk formats — but adds significant complexity. For standard downloaded audio files a plain <code>file://</code> URL is sufficient and far simpler. Use the delegate only when the file format or protection requires it.</div>
+
+  <h4>Background Audio</h4>
+  <ul>
+    <li>App must declare <code>audio</code> background mode in project settings</li>
+    <li><code>AVAudioSession</code> category set to <code>.playback</code> — allows audio to continue when app backgrounds</li>
+    <li><code>PlayerService</code> must be <strong>app-level singleton</strong> (not owned by a ViewModel) so the audio thread stays alive across screen transitions and backgrounding</li>
+  </ul>
+  <div class="rule"><strong>Background audio and <code>PlayerService</code> scope are the same problem.</strong> Both require the service to outlive any single screen. Solve the scope problem once and both are solved.</div>
+
+  <hr class="divider">
+
+  <!-- 3. WHAT IS HLS -->
+  <h3 id="hls-why">3. What is HLS and why does it exist?</h3>
   <div class="callout"><strong>Why HLS over progressive download (plain MP3/AAC)?</strong> Progressive download streams a single file from start to finish — no quality switching. If the network drops, playback stalls immediately. HLS chunks the audio and lets the player switch quality levels between chunks. At 100M DAU on mobile networks, adaptive bitrate is non-negotiable.</div>
   <div class="callout"><strong>Why HLS over DASH?</strong> Both are adaptive bitrate protocols. HLS is Apple's standard — <code>AVPlayer</code> has first-class native support with zero extra libraries. DASH requires a third-party player on iOS. Always default to HLS unless there's a specific cross-platform SDK requirement.</div>
   <p>HLS (HTTP Live Streaming) solves one problem: <strong>audio quality degrades or buffers on slow networks.</strong></p>
@@ -661,8 +763,8 @@ Page 2 using cursor→J:  [K, L, M, ...]  ← starts after J, unaffected</code><
 
   <hr class="divider">
 
-  <!-- 3. HOW HLS WORKS -->
-  <h3 id="hls-how">3. How HLS works — step by step</h3>
+  <!-- 4. HOW HLS WORKS -->
+  <h3 id="hls-how">4. How HLS works — step by step</h3>
 <pre><code>1. Client calls GET /item/{id}/stream-info
    → receives manifestUrl (.m3u8 file)
 
@@ -687,8 +789,8 @@ Page 2 using cursor→J:  [K, L, M, ...]  ← starts after J, unaffected</code><
 
   <hr class="divider">
 
-  <!-- 4. AVPLAYER -->
-  <h3 id="avplayer">4. AVPlayer and HLS on iOS</h3>
+  <!-- 5. AVPLAYER -->
+  <h3 id="avplayer">5. AVPlayer and HLS on iOS</h3>
   <p>You write almost no streaming code yourself — AVPlayer handles it all.</p>
 <pre><code><span class="cm">// This is all you need for HLS streaming</span>
 <span class="kw">let</span> url = <span class="ty">URL</span>(string: <span class="st">"https://cdn.example.com/manifest.m3u8"</span>)!
@@ -699,10 +801,10 @@ player.play()</code></pre>
 
   <hr class="divider">
 
-  <!-- 5. AUDIOSESSION -->
-  <h3 id="audiosession">5. AVAudioSession — required for real playback</h3>
+  <!-- 6. AUDIOSESSION -->
+  <h3 id="audiosession">6. AVAudioSession — required for real playback</h3>
   <p>Without this, audio stops when the screen locks or the app backgrounds.</p>
-<pre><code><span class="cm">// Called inside AVPlayerAdapter (Domain) — never in AppDelegate or ViewModel directly</span>
+<pre><code><span class="cm">// Called inside AudioPlayerDataSource (Domain) — never in AppDelegate or ViewModel directly</span>
 <span class="kw">try</span> <span class="ty">AVAudioSession</span>.sharedInstance().setCategory(.playback, mode: .default)
 <span class="kw">try</span> <span class="ty">AVAudioSession</span>.sharedInstance().setActive(<span class="kw">true</span>)</code></pre>
   <p>Also requires <code>audio</code> background mode in <code>Info.plist</code>:</p>
@@ -713,8 +815,8 @@ player.play()</code></pre>
 
   <hr class="divider">
 
-  <!-- 6. FILE STORAGE -->
-  <h3 id="storage">6. File storage — three tiers</h3>
+  <!-- 7. FILE STORAGE -->
+  <h3 id="storage">7. File storage — three tiers</h3>
   <div class="stack">
     <div class="stack-row"><div class="stack-name">Tier 1 — Memory buffer</div><div class="stack-desc">AVPlayer owns this. A few seconds of decoded audio ahead of the playhead. Freed on track change. You never touch it.</div></div>
     <div class="stack-row"><div class="stack-name">Tier 2 — LRU disk cache</div><div class="stack-desc">Recently streamed chunk files. Max 5 GB, evicts least-recently-used when full. If user replays a track, skip the network. You manage this via <code>DownloadTrackUseCase</code> / <code>MediaFileDataSource</code>.</div></div>
@@ -726,8 +828,8 @@ player.play()</code></pre>
 
   <hr class="divider">
 
-  <!-- 7. OFFLINE -->
-  <h3 id="offline">7. Offline playback — how AVPlayer reads local files</h3>
+  <!-- 8. OFFLINE -->
+  <h3 id="offline">8. Offline playback — how AVPlayer reads local files</h3>
   <p>When a track is fully downloaded, skip the CDN entirely and hand a <code>file://</code> URL to AVPlayer:</p>
 <pre><code><span class="cm">// Online path</span>
 <span class="kw">let</span> url = <span class="ty">URL</span>(string: <span class="st">"https://cdn.example.com/manifest.m3u8"</span>)!
@@ -746,8 +848,8 @@ player.play()</code></pre>
 
   <hr class="divider">
 
-  <!-- 8. EXPIRY -->
-  <h3 id="expiry">8. Short-lived URLs — why and how</h3>
+  <!-- 9. EXPIRY -->
+  <h3 id="expiry">9. Short-lived URLs — why and how</h3>
   <h4>Why URLs expire</h4>
   <p>A permanent CDN URL can be extracted from a packet sniffer and shared publicly. A signed URL with an expiry is useless after it expires.</p>
 <pre><code><span class="cm">// Server signs the URL</span>
@@ -760,14 +862,14 @@ https://cdn.example.com/track_123.m3u8?token=abc&expires=1716490800
 <pre><code><span class="nm">StreamRefreshService</span>.needsRefresh(for: streamInfo)
   → checks: <span class="ty">Date</span>() > streamInfo.expiresAt - refreshThreshold  <span class="cm">(e.g. 60s)</span>
   → if yes → background fetch new stream-info from API
-             swap manifest URL via <span class="nm">AudioPlayerProtocol</span>.updateManifest(_:) (→ <span class="nm">AVPlayerAdapter</span>)
+             swap manifest URL via <span class="nm">AudioPlayerProtocol</span>.updateManifest(_:) (→ <span class="nm">AudioPlayerDataSource</span>)
              buffered chunks already playing are unaffected</code></pre>
   <div class="rule"><strong>The refresh is invisible to the user</strong> — chunks already in the buffer play out while the new manifest loads in the background.</div>
 
   <hr class="divider">
 
-  <!-- 9. LRU -->
-  <h3 id="lru">9. LRU Cache — how it works</h3>
+  <!-- 10. LRU -->
+  <h3 id="lru">10. LRU Cache — how it works</h3>
   <p>LRU = Least Recently Used. When the cache is full, evict the item accessed least recently.</p>
 <pre><code>Cache (max 3 items for illustration):
   [chunk_A (oldest), chunk_B, chunk_C (newest)]
@@ -782,8 +884,8 @@ User replays chunk_B → promoted to newest:
 
   <hr class="divider">
 
-  <!-- 10. BAD NETWORK -->
-  <h3 id="badnetwork">10. Bad network — adaptive bitrate in detail</h3>
+  <!-- 11. BAD NETWORK -->
+  <h3 id="badnetwork">11. Bad network — adaptive bitrate in detail</h3>
   <p>AVPlayer measures <strong>observed bandwidth</strong> and <strong>buffer level</strong> continuously:</p>
 <pre><code>Buffer > 30s AND bandwidth stable  → upgrade quality
 Buffer < 10s OR bandwidth dropping → downgrade quality
@@ -805,8 +907,8 @@ player.currentItem?.preferredPeakBitRate = <span class="nm">0</span>         <sp
 
   <hr class="divider">
 
-  <!-- 11. COMPLETE FAILURE -->
-  <h3 id="failure">11. Complete network failure — retry strategy</h3>
+  <!-- 12. COMPLETE FAILURE -->
+  <h3 id="failure">12. Complete network failure — retry strategy</h3>
   <p>When network cuts out entirely (airplane mode, tunnel):</p>
   <ul>
     <li>AVPlayer plays out existing buffer (~15–30s)</li>
@@ -837,8 +939,8 @@ player.currentItem?.preferredPeakBitRate = <span class="nm">0</span>         <sp
 
   <hr class="divider">
 
-  <!-- 12. FAILURE MODES -->
-  <h3 id="failures">12. Common failure modes</h3>
+  <!-- 13. FAILURE MODES -->
+  <h3 id="failures">13. Common failure modes</h3>
   <div class="table-wrap">
     <table>
       <tr><th>Failure</th><th>How to handle</th></tr>
@@ -852,8 +954,8 @@ player.currentItem?.preferredPeakBitRate = <span class="nm">0</span>         <sp
 
   <hr class="divider">
 
-  <!-- 13. SEEKING -->
-  <h3 id="seeking">13. Seeking during streaming</h3>
+  <!-- 14. SEEKING -->
+  <h3 id="seeking">14. Seeking during streaming</h3>
   <p>Seeking in HLS is different from seeking in a local file — you're jumping between chunks, not byte offsets.</p>
 <pre><code>User drags seek bar to 2:30 (150s)
 
@@ -898,8 +1000,8 @@ player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { time <span
 
   <hr class="divider">
 
-  <!-- 14. OWNERSHIP -->
-  <h3 id="ownership">14. What you own vs what AVPlayer owns</h3>
+  <!-- 15. OWNERSHIP -->
+  <h3 id="ownership">15. What you own vs what AVPlayer owns</h3>
   <div class="table-wrap">
     <table>
       <tr><th>Responsibility</th><th>Owner</th></tr>
