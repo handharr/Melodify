@@ -186,41 +186,42 @@ SwiftUI screen (View)
 #### Deliverables
 
 **Tokens**
-- [ ] `Radius.swift` — corner radius scale (xs → full/pill)
-- [ ] `Elevation.swift` — shadow tokens (low, mid, high)
-- [ ] `Color.swift` — semantic tokens (primary, surface, error, warning, success, onPrimary…); retire `UIColor+Tokens` extension pattern
+- [x] `Radius.swift` — corner radius scale (xs → full/pill)
+- [x] `Elevation.swift` — shadow tokens (low, mid, high) + `UIView.applyShadow(_:)` helper
+- [x] `Color.swift` — `MDSColor` namespace (primary, surface, error, warning, success, onPrimary…); `UIColor+Tokens` and `UIFont+Tokens` extensions retired
+- [x] `Typography.swift` — `Typography` namespace (display, title, body, caption)
 
 **UIKit components (Atoms → Molecules → Organisms)**
-- [ ] `MDSAvatarView` *(atom)* — circular image with initials fallback, configurable size
-- [ ] `MDSBadgeView` *(atom)* — numeric unread badge, auto-hides at zero
-- [ ] `MDSLoadingView` *(atom)* — spinner + optional label, inline and full-screen variants
-- [ ] `MDSMessageBubble` *(molecule)* — text bubble with outgoing/incoming variant, status indicator
-- [ ] `MDSAudioPlayerView` *(molecule)* — waveform icon + duration label + play/pause state
+- [x] `MDSAvatarView` *(atom)* — circular image with initials fallback, configurable size (`MDSAvatarSize`: small/medium/large)
+- [x] `MDSBadgeView` *(atom)* — numeric unread badge, auto-hides at zero, pill cornerRadius via `layoutSubviews`
+- [x] `MDSLoadingView` *(atom)* — spinner + optional label, inline and full-screen variants (`MDSLoadingVariant`)
+- [x] `MDSMessageBubble` *(molecule)* — text bubble with outgoing/incoming variant, timestamp+status meta label
+- [x] `MDSAudioPlayerView` *(molecule)* — waveform icon + duration label + play/pause toggle; `onPlayPause` callback
 
 **SwiftUI components**
-- [ ] `MDSButton` *(atom)* — ButtonStyle with filled and outlined variants
-- [ ] `MDSBadge` *(atom)* — ViewModifier, overlays a count badge on any View
-- [ ] `MDSAvatar` *(molecule)* — native SwiftUI: async image + initials fallback; same tokens as `MDSAvatarView`, no UIViewRepresentable wrapper (component is simple enough for a native implementation)
-- [ ] `MDSEmptyState` *(organism)* — native SwiftUI: icon + title + subtitle + optional action; same tokens as `MDSEmptyStateView`, no UIViewRepresentable wrapper
-- [ ] `MDSLoadingOverlay` *(molecule)* — translucent fullscreen spinner, shown via `.overlay`; visually identical to `MDSLoadingView` — same tokens, two implementations for two contexts
+- [x] `MDSButton` *(atom)* — `MDSButtonStyle` with `.filled` and `.outlined` variants; `.mdsButtonStyle()` View extension
+- [x] `MDSBadge` *(atom)* — `MDSBadgeModifier` ViewModifier; `.mdsBadge(count:)` View extension
+- [x] `MDSAvatar` *(molecule)* — native SwiftUI: `AsyncImage` + initials fallback; same tokens as `MDSAvatarView`, no UIViewRepresentable wrapper
+- [x] `MDSEmptyState` *(organism)* — native SwiftUI: icon + title + subtitle + optional action; same tokens as `MDSEmptyStateView`, no UIViewRepresentable wrapper
+- [x] `MDSLoadingOverlay` *(molecule)* — translucent fullscreen spinner, shown via `.overlay`; same tokens as `MDSLoadingView` fullscreen variant
 
 **Bridge**
-- [ ] `UIHostingView<Content>` — UIView subclass hosting a SwiftUI View inline (no child ViewController)
-- [ ] `UIViewRepresentable` wrapper for `MDSAudioPlayerView` — the only UIKit component with no clean native SwiftUI equivalent (stateful play/pause + waveform animation); `MDSAvatarView` and `MDSEmptyStateView` are not wrapped — their SwiftUI counterparts are native implementations
+- [x] `UIHostingView<Content>` — UIView subclass hosting a SwiftUI View inline (no child ViewController); `update(rootView:)` for re-render
+- [x] `MDSAudioPlayerRepresentable` — `UIViewRepresentable` wrapper for `MDSAudioPlayerView`; `MDSAvatarView` and `MDSEmptyStateView` not wrapped — native SwiftUI counterparts used instead
 
 **Retrofit — MusicApp**
-- [ ] `TrackCell` — replace inline artwork + label stack with `MDSTrackRowView` (already in DS)
-- [ ] `TrackListViewController` — replace manual empty state with `MDSEmptyStateView`; replace manual loading indicator with `MDSLoadingView`
-- [ ] `TrackDetailViewController` — replace inline button with `MDSPrimaryButton`; use token spacing and radius throughout
-- [ ] `HomeViewController` — replace inline section headers and loading states with DS atoms
+- [x] `TrackCell` — uses `MDSTrackRowView` (was already wired; existing DS component hardened with Radius/Typography/MDSColor tokens)
+- [x] `TrackListViewController` — `MDSLoadingView` replaces `UIActivityIndicatorView`; `MDSEmptyStateView` shown on empty results
+- [x] `TrackDetailViewController` — `Radius.md` for artwork corner, `Typography`/`MDSColor` for all labels, `MDSColor.surface` background
+- [x] `HomeViewController` — `MDSLoadingView` replaces `UIActivityIndicatorView`; `MDSColor.surface` background
 
 **Retrofit — ChatApp**
-- [ ] `ConversationCell` — replace inline avatar placeholder with `MDSAvatarView`; replace inline badge with `MDSBadgeView`
-- [ ] `TextMessageCell` — replace inline bubble view with `MDSMessageBubble`
-- [ ] `AudioMessageCell` — replace inline waveform + duration layout with `MDSAudioPlayerView`
-- [ ] `DeletedMessageCell` — apply token typography and color (captionSmall, textDisabled)
-- [ ] `ConversationListViewController` — add `MDSEmptyStateView` for zero-conversation state
-- [ ] `ChatViewController` input bar — replace inline `UITextField` + `UIButton` with `MDSPrimaryButton`; apply token spacing
+- [x] `ConversationCell` — `MDSAvatarView` (initials from conversation title) + `MDSBadgeView` replace inline avatar placeholder and badge; `Typography`/`MDSColor` tokens throughout
+- [x] `TextMessageCell` — `MDSMessageBubble` replaces inline `bubbleView`; outgoing/incoming variant driven by `model.isOutgoing`
+- [x] `AudioMessageCell` — `MDSAudioPlayerView` replaces inline waveform + duration layout; outgoing/incoming variant wired
+- [x] `DeletedMessageCell` — `Typography.body` italic + `MDSColor.textDisabled`; `Spacing` tokens for padding
+- [x] `ConversationListViewController` — `MDSEmptyStateView` shown when conversation list is empty; `import MelodifyDesignSystem` added
+- [x] `ChatViewController` input bar — `MDSPrimaryButton` replaces inline `UIButton`; `Spacing` tokens replace magic numbers; `MDSColor.surfaceElevated` for input bar background
 
 **Previews catalog**
 - [ ] One `*Preview.swift` file per component showing all variants in light + dark mode
