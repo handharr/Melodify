@@ -2,12 +2,14 @@ import UIKit
 import CoreKit
 import MusicApp
 import ChatApp
+import MelodifyDesignSystem
 
 final class AppCoordinator: DeepLinkHandler {
     private let window: UIWindow
+    private let navigationController = UINavigationController()
+    private var homeCoordinator: HomeCoordinator?
     private var musicCoordinator: MusicCoordinator?
     private var chatCoordinator: ChatCoordinator?
-    private var tabBarController: UITabBarController?
     private var deepLinkObserver: Any?
 
     init(window: UIWindow) {
@@ -21,26 +23,16 @@ final class AppCoordinator: DeepLinkHandler {
     }
 
     func start() {
-        let analytics = ConsoleAnalyticsGateway()
+        let home = HomeCoordinator()
+        home.onAppSelected = { [weak self] id in
+            Task { @MainActor [weak self] in self?.push(id) }
+        }
+        home.start()
+        homeCoordinator = home
 
-        let music = MusicCoordinator(analytics: analytics)
-        music.start()
-        musicCoordinator = music
-
-        let webSocketClient = WebSocketClient()
-        let chat = ChatCoordinator(webSocketClient: webSocketClient)
-        chat.start()
-        chatCoordinator = chat
-
-        let tabBar = UITabBarController()
-        tabBar.viewControllers = [
-            music.searchNavigationController,
-            music.homeNavigationController,
-            chat.navigationController,
-            makePlaceholder(title: "Feed", icon: "newspaper", tag: 3)
-        ]
-        tabBarController = tabBar
-        window.rootViewController = tabBar
+        navigationController.navigationBar.prefersLargeTitles = true
+        navigationController.viewControllers = [home.viewController]
+        window.rootViewController = navigationController
         window.makeKeyAndVisible()
 
         deepLinkObserver = NotificationCenter.default.addObserver(
@@ -51,35 +43,58 @@ final class AppCoordinator: DeepLinkHandler {
         }
     }
 
-    @MainActor func handle(_ link: DeepLink) {
-        switch link {
-        case .track(let id):
-            tabBarController?.selectedIndex = 0
-            musicCoordinator?.showTrackDetail(id: id)
-        case .playlist(let id):
-            tabBarController?.selectedIndex = 1
-            musicCoordinator?.showPlaylistDetail(id: id)
-        case .search(let query):
-            tabBarController?.selectedIndex = 0
-            musicCoordinator?.triggerSearch(query: query)
+    @MainActor private func push(_ id: AppCardID) {
+        switch id {
+        case .music:    pushMusicApp()
+        case .chat:     pushChatApp()
+        case .feed:     pushPlaceholder(title: "Feed", icon: "newspaper.fill")
+        case .dsCatalog: pushPlaceholder(title: "DS Catalog", icon: "paintpalette.fill")
         }
     }
 
-    private func makePlaceholder(title: String, icon: String, tag: Int) -> UINavigationController {
+    @MainActor private func pushMusicApp() {
+        let coordinator = MusicCoordinator(analytics: ConsoleAnalyticsGateway())
+        coordinator.start()
+        musicCoordinator = coordinator
+        navigationController.pushViewController(coordinator.tabBarController, animated: true)
+    }
+
+    @MainActor private func pushChatApp() {
+        let coordinator = ChatCoordinator(
+            webSocketClient: WebSocketClient(),
+            navigationController: navigationController
+        )
+        coordinator.start()
+        chatCoordinator = coordinator
+    }
+
+    @MainActor private func pushPlaceholder(title: String, icon: String) {
         let vc = UIViewController()
-        vc.view.backgroundColor = .systemBackground
+        vc.title = title
+        vc.view.backgroundColor = MDSColor.surface
         let label = UILabel()
         label.text = "\(title) — Coming Soon"
-        label.font = .systemFont(ofSize: 17, weight: .medium)
-        label.textColor = .secondaryLabel
+        label.font = Typography.body
+        label.textColor = MDSColor.textSecondary
         label.translatesAutoresizingMaskIntoConstraints = false
         vc.view.addSubview(label)
         NSLayoutConstraint.activate([
             label.centerXAnchor.constraint(equalTo: vc.view.centerXAnchor),
-            label.centerYAnchor.constraint(equalTo: vc.view.centerYAnchor)
+            label.centerYAnchor.constraint(equalTo: vc.view.centerYAnchor),
         ])
-        let nav = UINavigationController(rootViewController: vc)
-        nav.tabBarItem = UITabBarItem(title: title, image: UIImage(systemName: icon), tag: tag)
-        return nav
+        navigationController.pushViewController(vc, animated: true)
+    }
+
+    @MainActor func handle(_ link: DeepLink) {
+        navigationController.popToRootViewController(animated: false)
+        pushMusicApp()
+        switch link {
+        case .track(let id):
+            musicCoordinator?.showTrackDetail(id: id)
+        case .playlist(let id):
+            musicCoordinator?.showPlaylistDetail(id: id)
+        case .search(let query):
+            musicCoordinator?.triggerSearch(query: query)
+        }
     }
 }
