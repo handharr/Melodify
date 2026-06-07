@@ -295,6 +295,7 @@
       <tr><td>Optimistic UI</td><td>Mutation flow awaits server response</td><td>Immediate UI update on like; <code>LikeService</code> retries in background until confirmed</td></tr>
       <tr><td>Like queue persistence</td><td>Not in generic</td><td>Core Data stores <code>Like { userID, postID, successfullySent }</code> — durable across app kills</td></tr>
       <tr><td>Image loading</td><td>Not covered</td><td><code>FeedImageDataSource</code> (ThirdPartyDataSource wrapping SDWebImage) — caches decoded <code>UIImage</code> on disk</td></tr>
+      <tr><td>Image service</td><td>Not in generic</td><td><code>ImageService</code> (Domain) — exposes <code>load(url:)</code> / <code>cancel(url:)</code> to ViewModel; backed by <code>FeedImageDataSource</code>; Presentation never calls SDWebImage directly</td></tr>
       <tr><td>Feed freshness</td><td><code>FetchPolicy.cached</code></td><td>2-minute timestamp check before firing network (extends .cached semantics at Repository level)</td></tr>
       <tr><td>Scroll prefetching</td><td>Not covered</td><td><code>UICollectionViewDataSourcePrefetching</code> — start data tasks ahead of scroll, cancel for off-screen cells</td></tr>
       <tr><td>Starvation mitigation</td><td>Not covered</td><td>Three-pronged: cancel prefetch tasks, cancel image load on cell reuse, defer new requests until scroll ends</td></tr>
@@ -311,6 +312,7 @@
   <div class="rule"><strong><code>LikeService</code> is a Domain Service, not a UseCase.</strong> It is stateful (holds a durable retry queue), app-scoped, and long-lived — must survive foreground/background cycles. A stateless UseCase cannot hold or retry queued actions.</div>
   <div class="rule"><strong>Optimistic UI with Core Data-backed queue.</strong> The like queue (<code>successfullySent: false</code>) is persisted — not in-memory. An app kill mid-retry does not lose the user's intent. On relaunch, <code>LikeService</code> reads pending <code>Like</code> records and resumes retrying.</div>
   <div class="callout"><strong>SDWebImage as <code>FeedImageDataSource</code> (ThirdPartyDataSource).</strong> <code>URLCache</code> stores raw <code>Data</code> bytes — every display requires <code>UIImage(data:)</code>, a CPU decode hit. SDWebImage caches the already-decoded <code>UIImage</code> in memory + disk. Repeat displays are zero-cost.</div>
+  <div class="rule"><strong><code>ImageService</code> as a Domain layer intermediary.</strong> Cells calling <code>sd_setImage</code> directly violates Presentation → Domain ← Data. <code>FeedViewModel</code> calls <code>ImageService.load(url:)</code> for both prefetch and display. <code>ImageService</code> delegates to <code>FeedImageDataSource</code> (Data), which owns the SDWebImage integration.</div>
   <div class="callout"><strong>ViewModel implements <code>UICollectionViewDataSource</code> and <code>UICollectionViewDelegate</code>.</strong> The ViewModel already owns <code>items: [FeedCellUIModel]</code> — it is the natural place to answer "how many cells?" and "which model at index N?". Avoids a separate data source object with shared mutable state.</div>
   <div class="callout"><strong>Feed freshness at the Repository, not FetchPolicy alone.</strong> <code>FetchPolicy.cached</code> says "use local if available". This scenario adds a time constraint: local is only valid if <code>fetchedAt</code> is &lt; 2 minutes ago. The Repository checks the timestamp before deciding whether <code>.cached</code> qualifies.</div>
 </section>
@@ -447,7 +449,7 @@
       <div class="stack-name">Domain</div>
       <div class="stack-desc">
         <strong>UseCases:</strong> <code>FetchFeedUseCase</code> · <code>LikePostUseCase</code><br>
-        <strong>Services:</strong> <code>LikeService</code> (app-scoped — stateful, holds durable retry queue)<br>
+        <strong>Services:</strong> <code>LikeService</code> (app-scoped — stateful, holds durable retry queue) · <code>ImageService</code> (per-navigation — owns active image operations)<br>
         <strong>Models:</strong> <code>Post</code> · <code>User</code> · <code>Like</code> · <code>PostType</code><br>
         <strong>Params:</strong> <code>FeedParam</code>
       </div>
@@ -495,9 +497,10 @@
                      ├─► <span class="nm">LikeRemoteDataSource</span> ── <span class="gr">POST</span> /users/&lt;id&gt;/likes ──► REST API
                      └─► <span class="nm">FeedLocalDataSource</span> (Core Data — Like queue, successfullySent flag)
 
-<span class="nm">FeedViewModel</span> ──► <span class="nm">FeedImageDataSource</span> (SDWebImage) ──► S3 URLs (photoURLs from <span class="ty">PostDTO</span>)</code></pre>
+<span class="nm">FeedViewModel</span> ──► <span class="nm">ImageService</span> (Domain)
+                      └─► <span class="nm">FeedImageDataSource</span> (SDWebImage) ──► S3 URLs (photoURLs from <span class="ty">PostDTO</span>)</code></pre>
 
-  <div class="callout"><strong>Note:</strong> Cells receive pre-resolved image URLs via <code>FeedCellUIModel</code>; <code>FeedImageDataSource</code> is called by the ViewModel, not by cells directly. Cells are dumb renderers — they never touch the domain layer.</div>
+  <div class="callout"><strong>Note:</strong> Cells receive <code>UIImage</code> via <code>FeedCellUIModel</code> after <code>FeedViewModel</code> loads them through <code>ImageService</code>. Cells never call SDWebImage directly.</div>
 
   <h3>Dependency Injection (Composition Root)</h3>
   <p>No DI framework. Dependencies flow inward via init. <code>AppCoordinator</code> owns the composition root — it builds the full graph and holds app-scoped objects as strong properties.</p>
@@ -509,6 +512,7 @@
 <span class="kw">let</span> <span class="nm">feedRemoteDS</span> = <span class="ty">FeedRemoteDataSource</span>(client: <span class="nm">client</span>)
 <span class="kw">let</span> <span class="nm">likeRemoteDS</span> = <span class="ty">LikeRemoteDataSource</span>(client: <span class="nm">client</span>)
 <span class="kw">let</span> <span class="nm">feedLocalDS</span>  = <span class="ty">FeedLocalDataSource</span>()              <span class="cm">// wraps Core Data</span>
+<span class="kw">let</span> <span class="nm">feedImageDS</span>  = <span class="ty">FeedImageDataSource</span>()              <span class="cm">// wraps SDWebImage</span>
 
 <span class="cm">// Repositories</span>
 <span class="kw">let</span> <span class="nm">newsFeedRepo</span> = <span class="ty">NewsFeedRepository</span>(remote: <span class="nm">feedRemoteDS</span>, local: <span class="nm">feedLocalDS</span>)
@@ -521,10 +525,14 @@
 <span class="cm">// UseCases — stateless; created per-navigation</span>
 <span class="kw">let</span> <span class="nm">fetchFeedUseCase</span> = <span class="ty">FetchFeedUseCase</span>(repository: <span class="nm">newsFeedRepo</span>)
 
+<span class="cm">// Domain Services — created per-navigation (no cross-screen state needed)</span>
+<span class="kw">let</span> <span class="nm">imageService</span> = <span class="ty">ImageService</span>(dataSource: <span class="nm">feedImageDS</span>)
+
 <span class="cm">// Presentation — created by Coordinator when pushing feed screen</span>
 <span class="kw">let</span> <span class="nm">viewModel</span> = <span class="ty">FeedViewModel</span>(
     fetchFeed: <span class="nm">fetchFeedUseCase</span>,
-    likeService: <span class="nm">likeService</span>
+    likeService: <span class="nm">likeService</span>,
+    imageService: <span class="nm">imageService</span>
 )</code></pre>
 
   <div class="warn"><strong><code>LikeService</code> is a stored property on <code>AppCoordinator</code></strong>, not created inside <code>FeedViewController</code>. This keeps it alive across screen transitions and app lifecycle events. If it were owned by the ViewController, it would deallocate on pop and lose the retry queue.</div>
@@ -562,10 +570,13 @@
         → @<span class="ty">Published</span> items updated → <span class="ty">UICollectionView</span> reloads
 
         <span class="cm">// Image layer resolves independently — no involvement from Repository</span>
-        Cell becomes visible → imageView.sd_setImage(with: post.imageURL)
-            → SDWebImage disk cache check (keyed by S3 URL)
-                ├── HIT  (same URL as yesterday) → decoded <span class="ty">UIImage</span>, zero network ✅
-                └── MISS (new post / evicted)    → download → decode → cache → display
+        Cell becomes visible → <span class="nm">FeedViewModel</span>.loadImage(url: model.imageURL)
+            → <span class="nm">ImageService</span>.load(url:)
+                → <span class="nm">FeedImageDataSource</span>.load(url:)
+                    → SDWebImage disk cache check (keyed by S3 URL)
+                        ├── HIT  (same URL as yesterday) → decoded <span class="ty">UIImage</span>, zero network ✅
+                        └── MISS (new post / evicted)    → download → decode → cache → display
+                → <span class="ty">UIImage</span> returned → ViewModel updates UIModel.image → cell displays
         → <span class="kw">defer</span>: isLoading = <span class="kw">false</span></code></pre>
 
   <div class="callout"><strong>Why the two layers are decoupled:</strong> Core Data holds post metadata (text, counts, URLs). SDWebImage holds decoded images keyed by the URLs inside those DTOs. Even when Core Data is stale and triggers a network re-fetch, the response contains the same S3 URLs as yesterday — SDWebImage recognises them and serves from disk. Metadata freshness and image freshness have independent clocks.</div>
@@ -599,18 +610,18 @@ User scrolls down — cells 6, 7 approaching viewport but not yet visible
 <span class="ty">UICollectionView</span>.prefetchItemsAt([<span class="ty">IndexPath</span>(6), <span class="ty">IndexPath</span>(7)])
     → <span class="nm">FeedViewModel</span>.prefetch(at: indexPaths)
         → withThrowingTaskGroup {
-            task A1: <span class="nm">FeedImageDataSource</span>.load(url: items[6].imageURL)
-            task A2: <span class="nm">FeedImageDataSource</span>.load(url: items[7].imageURL)
+            task A1: <span class="nm">ImageService</span>.load(url: items[6].imageURL)
+            task A2: <span class="nm">ImageService</span>.load(url: items[7].imageURL)
             <span class="cm">// Dynamic N cells → withThrowingTaskGroup (not async let — N is not known at compile time)</span>
           }
+          → <span class="nm">FeedImageDataSource</span>.load(url:)
           → SDWebImage: download bytes → decode <span class="ty">UIImage</span> in background thread
           → store decoded <span class="ty">UIImage</span> in memory cache + disk cache
           <span class="cm">// All this happens BEFORE cell 6 enters the viewport</span>
 
 Cell 6 becomes visible → <span class="ty">UICollectionView</span>.cellForItemAt(6)
     → <span class="ty">PhotoCell</span>.configure(model: items[6])
-        → imageView.sd_setImage(with: items[6].imageURL)
-            → SDWebImage: memory cache HIT — decoded <span class="ty">UIImage</span> already present
+        → imageView.image = items[6].image  <span class="cm">// UIImage already in UIModel, loaded via ImageService</span>
             → zero network · zero decode · instant display ✅
 
 
@@ -800,6 +811,7 @@ T=2min   fetchedAt expires → next load triggers re-fetch → likeCount: 1042 �
   <div class="warn"><strong>Forgetting <code>sd_cancelCurrentImageLoad()</code> in <code>prepareForReuse</code>.</strong> Fast scrollers see wrong images briefly — the recycled cell shows the previous request's result.</div>
   <div class="warn"><strong>Creating <code>LikeService</code> inside a ViewController instead of the composition root.</strong> If <code>FeedViewController</code> owns it, the service deallocates on pop — the retry queue is lost. It must be a stored property on <code>AppCoordinator</code>, passed down via init injection.</div>
   <div class="warn"><strong><code>successfullySent</code> records never cleaned up.</strong> The retry loop must set <code>successfullySent = true</code> and eventually delete the record on success, or the Core Data queue grows unbounded.</div>
+  <div class="warn"><strong>Cells calling <code>sd_setImage</code> directly (layer violation).</strong> Presentation must not touch External SDKs. Route all image loading through <code>ImageService</code> (Domain) → <code>FeedImageDataSource</code> (Data). <code>FeedViewModel</code> calls <code>ImageService.load(url:)</code> and passes <code>UIImage</code> back to the cell via the UIModel.</div>
 </section>
 
 <!-- INTERVIEWER TALKING POINTS -->
@@ -813,6 +825,7 @@ T=2min   fetchedAt expires → next load triggers re-fetch → likeCount: 1042 �
     <li>"The ViewModel maps <code>Post</code> domain objects into typed <code>FeedCellUIModel</code> variants before the collection view sees them. Cells are dumb renderers — they never touch the domain layer."</li>
     <li>"The like queue is persisted to Core Data with <code>successfullySent: false</code>. An app kill mid-retry doesn't lose the user's intent — <code>LikeService</code> reads pending records on relaunch and resumes."</li>
     <li>"Feed freshness extends <code>FetchPolicy.cached</code> with a 2-minute timestamp. If <code>fetchedAt</code> is recent, skip the network. The Repository is the only place that reads this timestamp."</li>
+    <li>"Image loading goes through <code>ImageService</code> in Domain — the ViewModel calls it, and <code>FeedImageDataSource</code> wraps SDWebImage underneath. Cells never touch the External SDK directly, which keeps the layer dependency rule clean."</li>
   </ul>
 </section>
 

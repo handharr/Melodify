@@ -20,6 +20,7 @@ All patterns not listed above are unchanged — see [ios-app-system-design-philo
 | Optimistic UI | Mutation flow awaits server response | Immediate UI update on like; `LikeService` retries in background until confirmed |
 | Like queue persistence | Not in generic | Core Data stores `Like { userID, postID, successfullySent }` — durable across app kills |
 | Image loading | Not covered | `FeedImageDataSource` (ThirdPartyDataSource wrapping SDWebImage) — caches decoded `UIImage` on disk |
+| Image service | Not in generic | `ImageService` (Domain) — exposes `load(url:)` / `cancel(url:)` to ViewModel; backed by `FeedImageDataSource`; Presentation never calls SDWebImage directly |
 | Feed freshness | `FetchPolicy.cached` | 2-minute timestamp check before firing network (extends .cached semantics at Repository level) |
 | Scroll prefetching | Not covered | `UICollectionViewDataSourcePrefetching` — start data tasks ahead of scroll, cancel for off-screen cells |
 | Starvation mitigation | Not covered | Three-pronged: cancel prefetch tasks, cancel image load on cell reuse, defer new requests until scroll ends |
@@ -35,6 +36,7 @@ All patterns not listed above are unchanged — see [ios-app-system-design-philo
 - **`LikeService` is a Domain Service, not a UseCase.** It is stateful (holds a durable retry queue), app-scoped, and long-lived — must survive foreground/background cycles. A stateless UseCase cannot hold or retry queued actions.
 - **Optimistic UI with Core Data-backed queue.** The like queue (`successfullySent: false`) is persisted — not in-memory. An app kill mid-retry does not lose the user's intent. On relaunch, `LikeService` reads pending `Like` records and resumes retrying.
 - **SDWebImage as `FeedImageDataSource` (ThirdPartyDataSource).** `URLCache` stores raw `Data` bytes — every display requires `UIImage(data:)`, a CPU decode hit. SDWebImage caches the already-decoded `UIImage` in memory + disk. Repeat displays are zero-cost.
+- **`ImageService` as a Domain layer intermediary.** Cells calling `sd_setImage` directly violates Presentation → Domain ← Data. `FeedViewModel` calls `ImageService.load(url:)` for both prefetch and display. `ImageService` delegates to `FeedImageDataSource` (Data), which owns the SDWebImage integration.
 - **ViewModel implements `UICollectionViewDataSource` and `UICollectionViewDelegate`.** The ViewModel already owns `items: [FeedCellUIModel]` — it is the natural place to answer "how many cells?" and "which model at index N?". Avoids a separate data source object with shared mutable state.
 - **Feed freshness at the Repository, not FetchPolicy alone.** `FetchPolicy.cached` says "use local if available". This scenario adds a time constraint: local is only valid if `fetchedAt` is < 2 minutes ago. The Repository checks the timestamp before deciding whether `.cached` qualifies.
 
@@ -168,7 +170,7 @@ struct AlbumCellUIModel {
 ```
 Presentation    →  ViewController + FeedViewModel (@MainActor)
                    FeedViewModel implements UICollectionViewDataSource + UICollectionViewDelegate
-Domain          →  FetchFeedUseCase · LikePostUseCase · LikeService (app-scoped)
+Domain          →  FetchFeedUseCase · LikePostUseCase · LikeService (app-scoped) · ImageService
 Data            →  NewsFeedRepository · LikeRepository
                    FeedRemoteDataSource · FeedLocalDataSource (Core Data)
                    FeedImageDataSource (wraps SDWebImage — single-layer Data concern)
@@ -184,7 +186,7 @@ Application     →  AppDelegate · AppCoordinator · manual init injection
 | Layer | Components |
 |---|---|
 | Presentation | `FeedViewController`, `FeedViewModel`, `FeedCellUIModel` (enum), `PhotoCell`, `AlbumCell` |
-| Domain | `FetchFeedUseCase`, `LikePostUseCase`, `LikeService`, `Post`, `User`, `Like`, `FeedParam` |
+| Domain | `FetchFeedUseCase`, `LikePostUseCase`, `LikeService`, `ImageService`, `Post`, `User`, `Like`, `FeedParam` |
 | Data | `NewsFeedRepository`, `LikeRepository`, `FeedRemoteDataSource`, `LikeRemoteDataSource`, `FeedLocalDataSource`, `FeedImageDataSource`, `PostDTO`, `PostMapper` |
 | Infrastructure | None |
 | External | `SDWebImage` · `CoreData` · `URLSession` · `Network.framework` |
@@ -210,9 +212,10 @@ FeedViewModel (@MainActor)
                      ├─► LikeRemoteDataSource ── POST /users/<id>/likes ──► REST API
                      └─► FeedLocalDataSource (Core Data — Like queue, successfullySent flag)
 
-FeedViewModel ──► FeedImageDataSource (SDWebImage) ──► S3 URLs (photoURLs from PostDTO)
+FeedViewModel ──► ImageService (Domain)
+                      └─► FeedImageDataSource (SDWebImage) ──► S3 URLs (photoURLs from PostDTO)
 
-> Note: Cells receive pre-resolved image URLs via `FeedCellUIModel`; `FeedImageDataSource` is called by `FeedRepository` (or the ViewModel via a dedicated use case), not by cells directly.
+> Note: Cells receive `UIImage` via `FeedCellUIModel` after `FeedViewModel` loads them through `ImageService`. Cells never call SDWebImage directly.
 ```
 
 ### Dependency Injection (Composition Root)
@@ -227,6 +230,7 @@ let client = APIClient()
 let feedRemoteDS = FeedRemoteDataSource(client: client)
 let likeRemoteDS = LikeRemoteDataSource(client: client)
 let feedLocalDS  = FeedLocalDataSource()              // wraps Core Data
+let feedImageDS  = FeedImageDataSource()              // wraps SDWebImage
 
 // Repositories
 let newsFeedRepo = NewsFeedRepository(remote: feedRemoteDS, local: feedLocalDS)
@@ -239,10 +243,14 @@ likeService.resumePendingRetries()                    // re-queue successfullySe
 // UseCases — stateless; created per-navigation
 let fetchFeedUseCase = FetchFeedUseCase(repository: newsFeedRepo)
 
+// Domain Services — created per-navigation (no cross-screen state needed)
+let imageService = ImageService(dataSource: feedImageDS)
+
 // Presentation — created by Coordinator when pushing feed screen
 let viewModel = FeedViewModel(
     fetchFeed: fetchFeedUseCase,
-    likeService: likeService
+    likeService: likeService,
+    imageService: imageService
 )
 ```
 
@@ -282,10 +290,13 @@ FeedViewController.viewDidLoad()
         → @Published items updated → UICollectionView reloads
 
         // Image layer resolves independently — no involvement from Repository
-        Cell becomes visible → imageView.sd_setImage(with: post.imageURL)
-            → SDWebImage disk cache check (keyed by S3 URL)
-                ├── HIT  (same URL as yesterday) → decoded UIImage, zero network ✅
-                └── MISS (new post / evicted)    → download → decode → cache → display
+        Cell becomes visible → FeedViewModel.loadImage(url: model.imageURL)
+            → ImageService.load(url:)
+                → FeedImageDataSource.load(url:)
+                    → SDWebImage disk cache check (keyed by S3 URL)
+                        ├── HIT  (same URL as yesterday) → decoded UIImage, zero network ✅
+                        └── MISS (new post / evicted)    → download → decode → cache → display
+                → UIImage returned → ViewModel updates UIModel.image → cell displays
         → defer: isLoading = false
 ```
 
@@ -322,18 +333,18 @@ User scrolls down — cells 6, 7 approaching viewport but not yet visible
 UICollectionView.prefetchItemsAt([IndexPath(6), IndexPath(7)])
     → FeedViewModel.prefetch(at: indexPaths)
         → withThrowingTaskGroup {
-            task A1: FeedImageDataSource.load(url: items[6].imageURL)
-            task A2: FeedImageDataSource.load(url: items[7].imageURL)
+            task A1: ImageService.load(url: items[6].imageURL)
+            task A2: ImageService.load(url: items[7].imageURL)
             // Dynamic N cells → withThrowingTaskGroup (not async let — N is not known at compile time)
           }
+          → FeedImageDataSource.load(url:)
           → SDWebImage: download bytes → decode UIImage in background thread
           → store decoded UIImage in memory cache + disk cache
           // All this happens BEFORE cell 6 enters the viewport
 
 Cell 6 becomes visible → UICollectionView.cellForItemAt(6)
     → PhotoCell.configure(model: items[6])
-        → imageView.sd_setImage(with: items[6].imageURL)
-            → SDWebImage: memory cache HIT — decoded UIImage already present
+        → imageView.image = items[6].image  // UIImage already in UIModel, loaded via ImageService
             → zero network · zero decode · instant display ✅
 
 
@@ -521,6 +532,7 @@ Open question: retry policy (exponential back-off vs fixed interval, retry cap) 
 - **Creating `LikeService` inside a ViewController instead of the composition root.** If `FeedViewController` owns it, the service deallocates on pop — the retry queue is lost. It must be a stored property on `AppCoordinator`, passed down via init injection.
 - **`successfullySent` records never cleaned up.** The retry loop must set `successfullySent = true` and eventually delete the record on success, or the Core Data queue grows unbounded.
 - **`LikeService` owned by a ViewController.** If scoped to a screen, it deallocates when the user navigates away — the retry queue disappears. Register at AppCoordinator level, same as `PlayerService` in the music streaming scenario.
+- **Cells calling `sd_setImage` directly (layer violation).** Presentation must not touch External SDKs. Route all image loading through `ImageService` (Domain) → `FeedImageDataSource` (Data). `FeedViewModel` calls `ImageService.load(url:)` and passes `UIImage` back to the cell via the UIModel.
 
 ---
 
@@ -533,6 +545,7 @@ Open question: retry policy (exponential back-off vs fixed interval, retry cap) 
 - "The ViewModel maps `Post` domain objects into typed `FeedCellUIModel` variants before the collection view sees them. Cells are dumb renderers — they never touch the domain layer."
 - "The like queue is persisted to Core Data with `successfullySent: false`. An app kill mid-retry doesn't lose the user's intent — `LikeService` reads pending records on relaunch and resumes."
 - "Feed freshness extends `FetchPolicy.cached` with a 2-minute timestamp. If `fetchedAt` is recent, skip the network. The Repository is the only place that reads this timestamp."
+- "Image loading goes through `ImageService` in Domain — the ViewModel calls it, and `FeedImageDataSource` wraps SDWebImage underneath. Cells never touch the External SDK directly, which keeps the layer dependency rule clean."
 
 ---
 
