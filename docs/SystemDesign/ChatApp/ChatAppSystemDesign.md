@@ -333,3 +333,45 @@ Incoming frame: { "channel": "conv-abc", "payload": "{...}" }
 
 **Why HTTP POST for outbound, not WebSocket?**  
 Outbound messages need HTTP semantics: guaranteed delivery confirmation, status codes (409 conflict, 5xx retry), and idempotency keys. WebSocket fire-and-forget has none of these. HTTP POST for send + WebSocket for receive is the correct split.
+
+---
+
+## 6. Technical Deep-dive
+
+### Why HTTP POST for outbound, not WebSocket?
+
+WebSocket is a transport — it has no delivery semantics. If you send a message over WebSocket and the frame is dropped, you get no error. HTTP POST gives you: a status code (200 sent, 409 conflict, 5xx retry), a request body you can log and replay, and a confirmed response with the server-assigned message ID. The idempotency key (`clientId`) only works over a request/response protocol. The split is intentional: WebSocket for inbound real-time events, HTTP for outbound actions that need a result.
+
+### Why one WebSocket connection instead of one per conversation?
+
+One socket per conversation is O(conversations) connections per user. A user with 50 open conversations would hold 50 persistent TCP connections — unsustainable on server and mobile battery. One shared `WebSocketClient` with channel multiplexing is O(1) per user. The `ChannelRouter` actor maps channel strings to continuations; subscribing to a new conversation adds one entry to the router's dictionary, not a new socket.
+
+### Why `MessageContent` enum instead of optional fields?
+
+Optional fields (`text: String?`, `imageURL: URL?`) make invalid states representable at the type level. A `MessageDTO` with no text and no image URL is syntactically valid Swift but semantically illegal in the domain. The `MessageContent` enum makes illegal states unrepresentable: every `Message` has exactly one content case. The switch in the cell factory is exhaustive at compile time — adding a new message type without handling it is a build error, not a runtime crash.
+
+### Why `clientId` (idempotency key) generated in `SendMessageRequest.init`?
+
+If generated at the ViewModel call site, the same action (e.g. a button tap that retries) would produce different UUIDs each time — defeating idempotency. If generated in the Repository or DataSource, the key is not accessible to the offline queue. Generating it in `SendMessageRequest.init` means: the same `Request` object always carries the same `clientId`, the queue can persist it, and retries (whether from queue flush or network retry) re-use the same key. The server deduplicates on `client_id` — safe to call twice with the same UUID.
+
+### Why `PendingMessageQueue` is a Swift actor?
+
+The queue is accessed from multiple concurrency contexts: the send path (ViewModel → UseCase → Repository), the flush path (Coordinator on app foreground), and potentially background retry logic. A class with a lock would work but requires manual locking discipline. An actor serialises all access automatically — no lock, no data race, compiler-enforced.
+
+### Why flush is triggered in `ChatCoordinator`, not in a ViewController?
+
+`UIApplication.didBecomeActiveNotification` fires app-wide — it doesn't belong to any one screen. If the `ConversationListViewController` owned the flush, it would miss events while another screen is active. `ChatCoordinator` is app-scoped for the chat feature; it lives as long as the chat module is active and is the correct owner of cross-screen infrastructure concerns.
+
+### Why `MessageLocalDataSource` is in-memory (actor) rather than disk-backed?
+
+Message history for the current session is loaded from bundled mock JSON via the local data source. In a production app it would be backed by Core Data or SQLite. The actor boundary is already in place — swapping the storage backend is a one-file change inside `MessageLocalDataSource` without touching any caller.
+
+### Interview Q&A
+
+| Question | Answer |
+|---|---|
+| Why WebSocket for inbound but HTTP for outbound? | HTTP gives you delivery confirmation, status codes, and idempotency. WebSocket fire-and-forget has none of those guarantees. The direction of the data determines the protocol. |
+| Why one socket? | O(1) connections per user. O(conversations) is unsustainable. Channel multiplexing handles any number of conversations on one TCP connection. |
+| Why enum for message type, not optionals? | Illegal states become unrepresentable. The cell factory switch is exhaustive at compile time — adding a new type without handling it is a build error, not a runtime crash. |
+| What happens if a send fails while offline? | `PendingMessageQueue.enqueue(PendingMessageDTO)` persists it to disk. On next app foreground, `ChatCoordinator` triggers `FlushPendingMessagesUseCase` which re-sends with the same `clientId` — server deduplicates. |
+| Why is `clientId` generated in `SendMessageRequest.init`? | So the same request object always carries the same key. Retries and queue flushes re-use it automatically — no caller needs to track the UUID. |

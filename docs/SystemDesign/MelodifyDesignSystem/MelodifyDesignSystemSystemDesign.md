@@ -257,3 +257,41 @@ Impact path:
   All SwiftUI MDSButton(.filled) → uses MDSColor.primary              ✅ updated
   No component internals touched — token is the single source of truth
 ```
+
+---
+
+## 6. Technical Deep-dive
+
+### Why token-first instead of hardcoded values inside components?
+
+Without tokens, "brand blue" is `#0066CC` duplicated across 20 files. A brand refresh or dark-mode audit means finding and replacing every occurrence. With tokens, `MDSColor.primary` is the single source — change it once in `Color.swift` and every component that reads it updates automatically. Theming, white-labelling, and dark mode support all reduce to token swaps.
+
+### Why a `*Configuration` value type instead of direct property setters on each component?
+
+Direct property setters (`avatarView.initials = "AL"`, `avatarView.size = .medium`) allow partial updates: a caller can set `initials` but forget to set `size`, leaving the view in an inconsistent intermediate state. A `Configuration` struct is atomic — the component receives a complete snapshot and applies it in one `configure(_:)` call. Invalid combinations can be caught at the struct level before any layout runs. The component owns layout and style; the caller owns data — clean separation.
+
+### Why UIKit for collection view cells and scroll-heavy lists, not SwiftUI?
+
+SwiftUI's `List` and `LazyVStack` do not expose `UICollectionViewDataSourcePrefetching` — the protocol that lets you trigger image prefetch before a cell is visible. For chat and feed use cases, prefetching is the difference between smooth scroll and visible loading. UIKit's `willDisplay(_:forItemAt:)` and `prefetchDataSource` give granular scroll lifecycle control that SwiftUI abstracts away. SwiftUI is the right choice for state-driven, self-contained surfaces (empty states, modals, action sheets) where scroll lifecycle doesn't matter.
+
+### Why `UIHostingView` over `UIHostingController` for inline SwiftUI?
+
+`UIHostingController` is a `UIViewController`. Embedding it for a single view (e.g. a loading overlay) adds it to the view controller hierarchy — it participates in `viewWillAppear`, `viewDidLayoutSubviews`, and similar lifecycle calls that are irrelevant for an overlay. `UIHostingView<Content>` is a plain `UIView` subclass: it lives in the view hierarchy, not the controller hierarchy. Auto Layout treats it like any other view. No lifecycle noise, no extra coordinator delegate wiring.
+
+### Why is `MDSAudioPlayerView` the only UIKit component with a `UIViewRepresentable` wrapper?
+
+All other MDS UIKit components (`MDSAvatarView`, `MDSEmptyStateView`) have native SwiftUI counterparts (`MDSAvatar`, `MDSEmptyState`) that are built with the same tokens and offer identical visual output. Wrapping them via `UIViewRepresentable` would add lifecycle boilerplate for no benefit. `MDSAudioPlayerView` has stateful waveform animation and a `onPlayPause` callback driven by `layoutSubviews` — there is no equivalent SwiftUI animation primitive without reimplementing the animation logic entirely. The wrapper is the pragmatic choice for this one case.
+
+### Why SPM local package instead of embedded targets or a monolith?
+
+An SPM local package enforces hard module boundaries at compile time — a target that doesn't list `MelodifyDesignSystem` in its dependencies cannot import it. An embedded target or folder group is a soft boundary enforced only by convention. The SPM structure also means MDS is trivially extractable to a remote package (e.g. a versioned GitHub release) when the project grows to need it — the consuming apps would change one line in `Package.swift`.
+
+### Interview Q&A
+
+| Question | Answer |
+|---|---|
+| What does "token-first" mean in practice? | Every visual decision (color, spacing, radius, shadow) is a named constant. Changing the brand or supporting theming touches only the token files, never component internals. |
+| Why `*Configuration` instead of setters? | Configuration is atomic — no partial-update bugs. The component receives a complete snapshot and applies it once. Setters allow invalid intermediate states. |
+| Why UIKit for cells in the chat list? | Prefetching via `UICollectionViewDataSourcePrefetching`. SwiftUI has no equivalent API for scroll-ahead image loading. |
+| Why `UIHostingView` and not `UIHostingController`? | `UIHostingController` is a ViewController — it adds unnecessary lifecycle overhead for an inline view embedding. `UIHostingView` is a plain `UIView` and slots into Auto Layout directly. |
+| Can MDS be shipped as a remote package? | Yes. The SPM local package structure is ready. Change the `Package.swift` dependency from a local path to a GitHub URL with a version — nothing inside MDS changes. |

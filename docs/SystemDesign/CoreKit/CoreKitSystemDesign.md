@@ -243,3 +243,40 @@ User action in MusicApp
       [dev]  ConsoleAnalyticsGateway → print("[\(event.name)] \(event.params)")
       [test] NoOpAnalyticsGateway   → (silently discarded)
 ```
+
+---
+
+## 6. Technical Deep-dive
+
+### Why `WebSocketClient` is a Swift actor, not a class with a lock?
+
+`WebSocketClient` mutates a `ChannelRouter` that maps channel strings to `AsyncStream.Continuation` instances. Those continuations can be added or removed from any concurrency context — the receive loop, a subscription call, or a disconnect. An actor serialises all of that automatically. A class with `NSLock` would work but requires manual discipline: forget to lock in one path and you get a data race. The actor is the compiler-enforced option.
+
+### Why `ChannelRouter` is a separate private actor, not part of `WebSocketClient`?
+
+Keeping `ChannelRouter` private and separate from the public `WebSocketClient` actor enforces a single responsibility boundary. `WebSocketClient` owns the transport (connect, disconnect, receive loop). `ChannelRouter` owns the routing table. Neither needs to know the internals of the other. It also avoids actor reentrancy issues — a call to `yield` on `ChannelRouter` from within `WebSocketClient`'s receive loop does not re-enter the client actor.
+
+### Why `LocalDataSourceProtocol` uses `associatedtype` instead of a generic parameter?
+
+A generic parameter `LocalDataSource<DTO>` would require every caller to spell out the full generic type at every injection point. An `associatedtype` lets each concrete type (`TrackLocalDataSource`, `MessageLocalDataSource`) declare its own `DTO` and `Request` types — the call site stays clean and there is no generics explosion through the dependency graph. The trade-off is that `LocalDataSourceProtocol` cannot be used as an existential directly; it's always consumed through a concrete type or a type-erased wrapper, which is the correct usage pattern in a DI composition root.
+
+### Why URLSession only — no third-party networking library?
+
+CoreKit is a shared primitive layer consumed by all mini-apps. Adding Alamofire or Moya would: (1) impose a version constraint on every app that imports CoreKit, (2) add build-time overhead for functionality URLSession already provides, and (3) couple the shared layer to a third party that could be abandoned or break on a Swift/Xcode update. URLSession with `async/await` and `JSONDecoder` covers everything CoreKit needs.
+
+### Why are analytics event concretes (e.g. `MusicAnalyticsEvent`) in each mini-app, not in CoreKit?
+
+`AnalyticsGatewayProtocol` and `AnalyticsEvent` belong in CoreKit because every app needs to track events. But the event *values* (`searchPerformed`, `trackPlayed`) are domain-specific — they know about tracks, playlists, conversations. Domain knowledge has no place in CoreKit. Each mini-app defines its own enum conforming to `AnalyticsEvent`; CoreKit provides only the protocol and the concrete gateway implementations (`ConsoleAnalyticsGateway`, `NoOpAnalyticsGateway`).
+
+### Why no UIKit or SwiftUI in CoreKit?
+
+CoreKit is consumed by the Data layer of every mini-app. The Data layer must not import UIKit or SwiftUI — domain and data layers are framework-agnostic by design. If CoreKit imported UIKit, every SPM target that imports CoreKit would transitively pull in UIKit, breaking the layer rule. Pure Foundation + Swift Concurrency keeps CoreKit importable from any layer.
+
+### Interview Q&A
+
+| Question | Answer |
+|---|---|
+| Why is `WebSocketClient` an actor? | Continuations are mutated from multiple contexts — receive loop, subscriptions, disconnects. Actor serialises all access without manual locking. |
+| Why `associatedtype` on `LocalDataSourceProtocol`? | Avoids generic parameter explosion at call sites. Each concrete type declares its own DTO/Request pair; the DI composition root wires the right concrete. |
+| What prevents two apps from interfering on the same WebSocket connection? | `ChannelRouter` namespaces each subscriber by its channel string. A message for `"conv-abc"` is only delivered to the subscriber for that channel, never to unrelated subscribers. |
+| Why no third-party networking? | URLSession + async/await covers all needs. A third-party dependency in a shared package constrains every app that imports it. |

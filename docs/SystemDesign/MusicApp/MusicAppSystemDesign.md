@@ -313,3 +313,40 @@ User taps "New Playlist", enters name + description
       → @Published state → View reloads
       → defer: isLoading = false
 ```
+
+---
+
+## 6. Technical Deep-dive
+
+### Why `FetchPolicy` lives on `Request`, not as a UseCase/Repository parameter
+
+Passing `policy:` as a separate argument forces every call site to carry it, and UseCase signatures change whenever the policy surface changes. Embedding it in `Request.policy` keeps the public API of `UseCase.execute(request:)` stable — callers set the policy when they build the `Request`, and the Repository reads it only at the cache-vs-network decision point. Nothing in between touches it.
+
+### Why `async let` for home fetch but `withThrowingTaskGroup` for genre sections
+
+`async let` is clean for a fixed small number of concurrent tasks (featured tracks + playlists = 2). `withThrowingTaskGroup` is necessary when N is dynamic — the genre list is user-configurable and could be 1 or 10. Choosing the wrong primitive in the other direction would either be over-engineered (group for 2 tasks) or broken at runtime (async let for a variable-length array).
+
+### Why `SearchSessionService` in Domain instead of state in `TrackListViewModel`
+
+Query state (`term`, `page`, `policy`) is used by both search and pagination flows. If it lived in the ViewModel, it would be duplicated for every screen that needs to page through results. A Domain Service is the right home: it outlives a single user action, it's injected, and it encodes a business rule — "reset to page 1 on a new query, advance page on scroll." ViewModels call `begin(query:)` and `advance()` without knowing the state shape.
+
+### Why `PlaylistRepository` has no `LocalDataSource` and no `FetchPolicy`
+
+Playlists are user-owned mutable data. Showing a stale cached playlist while the network loads would hide edits the user just made on another device. The benefit of a cache (avoiding a spinner) is outweighed by the risk of stale state for a list that can be mutated. Remote-only with no caching is the correct trade-off — it keeps `PlaylistRepository` simpler and avoids a cache-invalidation problem.
+
+### Why `Mapper.toDomain` returns `Optional` instead of throwing
+
+A throwing Mapper would force every call site to handle a `try` — but an individual invalid DTO inside a list of 50 is not a fatal error. Returning `nil` lets the Repository filter silently: `dtos.compactMap(TrackMapper.toDomain)` drops the bad item and returns the rest. The user sees 49 tracks instead of an error. Throwing is appropriate at the network layer (bad status code, missing auth); not at the DTO-to-domain translation layer.
+
+### Why `@MainActor` on ViewModel instead of `DispatchQueue.main.async` per update
+
+`@MainActor` is a compile-time guarantee. `DispatchQueue.main.async` is a runtime call that can be forgotten, duplicated, or placed at the wrong granularity. With `@MainActor`, the compiler enforces that all `@Published` mutations happen on the main thread — there is no way to forget.
+
+### Interview Q&A
+
+| Question | Answer |
+|---|---|
+| Where does `FetchPolicy` come from and who reads it? | Set by the ViewModel on the `Request`; read only by `TrackRepository` at the cache branch. Nothing in between touches it. |
+| Why two `async let` instead of sequential awaits on the home screen? | Both fetches are independent — sequential would wait for featured tracks before starting playlists, adding unnecessary latency. `async let` runs them concurrently with a single line of composition. |
+| What happens when `TrackMapper.toDomain` returns `nil`? | `compactMap` drops the nil. The user sees fewer results; the app never crashes on a bad DTO. |
+| Why no playlist cache? | Playlist data is mutable and user-owned. Stale cache creates a worse experience than a spinner. No cache = no cache-invalidation problem. |
