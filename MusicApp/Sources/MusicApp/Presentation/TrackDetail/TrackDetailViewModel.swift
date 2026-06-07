@@ -21,8 +21,7 @@ final class TrackDetailViewModel {
             do {
                 isLoading = true
                 let track = try await getTrackDetailUseCase.execute(
-                    policy: .fresh,
-                    param: GetTrackDetailParam(path: GetTrackDetailPath(id: trackId))
+                    request: GetTrackDetailRequest(path: GetTrackDetailPath(id: trackId), policy: .fresh)
                 )
                 detail = TrackDetailUIModelMapper.toUIModel(track)
             } catch {

@@ -37,10 +37,10 @@ final class TrackListViewModel: ObservableObject {
         Task {
             defer { isLoading = false }
             do {
-                let newTracks = try await searchTracks.execute(policy: session.policy, param: session.param)
+                let newTracks = try await searchTracks.execute(request: session.request)
                 tracks += newTracks.map(TrackUIModelMapper.toUIModel)
-                if session.policy.force {
-                    analytics.track(MusicAnalyticsEvent.searchPerformed(query: session.param.query.term, resultCount: tracks.count))
+                if session.request.policy.force {
+                    analytics.track(MusicAnalyticsEvent.searchPerformed(query: session.request.query.term, resultCount: tracks.count))
                 }
             } catch {
                 errorMessage = error.localizedDescription

@@ -17,16 +17,17 @@ final class HomeViewModel {
         guard !isLoading else { return }
         isLoading = true
 
-        let param = FetchHomeDataParam(
+        let request = FetchHomeDataRequest(
             query: FetchHomeDataQuery(
                 trackQuery: SearchTracksQuery(term: "top hits", page: 1, limit: 20)
-            )
+            ),
+            policy: .cached
         )
 
         Task {
             defer { isLoading = false }
             do {
-                let data = try await fetchHomeData.execute(policy: .cached, param: param)
+                let data = try await fetchHomeData.execute(request: request)
                 let banner = HomeFeedItem.banner(BannerUIModel(title: "Discover Music", subtitle: "Top hits this week"))
                 let tracks = data.featuredTracks.map { HomeFeedItem.track(TrackUIModelMapper.toUIModel($0)) }
                 let playlists = data.playlists.map { HomeFeedItem.playlist(PlaylistUIModelMapper.toUIModel($0)) }

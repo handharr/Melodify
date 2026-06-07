@@ -110,7 +110,7 @@ ViewModel
 
 ```
 UseCase
-  └─ one public method: execute(policy:param:) async throws → Output
+  └─ one public method: execute(request:) async throws → Output
   └─ stateless — created per call or injected
   └─ orchestrates one business action
   └─ calls one or more Repository methods
@@ -145,17 +145,21 @@ Model
   └─ pure Swift structs — no import UIKit, no import Foundation networking
   └─ the only type that crosses all layers
 
-Param
-  └─ typed struct for every UseCase input
-  └─ split into path: and query: sub-structs
-  └─ adding a field doesn't break existing call sites
+Request
+  └─ typed wrapper for every UseCase input: query + path + policy
+  └─ query: sub-struct — the "what" (search term, page, filters)
+  └─ path: sub-struct — the "where" (resource IDs in the URL)
+  └─ policy: FetchPolicy — the "how" (defaults to .fresh; mutations never read it)
+  └─ typealias per UseCase: typealias SearchTracksRequest = Request<SearchTracksQuery, Void>
+  └─ adding a field to query/path doesn't break existing call sites
 
 FetchPolicy
   └─ .fresh   — always hit network, update cache
   └─ .cached  — return cache if available, else network
   └─ .strict  — cache only, throw on miss
-  └─ travels from ViewModel → UseCase → Repository
-  └─ Repository is the only place that interprets it
+  └─ lives on Request.policy — set by ViewModel, read only by Repository
+  └─ defaults to .fresh — mutation Repositories simply never inspect it
+  └─ Data network structs (HTTP payloads) are named *APIRequest to avoid collision
 ```
 
 **UseCase vs Domain Service — when to use which:**
@@ -304,8 +308,10 @@ final class TrackLocalDataSource: TrackLocalDataSourceProtocol {
 | `UseCase` | Domain | No | `SearchTracksUseCase` |
 | `Service` | Domain | Yes | `PlayerService`, `ReservationService` |
 | `Spec` | Domain | No | `OvernightShiftSpec`, `DefaultShiftSpec` |
+| `Request` | Domain | No | `SearchTracksRequest`, `CreatePlaylistRequest` |
 | `Repository` | Data | No | `TrackRepository` |
 | `DataSource` | Data | No | `TrackRemoteDataSource` |
+| `APIRequest` | Data | No | `TrackSearchAPIRequest`, `CreatePlaylistAPIRequest` |
 | `Gateway` | Infrastructure | — | `StripePaymentGateway` |
 | *(SDK name itself)* | External | — | `Stripe`, `CoreData`, `AVFoundation` |
 
@@ -380,13 +386,13 @@ ViewController.viewDidLoad()
       → isLoading = true
 
       // Phase 1 — cache (instant)
-      if let cached = try? await UseCase.execute(policy: .strict, param:)
+      if let cached = try? await UseCase.execute(request: .init(query:, policy: .strict))
           → Repository checks LocalDataSource only — throws on miss
           → ViewModel maps cached Model → UIModel
           → @Published state updated → View renders immediately
 
       // Phase 2 — network (background)
-      let fresh = try await UseCase.execute(policy: .fresh, param:)
+      let fresh = try await UseCase.execute(request: .init(query:, policy: .fresh))
           → Repository fetches RemoteDataSource → DTO → Mapper → Model
           → LocalDataSource.save(dto)
           → ViewModel maps Model → UIModel

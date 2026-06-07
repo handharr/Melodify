@@ -20,8 +20,12 @@ final class PlaylistDetailViewModel {
         Task {
             defer { isLoading = false }
             do {
-                let param = PlaylistDetailParam(query: PlaylistDetailQuery(), path: PlaylistDetailPath(playlistId: playlistId))
-                let result = try await useCase.execute(policy: .fresh, param: param)
+                let request = PlaylistDetailRequest(
+                    query: PlaylistDetailQuery(),
+                    path: PlaylistDetailPath(playlistId: playlistId),
+                    policy: .fresh
+                )
+                let result = try await useCase.execute(request: request)
                 detail = PlaylistDetailUIModel(
                     name: result.playlist.name,
                     description: result.playlist.description,
