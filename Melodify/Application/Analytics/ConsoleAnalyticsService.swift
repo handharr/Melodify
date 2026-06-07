@@ -1,5 +1,7 @@
-final class ConsoleAnalyticsService: AnalyticsServiceProtocol {
-    func track(_ event: AnalyticsEvent) {
-        print("[Analytics] \(event)")
+import CoreKit
+
+final class ConsoleAnalyticsService: AnalyticsGatewayProtocol {
+    func track(_ event: any AnalyticsEvent) {
+        print("[Analytics] \(event.name) \(event.params)")
     }
 }

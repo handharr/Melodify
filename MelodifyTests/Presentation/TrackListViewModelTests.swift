@@ -123,7 +123,7 @@ final class TrackListViewModelTests: XCTestCase {
         sut.search(query: "coldplay")
         await fulfillment(of: [expectation], timeout: 1)
 
-        guard case .searchPerformed(let query, let count) = mockAnalytics.trackedEvents.first else {
+        guard case .searchPerformed(let query, let count) = mockAnalytics.lastMusicEvent else {
             return XCTFail("Expected searchPerformed event")
         }
         XCTAssertEqual(query, "coldplay")
