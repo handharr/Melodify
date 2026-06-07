@@ -19,21 +19,19 @@ public struct WebSocketEnvelope: Codable, Sendable {
 
 public protocol WebSocketClientProtocol: Sendable {
     func connect(to url: URL) async throws
-    func disconnect()
+    func disconnect() async
     func subscribe(channel: String) -> AsyncStream<String>
     func send(payload: String, channel: String) async throws
 }
 
-// One shared connection. Subscribers call subscribe(channel:) to get an
-// AsyncStream scoped to their channel. Incoming envelopes are routed by
-// channel name; unrecognised channels are silently dropped.
-public final class WebSocketClient: WebSocketClientProtocol, @unchecked Sendable {
+// One shared connection. Actor isolation guarantees task mutation is
+// thread-safe without @unchecked Sendable. Subscribers call subscribe(channel:)
+// to get an AsyncStream scoped to their channel. Unrecognised channels are dropped.
+public actor WebSocketClient: WebSocketClientProtocol {
     private var task: URLSessionWebSocketTask?
     private let session: URLSession
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
-
-    // Continuations keyed by channel name. Guarded by the actor below.
     private let router = ChannelRouter()
 
     public init(session: URLSession = .shared) {
@@ -41,18 +39,21 @@ public final class WebSocketClient: WebSocketClientProtocol, @unchecked Sendable
     }
 
     public func connect(to url: URL) async throws {
-        task = session.webSocketTask(with: url)
-        task?.resume()
-        receiveLoop()
+        guard task == nil else { return } // double-connect guard
+        let newTask = session.webSocketTask(with: url)
+        task = newTask
+        newTask.resume()
+        receiveLoop(task: newTask)
     }
 
-    public func disconnect() {
+    public func disconnect() async {
         task?.cancel(with: .goingAway, reason: nil)
         task = nil
-        Task { await router.cancelAll() }
+        await router.cancelAll()
     }
 
-    public func subscribe(channel: String) -> AsyncStream<String> {
+    // nonisolated: defers all state access to Tasks — no actor hop required at call site.
+    public nonisolated func subscribe(channel: String) -> AsyncStream<String> {
         AsyncStream { continuation in
             Task { await router.add(continuation, for: channel) }
             continuation.onTermination = { _ in
@@ -73,9 +74,10 @@ public final class WebSocketClient: WebSocketClientProtocol, @unchecked Sendable
 
     // MARK: - Private
 
-    private func receiveLoop() {
+    // Captures the task directly — loop survives disconnect() setting self.task = nil,
+    // and avoids a repeated actor hop on every receive iteration.
+    private func receiveLoop(task: URLSessionWebSocketTask) {
         Task {
-            guard let task else { return }
             do {
                 while true {
                     let message = try await task.receive()
