@@ -1,10 +1,12 @@
 import UIKit
 import CoreKit
 import MusicApp
+import ChatApp
 
 final class AppCoordinator: DeepLinkHandler {
     private let window: UIWindow
     private var musicCoordinator: MusicCoordinator?
+    private var chatCoordinator: ChatCoordinator?
     private var tabBarController: UITabBarController?
     private var deepLinkObserver: Any?
 
@@ -25,11 +27,16 @@ final class AppCoordinator: DeepLinkHandler {
         music.start()
         musicCoordinator = music
 
+        let webSocketClient = WebSocketClient()
+        let chat = ChatCoordinator(webSocketClient: webSocketClient)
+        chat.start()
+        chatCoordinator = chat
+
         let tabBar = UITabBarController()
         tabBar.viewControllers = [
             music.searchNavigationController,
             music.homeNavigationController,
-            makePlaceholder(title: "Chat", icon: "message", tag: 2),
+            chat.navigationController,
             makePlaceholder(title: "Feed", icon: "newspaper", tag: 3)
         ]
         tabBarController = tabBar

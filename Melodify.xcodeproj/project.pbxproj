@@ -10,6 +10,7 @@
 		B4403E022FBE9E3B0004ADA9 /* MelodifyDesignSystem in Frameworks */ = {isa = PBXBuildFile; productRef = B4403E012FBE9E3B0004ADA9 /* MelodifyDesignSystem */; };
 		B4F25DFF2FD5289800F40E37 /* CoreKit in Frameworks */ = {isa = PBXBuildFile; productRef = B4F25DFE2FD5289800F40E37 /* CoreKit */; };
 		B4F25E022FD528A600F40E37 /* MusicApp in Frameworks */ = {isa = PBXBuildFile; productRef = B4F25E012FD528A600F40E37 /* MusicApp */; };
+		B4F25E032FD528C000F40E37 /* ChatApp in Frameworks */ = {isa = PBXBuildFile; productRef = B4F25E052FD528C000F40E37 /* ChatApp */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -59,6 +60,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				B4F25E022FD528A600F40E37 /* MusicApp in Frameworks */,
+				B4F25E032FD528C000F40E37 /* ChatApp in Frameworks */,
 				B4F25DFF2FD5289800F40E37 /* CoreKit in Frameworks */,
 				B4403E022FBE9E3B0004ADA9 /* MelodifyDesignSystem in Frameworks */,
 			);
@@ -124,6 +126,7 @@
 				B4403E012FBE9E3B0004ADA9 /* MelodifyDesignSystem */,
 				B4F25DFE2FD5289800F40E37 /* CoreKit */,
 				B4F25E012FD528A600F40E37 /* MusicApp */,
+				B4F25E052FD528C000F40E37 /* ChatApp */,
 			);
 			productName = Melodify;
 			productReference = B4FEE2132FB84A5F00626790 /* Melodify.app */;
@@ -211,6 +214,7 @@
 				B4403E002FBE9E3B0004ADA9 /* XCLocalSwiftPackageReference "MelodifyDesignSystem" */,
 				B4F25DFD2FD5289800F40E37 /* XCLocalSwiftPackageReference "CoreKit" */,
 				B4F25E002FD528A600F40E37 /* XCLocalSwiftPackageReference "MusicApp" */,
+				B4F25E042FD528C000F40E37 /* XCLocalSwiftPackageReference "ChatApp" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = B4FEE2142FB84A5F00626790 /* Products */;
@@ -646,6 +650,10 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = MusicApp;
 		};
+		B4F25E042FD528C000F40E37 /* XCLocalSwiftPackageReference "ChatApp" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ChatApp;
+		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -660,6 +668,11 @@
 		B4F25E012FD528A600F40E37 /* MusicApp */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = MusicApp;
+		};
+		B4F25E052FD528C000F40E37 /* ChatApp */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B4F25E042FD528C000F40E37 /* XCLocalSwiftPackageReference "ChatApp" */;
+			productName = ChatApp;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

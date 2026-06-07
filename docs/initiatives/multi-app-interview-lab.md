@@ -100,12 +100,12 @@ No optionals for content type. Switch exhaustively in the cell factory.
 - [x] Philosophy hardened — `RepositoryProtocol` added as explicit Domain component; Domain Service three-test diagnostic + smell test vs Repository; `Spec` suffix introduced for stateless business rules (`Domain/Specs/`); suffix clarity table updated with stateful column
 - [x] `Param` replaced by `Request<Query, Path>` — unified UseCase input carrying query + path + `policy: FetchPolicy` (`.fresh` default); all `*Param` typealiases renamed to `*Request`; `policy:` dropped from UseCase/Repository signatures; Data HTTP structs renamed to `*APIRequest` to avoid collision; philosophy updated with `Request` and `APIRequest` suffix rows
 
-### Phase 2 — ChatApp
-- [ ] Design WebSocket multiplexing layer in CoreKit
-- [ ] Implement type-safe `MessageContent` enum
-- [ ] Offline send queue (persist unsent messages, retry on reconnect)
-- [ ] Mock JSON/local data source for conversations and messages
-- [ ] UICollectionView with heterogeneous cells (text, image, audio)
+### Phase 2 — ChatApp ✅
+- [x] Design WebSocket multiplexing layer in CoreKit
+- [x] Implement type-safe `MessageContent` enum
+- [x] Offline send queue (persist unsent messages, retry on reconnect)
+- [x] Mock JSON/local data source for conversations and messages
+- [x] UICollectionView with heterogeneous cells (text, image, audio)
 
 ### Phase 3 — FeedApp
 - [ ] Heterogeneous feed items (post, story strip, ad, suggested users)
