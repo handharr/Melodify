@@ -25,7 +25,6 @@ Workers read this file at runtime. The philosophy doc (`docs/ios-app-system-desi
 | Infrastructure wrapper | `<Vendor><Domain>Gateway` — vendor-prefixed | `StripePaymentGateway` |
 
 **Exception:** bare `LocalDataSource` / `RemoteDataSource` is acceptable only in:
-- Delta table "Generic" column
 - Pattern-level callouts (e.g. "every repo has a LocalDataSource and a RemoteDataSource")
 - Type-annotation diagrams
 
@@ -53,15 +52,16 @@ Violations to flag:
 
 ## Section 3 — Architecture Layer Structure
 
-Every scenario must cover all 5 layers. Unused layers marked `None`.
+Full-stack apps (MusicApp, ChatApp) cover all 6 layers. SPM packages (CoreKit, MelodifyDesignSystem) omit layers they genuinely don't have — mark unused layers `None` or omit the row.
 
-Layer order (top to bottom in docs): **Presentation → Domain → Infrastructure → Data → External → Application**
+Layer order (top to bottom in docs): **Presentation → Domain → Data → Application → Infrastructure → External**
 
 **Domain sublayers** (always grouped in this order):
 1. UseCases
 2. Services (or `None`)
-3. Models
-4. Params
+3. Specs (or `None`) — pure stateless business logic; `Domain/Specs/`
+4. Models
+5. Requests
 
 **Data sublayers** (always grouped in this order):
 1. Repositories
@@ -90,7 +90,7 @@ Layer order (top to bottom in docs): **Presentation → Domain → Infrastructur
 
 ## Section 5 — Generic Content Blocklist
 
-Remove from scenario `.md` files — belongs only in the philosophy doc:
+Remove from system design `.md` files — belongs only in the philosophy doc:
 
 - "Why MVVM over MVP?" / "Why MVVM over VIPER?"
 - "Why Clean Architecture over MVC?"
@@ -98,7 +98,7 @@ Remove from scenario `.md` files — belongs only in the philosophy doc:
 - "UseCase vs Domain Service" comparison table
 - "Domain Service vs Gateway" comparison table
 
-**Test:** would this exact explanation appear unchanged in every other scenario? If yes → generic → remove.
+**Test:** would this exact explanation appear unchanged in every other app? If yes → generic → remove.
 
 ---
 
@@ -140,7 +140,7 @@ that participates in a connection arc must carry an `id` attribute.
 ### ID scheme
 
 ```
-{scenario-prefix}-{component-kebab-name}
+{app-prefix}-{component-kebab-name}
 ```
 
 | App                    | Prefix |
@@ -199,7 +199,7 @@ When adding or renaming a chip in `system-design-recall.html`:
 2. Add/update the corresponding entry in `PATHS`
 3. Place the chip in the correct sub-group within its column
 
-When adding a new scenario:
+When adding a new app:
 1. Choose a unique prefix (2–4 chars, lowercase, no hyphens)
 2. Add the prefix to the table above
 3. Add chip IDs to all connection-participant chips
@@ -225,8 +225,8 @@ in the recall card. Absorbing it into a neighbour's sub-text and skipping it in 
 | LocalDS mentioned only in Repository sub-text | LocalDS has its own `chip ds` in the DataSource group |
 | `API → Repository` arc (RemoteDS skipped) | `API → APIClient → RemoteDS → Repository` or `API → APIClient → Repository` when RemoteDS is not a named separate class |
 
-**Rule:** if a component has a named class in the scenario `.md` (e.g. `RestaurantLocalDataSource`,
-`MessageStreamDataSource`), it must be a chip in the recall card with its own `id` and appear in `PATHS`.
+**Rule:** if a component has a named class in the app's `.md` (e.g. `TrackLocalDataSource`,
+`MessageLocalDataSource`), it must be a chip in the recall card with its own `id` and appear in `PATHS`.
 
 ### External chip naming
 
@@ -240,7 +240,7 @@ Use the concrete technology name, never a generic label:
 | `Network` | `URLSession` (or omit — already implied by `APIClient`) |
 
 **Exception:** `API` and `Storage` are acceptable only as the chip label in the `API` endpoint group
-and as a fallback when the scenario genuinely uses multiple storage backends with no single name.
+and as a fallback when the app genuinely uses multiple storage backends with no single name.
 
 ### PATHS completeness check
 
