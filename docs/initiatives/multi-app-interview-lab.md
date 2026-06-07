@@ -97,6 +97,7 @@ No optionals for content type. Switch exhaustively in the cell factory.
 - [x] `AnalyticsEvent` made app-agnostic — protocol with `name`/`params` in CoreKit; `MusicAnalyticsEvent` enum in `MusicApp/Domain/Analytics/`
 - [x] Analytics concretes in CoreKit — `ConsoleAnalyticsGateway` (dev/debug), `NoOpAnalyticsGateway` (test/preview); host app `ConsoleAnalyticsService` removed
 - [x] Image loading stack — `ImageDataSourceProtocol` + `ImagePrefetcherProtocol` in CoreKit; `URLSessionImageDataSource` + `NoOpImagePrefetcher` as dev/test stubs; `ImageDataSource` (SDWebImage stub) in `MusicApp/Data/`; `ImageRepositoryProtocol` in `MusicApp/Domain/`; `ImageRepository` in `MusicApp/Data/` wires DataSource + Prefetcher
+- [x] Philosophy hardened — `RepositoryProtocol` added as explicit Domain component; Domain Service three-test diagnostic + smell test vs Repository; `Spec` suffix introduced for stateless business rules (`Domain/Specs/`); suffix clarity table updated with stateful column
 
 ### Phase 2 — ChatApp
 - [ ] Design WebSocket multiplexing layer in CoreKit
