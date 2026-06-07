@@ -1,0 +1,82 @@
+{
+  "": {
+    "swift-dependencies": "/Users/puras.handharmahuamekari.com/Workspace/Melodify/ChatApp/.build/index-build/arm64-apple-macosx/debug/CoreKit.build/primary.swiftdeps"
+  },
+  "/Users/puras.handharmahuamekari.com/Workspace/Melodify/CoreKit/Sources/CoreKit/Analytics/AnalyticsEvent.swift": {
+    "dependencies": "/Users/puras.handharmahuamekari.com/Workspace/Melodify/ChatApp/.build/index-build/arm64-apple-macosx/debug/CoreKit.build/AnalyticsEvent.d",
+    "object": "/Users/puras.handharmahuamekari.com/Workspace/Melodify/ChatApp/.build/index-build/arm64-apple-macosx/debug/CoreKit.build/AnalyticsEvent.swift.o",
+    "swiftmodule": "/Users/puras.handharmahuamekari.com/Workspace/Melodify/ChatApp/.build/index-build/arm64-apple-macosx/debug/CoreKit.build/AnalyticsEvent~partial.swiftmodule",
+    "swift-dependencies": "/Users/puras.handharmahuamekari.com/Workspace/Melodify/ChatApp/.build/index-build/arm64-apple-macosx/debug/CoreKit.build/AnalyticsEvent.swiftdeps",
+    "diagnostics": "/Users/puras.handharmahuamekari.com/Workspace/Melodify/ChatApp/.build/index-build/arm64-apple-macosx/debug/CoreKit.build/AnalyticsEvent.dia"
+  },
+  "/Users/puras.handharmahuamekari.com/Workspace/Melodify/CoreKit/Sources/CoreKit/Analytics/AnalyticsGatewayProtocol.swift": {
+    "dependencies": "/Users/puras.handharmahuamekari.com/Workspace/Melodify/ChatApp/.build/index-build/arm64-apple-macosx/debug/CoreKit.build/AnalyticsGatewayProtocol.d",
+    "object": "/Users/puras.handharmahuamekari.com/Workspace/Melodify/ChatApp/.build/index-build/arm64-apple-macosx/debug/CoreKit.build/AnalyticsGatewayProtocol.swift.o",
+    "swiftmodule": "/Users/puras.handharmahuamekari.com/Workspace/Melodify/ChatApp/.build/index-build/arm64-apple-macosx/debug/CoreKit.build/AnalyticsGatewayProtocol~partial.swiftmodule",
+    "swift-dependencies": "/Users/puras.handharmahuamekari.com/Workspace/Melodify/ChatApp/.build/index-build/arm64-apple-macosx/debug/CoreKit.build/AnalyticsGatewayProtocol.swiftdeps",
+    "diagnostics": "/Users/puras.handharmahuamekari.com/Workspace/Melodify/ChatApp/.build/index-build/arm64-apple-macosx/debug/CoreKit.build/AnalyticsGatewayProtocol.dia"
+  },
+  "/Users/puras.handharmahuamekari.com/Workspace/Melodify/CoreKit/Sources/CoreKit/Analytics/ConsoleAnalyticsGateway.swift": {
+    "dependencies": "/Users/puras.handharmahuamekari.com/Workspace/Melodify/ChatApp/.build/index-build/arm64-apple-macosx/debug/CoreKit.build/ConsoleAnalyticsGateway.d",
+    "object": "/Users/puras.handharmahuamekari.com/Workspace/Melodify/ChatApp/.build/index-build/arm64-apple-macosx/debug/CoreKit.build/ConsoleAnalyticsGateway.swift.o",
+    "swiftmodule": "/Users/puras.handharmahuamekari.com/Workspace/Melodify/ChatApp/.build/index-build/arm64-apple-macosx/debug/CoreKit.build/ConsoleAnalyticsGateway~partial.swiftmodule",
+    "swift-dependencies": "/Users/puras.handharmahuamekari.com/Workspace/Melodify/ChatApp/.build/index-build/arm64-apple-macosx/debug/CoreKit.build/ConsoleAnalyticsGateway.swiftdeps",
+    "diagnostics": "/Users/puras.handharmahuamekari.com/Workspace/Melodify/ChatApp/.build/index-build/arm64-apple-macosx/debug/CoreKit.build/ConsoleAnalyticsGateway.dia"
+  },
+  "/Users/puras.handharmahuamekari.com/Workspace/Melodify/CoreKit/Sources/CoreKit/Analytics/NoOpAnalyticsGateway.swift": {
+    "dependencies": "/Users/puras.handharmahuamekari.com/Workspace/Melodify/ChatApp/.build/index-build/arm64-apple-macosx/debug/CoreKit.build/NoOpAnalyticsGateway.d",
+    "object": "/Users/puras.handharmahuamekari.com/Workspace/Melodify/ChatApp/.build/index-build/arm64-apple-macosx/debug/CoreKit.build/NoOpAnalyticsGateway.swift.o",
+    "swiftmodule": "/Users/puras.handharmahuamekari.com/Workspace/Melodify/ChatApp/.build/index-build/arm64-apple-macosx/debug/CoreKit.build/NoOpAnalyticsGateway~partial.swiftmodule",
+    "swift-dependencies": "/Users/puras.handharmahuamekari.com/Workspace/Melodify/ChatApp/.build/index-build/arm64-apple-macosx/debug/CoreKit.build/NoOpAnalyticsGateway.swiftdeps",
+    "diagnostics": "/Users/puras.handharmahuamekari.com/Workspace/Melodify/ChatApp/.build/index-build/arm64-apple-macosx/debug/CoreKit.build/NoOpAnalyticsGateway.dia"
+  },
+  "/Users/puras.handharmahuamekari.com/Workspace/Melodify/CoreKit/Sources/CoreKit/ImageLoading/ImageDataSourceProtocol.swift": {
+    "dependencies": "/Users/puras.handharmahuamekari.com/Workspace/Melodify/ChatApp/.build/index-build/arm64-apple-macosx/debug/CoreKit.build/ImageDataSourceProtocol.d",
+    "object": "/Users/puras.handharmahuamekari.com/Workspace/Melodify/ChatApp/.build/index-build/arm64-apple-macosx/debug/CoreKit.build/ImageDataSourceProtocol.swift.o",
+    "swiftmodule": "/Users/puras.handharmahuamekari.com/Workspace/Melodify/ChatApp/.build/index-build/arm64-apple-macosx/debug/CoreKit.build/ImageDataSourceProtocol~partial.swiftmodule",
+    "swift-dependencies": "/Users/puras.handharmahuamekari.com/Workspace/Melodify/ChatApp/.build/index-build/arm64-apple-macosx/debug/CoreKit.build/ImageDataSourceProtocol.swiftdeps",
+    "diagnostics": "/Users/puras.handharmahuamekari.com/Workspace/Melodify/ChatApp/.build/index-build/arm64-apple-macosx/debug/CoreKit.build/ImageDataSourceProtocol.dia"
+  },
+  "/Users/puras.handharmahuamekari.com/Workspace/Melodify/CoreKit/Sources/CoreKit/ImageLoading/ImagePrefetcherProtocol.swift": {
+    "dependencies": "/Users/puras.handharmahuamekari.com/Workspace/Melodify/ChatApp/.build/index-build/arm64-apple-macosx/debug/CoreKit.build/ImagePrefetcherProtocol.d",
+    "object": "/Users/puras.handharmahuamekari.com/Workspace/Melodify/ChatApp/.build/index-build/arm64-apple-macosx/debug/CoreKit.build/ImagePrefetcherProtocol.swift.o",
+    "swiftmodule": "/Users/puras.handharmahuamekari.com/Workspace/Melodify/ChatApp/.build/index-build/arm64-apple-macosx/debug/CoreKit.build/ImagePrefetcherProtocol~partial.swiftmodule",
+    "swift-dependencies": "/Users/puras.handharmahuamekari.com/Workspace/Melodify/ChatApp/.build/index-build/arm64-apple-macosx/debug/CoreKit.build/ImagePrefetcherProtocol.swiftdeps",
+    "diagnostics": "/Users/puras.handharmahuamekari.com/Workspace/Melodify/ChatApp/.build/index-build/arm64-apple-macosx/debug/CoreKit.build/ImagePrefetcherProtocol.dia"
+  },
+  "/Users/puras.handharmahuamekari.com/Workspace/Melodify/CoreKit/Sources/CoreKit/ImageLoading/NoOpImagePrefetcher.swift": {
+    "dependencies": "/Users/puras.handharmahuamekari.com/Workspace/Melodify/ChatApp/.build/index-build/arm64-apple-macosx/debug/CoreKit.build/NoOpImagePrefetcher.d",
+    "object": "/Users/puras.handharmahuamekari.com/Workspace/Melodify/ChatApp/.build/index-build/arm64-apple-macosx/debug/CoreKit.build/NoOpImagePrefetcher.swift.o",
+    "swiftmodule": "/Users/puras.handharmahuamekari.com/Workspace/Melodify/ChatApp/.build/index-build/arm64-apple-macosx/debug/CoreKit.build/NoOpImagePrefetcher~partial.swiftmodule",
+    "swift-dependencies": "/Users/puras.handharmahuamekari.com/Workspace/Melodify/ChatApp/.build/index-build/arm64-apple-macosx/debug/CoreKit.build/NoOpImagePrefetcher.swiftdeps",
+    "diagnostics": "/Users/puras.handharmahuamekari.com/Workspace/Melodify/ChatApp/.build/index-build/arm64-apple-macosx/debug/CoreKit.build/NoOpImagePrefetcher.dia"
+  },
+  "/Users/puras.handharmahuamekari.com/Workspace/Melodify/CoreKit/Sources/CoreKit/ImageLoading/URLSessionImageDataSource.swift": {
+    "dependencies": "/Users/puras.handharmahuamekari.com/Workspace/Melodify/ChatApp/.build/index-build/arm64-apple-macosx/debug/CoreKit.build/URLSessionImageDataSource.d",
+    "object": "/Users/puras.handharmahuamekari.com/Workspace/Melodify/ChatApp/.build/index-build/arm64-apple-macosx/debug/CoreKit.build/URLSessionImageDataSource.swift.o",
+    "swiftmodule": "/Users/puras.handharmahuamekari.com/Workspace/Melodify/ChatApp/.build/index-build/arm64-apple-macosx/debug/CoreKit.build/URLSessionImageDataSource~partial.swiftmodule",
+    "swift-dependencies": "/Users/puras.handharmahuamekari.com/Workspace/Melodify/ChatApp/.build/index-build/arm64-apple-macosx/debug/CoreKit.build/URLSessionImageDataSource.swiftdeps",
+    "diagnostics": "/Users/puras.handharmahuamekari.com/Workspace/Melodify/ChatApp/.build/index-build/arm64-apple-macosx/debug/CoreKit.build/URLSessionImageDataSource.dia"
+  },
+  "/Users/puras.handharmahuamekari.com/Workspace/Melodify/CoreKit/Sources/CoreKit/Network/APIClient.swift": {
+    "dependencies": "/Users/puras.handharmahuamekari.com/Workspace/Melodify/ChatApp/.build/index-build/arm64-apple-macosx/debug/CoreKit.build/APIClient.d",
+    "object": "/Users/puras.handharmahuamekari.com/Workspace/Melodify/ChatApp/.build/index-build/arm64-apple-macosx/debug/CoreKit.build/APIClient.swift.o",
+    "swiftmodule": "/Users/puras.handharmahuamekari.com/Workspace/Melodify/ChatApp/.build/index-build/arm64-apple-macosx/debug/CoreKit.build/APIClient~partial.swiftmodule",
+    "swift-dependencies": "/Users/puras.handharmahuamekari.com/Workspace/Melodify/ChatApp/.build/index-build/arm64-apple-macosx/debug/CoreKit.build/APIClient.swiftdeps",
+    "diagnostics": "/Users/puras.handharmahuamekari.com/Workspace/Melodify/ChatApp/.build/index-build/arm64-apple-macosx/debug/CoreKit.build/APIClient.dia"
+  },
+  "/Users/puras.handharmahuamekari.com/Workspace/Melodify/CoreKit/Sources/CoreKit/Network/WebSocketClient.swift": {
+    "dependencies": "/Users/puras.handharmahuamekari.com/Workspace/Melodify/ChatApp/.build/index-build/arm64-apple-macosx/debug/CoreKit.build/WebSocketClient.d",
+    "object": "/Users/puras.handharmahuamekari.com/Workspace/Melodify/ChatApp/.build/index-build/arm64-apple-macosx/debug/CoreKit.build/WebSocketClient.swift.o",
+    "swiftmodule": "/Users/puras.handharmahuamekari.com/Workspace/Melodify/ChatApp/.build/index-build/arm64-apple-macosx/debug/CoreKit.build/WebSocketClient~partial.swiftmodule",
+    "swift-dependencies": "/Users/puras.handharmahuamekari.com/Workspace/Melodify/ChatApp/.build/index-build/arm64-apple-macosx/debug/CoreKit.build/WebSocketClient.swiftdeps",
+    "diagnostics": "/Users/puras.handharmahuamekari.com/Workspace/Melodify/ChatApp/.build/index-build/arm64-apple-macosx/debug/CoreKit.build/WebSocketClient.dia"
+  },
+  "/Users/puras.handharmahuamekari.com/Workspace/Melodify/CoreKit/Sources/CoreKit/Persistence/LocalDataSourceProtocol.swift": {
+    "dependencies": "/Users/puras.handharmahuamekari.com/Workspace/Melodify/ChatApp/.build/index-build/arm64-apple-macosx/debug/CoreKit.build/LocalDataSourceProtocol.d",
+    "object": "/Users/puras.handharmahuamekari.com/Workspace/Melodify/ChatApp/.build/index-build/arm64-apple-macosx/debug/CoreKit.build/LocalDataSourceProtocol.swift.o",
+    "swiftmodule": "/Users/puras.handharmahuamekari.com/Workspace/Melodify/ChatApp/.build/index-build/arm64-apple-macosx/debug/CoreKit.build/LocalDataSourceProtocol~partial.swiftmodule",
+    "swift-dependencies": "/Users/puras.handharmahuamekari.com/Workspace/Melodify/ChatApp/.build/index-build/arm64-apple-macosx/debug/CoreKit.build/LocalDataSourceProtocol.swiftdeps",
+    "diagnostics": "/Users/puras.handharmahuamekari.com/Workspace/Melodify/ChatApp/.build/index-build/arm64-apple-macosx/debug/CoreKit.build/LocalDataSourceProtocol.dia"
+  }
+}

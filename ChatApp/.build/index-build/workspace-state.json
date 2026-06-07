@@ -1,0 +1,27 @@
+{
+  "object" : {
+    "artifacts" : [
+
+    ],
+    "dependencies" : [
+      {
+        "basedOn" : null,
+        "packageRef" : {
+          "identity" : "corekit",
+          "kind" : "fileSystem",
+          "location" : "/Users/puras.handharmahuamekari.com/Workspace/Melodify/CoreKit",
+          "name" : "CoreKit"
+        },
+        "state" : {
+          "name" : "fileSystem",
+          "path" : "/Users/puras.handharmahuamekari.com/Workspace/Melodify/CoreKit"
+        },
+        "subpath" : "corekit"
+      }
+    ],
+    "prebuilts" : [
+
+    ]
+  },
+  "version" : 7
+}

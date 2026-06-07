@@ -1,0 +1,20 @@
+[
+  {
+    "id": "msg-6",
+    "conversation_id": "conv-2",
+    "sender_id": "user-bob",
+    "type": "text",
+    "text": "Are you coming to the gig tonight?",
+    "created_at": "2026-06-07T08:20:00Z",
+    "status": "read"
+  },
+  {
+    "id": "msg-7",
+    "conversation_id": "conv-2",
+    "sender_id": "me",
+    "type": "text",
+    "text": "Sounds good, see you there!",
+    "created_at": "2026-06-07T08:30:00Z",
+    "status": "sent"
+  }
+]

@@ -1,0 +1,18 @@
+[
+  {
+    "id": "conv-1",
+    "participant_ids": ["me", "user-alice"],
+    "participant_names": { "me": "You", "user-alice": "Alice" },
+    "last_message": "Check out this photo 📷",
+    "last_message_at": "2026-06-07T10:01:00Z",
+    "unread_count": 2
+  },
+  {
+    "id": "conv-2",
+    "participant_ids": ["me", "user-bob"],
+    "participant_names": { "me": "You", "user-bob": "Bob" },
+    "last_message": "Sounds good, see you there!",
+    "last_message_at": "2026-06-07T08:30:00Z",
+    "unread_count": 0
+  }
+]
