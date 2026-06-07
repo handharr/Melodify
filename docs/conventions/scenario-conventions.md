@@ -1,9 +1,11 @@
 # Scenario Conventions
 
-Machine-readable rules for all three scenario doc types:
-- `docs/scenarios/*.md` — scenario markdown docs
-- `docs/deck/scenarios/*.html` — scenario HTML decks
+Machine-readable rules for all three doc types:
+- `docs/SystemDesign/<App>/<App>SystemDesign.md` — system design markdown docs
+- `docs/deck/SystemDesign/<App>SystemDesign.html` — system design HTML decks
 - `docs/deck/system-design-recall.html` — recall card with SVG connection arcs
+
+Apps: `MusicApp`, `ChatApp`, `CoreKit`, `MelodifyDesignSystem`
 
 Workers read this file at runtime. The philosophy doc (`docs/ios-app-system-design-philosophy.md`) is the human-readable narrative; this file is the authoritative rule set.
 
@@ -100,28 +102,33 @@ Remove from scenario `.md` files — belongs only in the philosophy doc:
 
 ---
 
-## Section 6 — Delta Section Requirements
+## Section 6 — Technical Deep-dive Requirements
 
-Every scenario `.md` must contain this section with this exact structure:
+Every system design `.md` must contain this section with this exact structure:
 
 ```markdown
-## Delta — What This Scenario Adds
+## 6. Technical Deep-dive
 
-### Same as generic architecture
-- (bullet list — patterns shared with every other scenario)
+### Why [specific question unique to this app]?
+[rationale — scenario-specific only; see Section 5 blocklist]
 
-### What this scenario adds
-| Concept | Generic | This Scenario |
-|---|---|---|
+### Why [another specific question]?
+[rationale]
 
-### Key decisions unique to this scenario
-- (bullet list — the "why" for each delta item)
+...one ### subsection per key decision...
+
+### Interview Q&A
+
+| Question | Answer |
+|---|---|
 ```
 
 Rules:
-- Nothing scenario-specific in the "Same as generic" list
-- Nothing generic in the delta table
-- Every row in the delta table must have a corresponding bullet in "Key decisions"
+- All "why" rationale, trade-offs, and "X over Y" decisions belong **exclusively** here
+- Sections 1–5 are pure design — no rationale paragraphs, no bold **Why?** sentences
+- Every `### Why` subsection must be scenario-specific (blocklist test: would it appear unchanged in every other app? If yes → remove)
+- The `### Interview Q&A` table is always the last subsection
+- Minimum 3 `### Why` subsections per app; typical range 5–7
 
 ---
 
@@ -136,16 +143,14 @@ that participates in a connection arc must carry an `id` attribute.
 {scenario-prefix}-{component-kebab-name}
 ```
 
-| Scenario            | Prefix |
-|---------------------|--------|
-| Uber Eats           | `ue`   |
-| Messenger           | `ms`   |
-| Music Streaming     | `mst`  |
-| Instagram News Feed | `ig`   |
-| Hotel Booking       | `hb`   |
-| Story Viewer        | `sv`   |
+| App                    | Prefix |
+|------------------------|--------|
+| MusicApp               | `mus`  |
+| ChatApp                | `cha`  |
+| CoreKit                | `ck`   |
+| MelodifyDesignSystem   | `mds`  |
 
-Examples: `id="ue-basket-repo"`, `id="ms-msg-stream-svc"`, `id="hb-stripe"`
+Examples: `id="mus-track-repo"`, `id="cha-msg-stream-svc"`, `id="ck-ws-client"`
 
 ### PATHS array
 
@@ -206,7 +211,7 @@ When adding a new scenario:
 ## Section 8 — Recall Diagram Fidelity Rules
 
 `system-design-recall.html` must faithfully reflect the layer structure in the corresponding
-scenario `.md` and `docs/deck/scenarios/*.html`. It is a compressed view — not a simplified one.
+app `.md` and `docs/deck/SystemDesign/<App>SystemDesign.html`. It is a compressed view — not a simplified one.
 Compression is allowed (fewer rows, merged sub-text); architectural shortcuts are not.
 
 ### Layer chain fidelity
@@ -247,7 +252,7 @@ Before committing a recall card change, verify:
 
 ### Sync trigger
 
-Update `system-design-recall.html` whenever any of the following change in a scenario:
-- A component is added, removed, or renamed in the `.md` Layer Breakdown
-- A new flow row is added or removed in the `.md` Data Flow section
-- An endpoint is added or removed in the `.md` API Design section
+Update `system-design-recall.html` whenever any of the following change in an app's `.md`:
+- A component is added, removed, or renamed in the High-Level Design section (§4)
+- A new flow is added or removed in the Data Flow section (§5)
+- An endpoint is added or removed in the API Design section (§2)
