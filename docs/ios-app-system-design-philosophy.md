@@ -130,6 +130,17 @@ RepositoryProtocol
   └─ this is Dependency Inversion: Domain owns the interface, Data fulfills it
   └─ lives in Domain/Interfaces/
 
+Spec
+  └─ stateless pure business logic — no state, no data requirements, no SDK imports
+  └─ encapsulates a named business rule or decision that is too complex for a Model
+     computed property and has no orchestration to justify a UseCase
+  └─ static methods or a simple struct — never injected, never app-scoped
+  └─ reusable across multiple UseCases without duplication
+  └─ lives in Domain/Specs/
+  └─ examples: OvernightShiftSpec, DefaultShiftSpec, AttendanceEligibilitySpec
+  └─ naming conflict with Quick/Nimble test specs: resolved by module isolation
+     (Domain/Specs/ vs Tests/Specs/) — no compiler conflict, folder makes intent clear
+
 Model
   └─ pure Swift structs — no import UIKit, no import Foundation networking
   └─ the only type that crosses all layers
@@ -288,14 +299,15 @@ final class TrackLocalDataSource: TrackLocalDataSourceProtocol {
 
 **Suffix clarity — one suffix per layer:**
 
-| Suffix | Layer | Example |
-|---|---|---|
-| `UseCase` | Domain | `SearchTracksUseCase` |
-| `Service` | Domain | `PlayerService`, `ReservationService` |
-| `Repository` | Data | `TrackRepository` |
-| `DataSource` | Data | `TrackRemoteDataSource` |
-| `Gateway` | Infrastructure | `StripePaymentGateway` |
-| *(SDK name itself)* | External | `Stripe`, `CoreData`, `AVFoundation` |
+| Suffix | Layer | Stateful? | Example |
+|---|---|---|---|
+| `UseCase` | Domain | No | `SearchTracksUseCase` |
+| `Service` | Domain | Yes | `PlayerService`, `ReservationService` |
+| `Spec` | Domain | No | `OvernightShiftSpec`, `DefaultShiftSpec` |
+| `Repository` | Data | No | `TrackRepository` |
+| `DataSource` | Data | No | `TrackRemoteDataSource` |
+| `Gateway` | Infrastructure | — | `StripePaymentGateway` |
+| *(SDK name itself)* | External | — | `Stripe`, `CoreData`, `AVFoundation` |
 
 ### External
 
