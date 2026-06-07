@@ -184,13 +184,45 @@ SwiftUI screen (View)
 
 #### Deliverables
 
-- [ ] Expand tokens: `Radius.swift`, `Elevation.swift`, semantic `Color.swift` (retire `UIColor+Tokens` extension pattern)
-- [ ] New UIKit components: `MDSAvatarView`, `MDSBadgeView`, `MDSMessageBubble`, `MDSAudioPlayerView`, `MDSLoadingView`
-- [ ] SwiftUI components: `DSButton`, `DSEmptyState`, `DSAvatar`, `DSBadge`, `DSLoadingOverlay`
-- [ ] Bridge: `UIHostingView`, `UIViewRepresentable` convenience wrappers
-- [ ] Retrofit MusicApp: `TrackCell`, `TrackListViewController` empty state, `TrackDetailViewController`
-- [ ] Retrofit ChatApp: `ConversationCell`, `TextMessageCell`, `AudioMessageCell`, `ChatViewController` input bar
-- [ ] SwiftUI Previews catalog: one file per component, light + dark variants
+**Tokens**
+- [ ] `Radius.swift` — corner radius scale (xs → full/pill)
+- [ ] `Elevation.swift` — shadow tokens (low, mid, high)
+- [ ] `Color.swift` — semantic tokens (primary, surface, error, warning, success, onPrimary…); retire `UIColor+Tokens` extension pattern
+
+**UIKit components (Atoms → Molecules → Organisms)**
+- [ ] `MDSAvatarView` *(atom)* — circular image with initials fallback, configurable size
+- [ ] `MDSBadgeView` *(atom)* — numeric unread badge, auto-hides at zero
+- [ ] `MDSLoadingView` *(atom)* — spinner + optional label, inline and full-screen variants
+- [ ] `MDSMessageBubble` *(molecule)* — text bubble with outgoing/incoming variant, status indicator
+- [ ] `MDSAudioPlayerView` *(molecule)* — waveform icon + duration label + play/pause state
+
+**SwiftUI components**
+- [ ] `DSButton` *(atom)* — ButtonStyle with filled and outlined variants
+- [ ] `DSBadge` *(atom)* — ViewModifier, overlays a count badge on any View
+- [ ] `DSAvatar` *(molecule)* — async image + initials fallback, wraps `MDSAvatarView` via representable
+- [ ] `DSEmptyState` *(organism)* — icon + title + subtitle + optional action, wraps `MDSEmptyStateView`
+- [ ] `DSLoadingOverlay` *(molecule)* — translucent fullscreen spinner, shown via `.overlay`
+
+**Bridge**
+- [ ] `UIHostingView<Content>` — UIView subclass hosting a SwiftUI View inline (no child ViewController)
+- [ ] `UIViewRepresentable` wrappers for `MDSAvatarView` and `MDSAudioPlayerView`
+
+**Retrofit — MusicApp**
+- [ ] `TrackCell` — replace inline artwork + label stack with `MDSTrackRowView` (already in DS)
+- [ ] `TrackListViewController` — replace manual empty state with `MDSEmptyStateView`; replace manual loading indicator with `MDSLoadingView`
+- [ ] `TrackDetailViewController` — replace inline button with `MDSPrimaryButton`; use token spacing and radius throughout
+- [ ] `HomeViewController` — replace inline section headers and loading states with DS atoms
+
+**Retrofit — ChatApp**
+- [ ] `ConversationCell` — replace inline avatar placeholder with `MDSAvatarView`; replace inline badge with `MDSBadgeView`
+- [ ] `TextMessageCell` — replace inline bubble view with `MDSMessageBubble`
+- [ ] `AudioMessageCell` — replace inline waveform + duration layout with `MDSAudioPlayerView`
+- [ ] `DeletedMessageCell` — apply token typography and color (captionSmall, textDisabled)
+- [ ] `ConversationListViewController` — add `MDSEmptyStateView` for zero-conversation state
+- [ ] `ChatViewController` input bar — replace inline `UITextField` + `UIButton` with `MDSPrimaryButton`; apply token spacing
+
+**Previews catalog**
+- [ ] One `*Preview.swift` file per component showing all variants in light + dark mode
 
 #### Interview Angle
 
