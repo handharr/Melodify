@@ -1,0 +1,843 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MusicApp — System Design</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --surface-elevated: #21262d;
+      --border: #30363d;
+      --text: #c9d1d9;
+      --text-muted: #8b949e;
+      --accent: #58a6ff;
+      --accent-muted: #1f3a5f;
+      --green: #3fb950;
+      --green-muted: #1a3626;
+      --orange: #d29922;
+      --orange-muted: #3a2a0a;
+      --purple: #8b5cf6;
+      --purple-muted: #2d1f4e;
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      line-height: 1.6;
+      max-width: 900px;
+      margin: auto;
+      padding: 2rem;
+      padding-bottom: 5rem;
+    }
+
+    a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    h2 {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: var(--text);
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 1.25rem;
+    }
+
+    h3 {
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: var(--accent);
+      margin: 1.25rem 0 0.75rem;
+    }
+
+    p {
+      margin: 0.75rem 0;
+    }
+
+    ul, ol {
+      padding-left: 1.5rem;
+      margin: 0.5rem 0 0.75rem;
+    }
+
+    li {
+      margin: 0.3rem 0;
+    }
+
+    strong {
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    /* nav breadcrumb */
+    nav.breadcrumb {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin-bottom: 1.5rem;
+    }
+
+    nav.breadcrumb a {
+      color: var(--accent);
+    }
+
+    /* header */
+    header {
+      padding: 2rem 0 1.5rem;
+    }
+
+    header h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 0.4rem;
+    }
+
+    header p {
+      color: var(--text-muted);
+      font-size: 1rem;
+      margin: 0;
+    }
+
+    /* toc */
+    nav.toc {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 2rem;
+    }
+
+    nav.toc h4 {
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+      margin-bottom: 0.75rem;
+    }
+
+    nav.toc ol {
+      list-style: none;
+      padding: 0;
+      counter-reset: toc-counter;
+    }
+
+    nav.toc ol li {
+      counter-increment: toc-counter;
+      display: flex;
+      align-items: baseline;
+      gap: 0.6rem;
+      padding: 0.3rem 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    nav.toc ol li:last-child {
+      border-bottom: none;
+    }
+
+    nav.toc ol li::before {
+      content: counter(toc-counter, decimal-leading-zero);
+      color: var(--accent);
+      font-size: 0.8rem;
+      font-weight: 700;
+      min-width: 1.8rem;
+    }
+
+    nav.toc ol li a {
+      color: var(--text);
+      text-decoration: none;
+      font-size: 0.95rem;
+    }
+
+    nav.toc ol li a:hover {
+      color: var(--accent);
+    }
+
+    /* sections */
+    section {
+      padding: 2rem 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    section:last-of-type {
+      border-bottom: none;
+    }
+
+    /* callout */
+    .callout {
+      border-left: 4px solid var(--accent);
+      background: var(--accent-muted);
+      padding: 1rem 1.25rem;
+      border-radius: 6px;
+      margin: 1rem 0;
+    }
+
+    .callout p {
+      margin: 0;
+    }
+
+    /* rule */
+    .rule {
+      border-left: 4px solid var(--green);
+      background: var(--green-muted);
+      padding: 1rem 1.25rem;
+      border-radius: 6px;
+      margin: 1rem 0;
+    }
+
+    .rule p {
+      margin: 0;
+    }
+
+    /* warn */
+    .warn {
+      border-left: 4px solid var(--orange);
+      background: var(--orange-muted);
+      padding: 1rem 1.25rem;
+      border-radius: 6px;
+      margin: 1rem 0;
+    }
+
+    .warn p {
+      margin: 0;
+    }
+
+    /* table */
+    .table-wrap {
+      overflow-x: auto;
+      margin: 1rem 0;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+
+    thead tr {
+      background: var(--surface);
+    }
+
+    thead th {
+      color: var(--text-muted);
+      font-weight: 600;
+      text-align: left;
+      padding: 0.6rem 1rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    tbody tr:nth-child(even) {
+      background: var(--surface-elevated);
+    }
+
+    tbody td {
+      padding: 0.6rem 1rem;
+      border-bottom: 1px solid var(--border);
+      color: var(--text);
+    }
+
+    tbody tr:last-child td {
+      border-bottom: none;
+    }
+
+    /* code */
+    code {
+      background: var(--surface-elevated);
+      color: var(--text);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.85em;
+      font-family: monospace;
+    }
+
+    pre {
+      margin: 1rem 0;
+      border-radius: 6px;
+      overflow-x: auto;
+      border: 1px solid var(--border);
+    }
+
+    pre code {
+      display: block;
+      background: var(--surface-elevated);
+      color: var(--text);
+      padding: 1rem;
+      border-radius: 6px;
+      font-size: 0.875rem;
+      line-height: 1.7;
+      overflow-x: auto;
+      white-space: pre;
+    }
+
+    /* syntax highlight */
+    .kw { color: var(--accent); }          /* keywords: struct, let, func, etc. */
+    .ty { color: #79c0ff; }                /* type names */
+    .st { color: #ffa657; }                /* string literals */
+    .cm { color: var(--text-muted); }      /* comments */
+    .nm { color: #d2a8ff; }                /* property / param names */
+    .gr { color: var(--green); }           /* architectural / special terms */
+
+    /* stack */
+    .stack {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 1rem 0;
+    }
+
+    .stack-row {
+      display: flex;
+      flex-direction: row;
+      align-items: flex-start;
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid var(--border);
+      gap: 1rem;
+    }
+
+    .stack-row:last-child {
+      border-bottom: none;
+    }
+
+    .stack-row:nth-child(even) {
+      background: var(--surface-elevated);
+    }
+
+    .stack-label {
+      min-width: 120px;
+      font-weight: 700;
+      color: var(--accent);
+      font-size: 0.85rem;
+      padding-top: 0.1rem;
+    }
+
+    .stack-content {
+      color: var(--text);
+      font-size: 0.9rem;
+      line-height: 1.7;
+      flex: 1;
+    }
+
+    .stack-content code {
+      margin: 0 2px;
+    }
+
+    .stack-content strong {
+      color: var(--text-muted);
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      display: block;
+      margin-top: 0.3rem;
+    }
+
+    .stack-content strong:first-child {
+      margin-top: 0;
+    }
+
+    /* bottom nav */
+    .bottom-nav {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: var(--surface-elevated);
+      border-top: 1px solid var(--border);
+      display: flex;
+      flex-direction: row;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.75rem 2rem;
+      font-size: 0.9rem;
+    }
+
+    .bottom-nav a {
+      color: var(--accent);
+    }
+
+    /* ascii diagram */
+    .ascii-diagram {
+      font-family: monospace;
+      font-size: 0.78rem;
+      line-height: 1.5;
+      color: var(--text-muted);
+      background: var(--surface-elevated);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 1rem;
+      overflow-x: auto;
+      white-space: pre;
+      margin: 1rem 0;
+    }
+
+    .ascii-diagram .ascii-layer-label {
+      color: var(--accent);
+      font-weight: 700;
+    }
+  </style>
+</head>
+<body>
+
+  <nav class="breadcrumb">← <a href="../index.html">Home</a></nav>
+
+  <header>
+    <h1>MusicApp</h1>
+    <p>System Design — Melodify Interview Lab</p>
+  </header>
+
+  <nav class="toc">
+    <h4>Contents</h4>
+    <ol>
+      <li><a href="#requirements">Requirements</a></li>
+      <li><a href="#api-design">API Design</a></li>
+      <li><a href="#data-model">Data Model Design</a></li>
+      <li><a href="#high-level-design">High-Level Design</a></li>
+      <li><a href="#data-flow">Data Flow</a></li>
+    </ol>
+  </nav>
+
+  <!-- ═══════════════════════════════════════════════════ 1. Requirements -->
+  <section id="requirements">
+    <h2>1. Requirements</h2>
+
+    <h3>Functional</h3>
+    <ul>
+      <li>Search tracks by keyword via iTunes Search API; debounced, paginated (offset + limit)</li>
+      <li>View track detail: artwork, artist, album, genre, duration, 30-second preview URL</li>
+      <li>Home screen: featured tracks (genre-filtered) + user playlists fetched in parallel</li>
+      <li>Browse playlist detail: playlist metadata + resolved track list</li>
+      <li>Create a new playlist (name, description); update name/description of an existing playlist</li>
+    </ul>
+
+    <h3>Non-Functional</h3>
+    <ul>
+      <li>Track search results and detail are cached in <strong>UserDefaults</strong>; <code>FetchPolicy</code> on the <code>Request</code> controls whether the cached or network path is taken — set by the ViewModel, read only by the Repository</li>
+      <li>Playlists are always fetched from the network — <code>PlaylistRepository</code> is remote-only with no local cache</li>
+      <li><code>FetchHomeSectionsUseCase</code> fetches N genre sections in parallel via <code>withThrowingTaskGroup</code>; <code>FetchHomeDataUseCase</code> fetches featured tracks + playlists concurrently via <code>async let</code></li>
+      <li><code>PlaylistDetailUseCase</code> resolves each <code>trackId</code> to a full <code>Track</code> in parallel via <code>withThrowingTaskGroup</code></li>
+      <li>All ViewModel state mutations on <code>@MainActor</code> — no <code>DispatchQueue.main.async</code></li>
+      <li><code>defer { isLoading = false }</code> guarantees cleanup on any exit path (success or throw)</li>
+      <li><code>SearchSessionService</code> owns query + page state; <code>begin(query:genre:)</code> resets to page 1, <code>advance()</code> increments for next page</li>
+    </ul>
+
+    <div class="rule">
+      <p><strong>Key invariant:</strong> <code>FetchPolicy</code> travels from ViewModel → Repository only. The Repository reads it; no layer below (DataSource) ever sees or stores it.</p>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════ 2. API Design -->
+  <section id="api-design">
+    <h2>2. API Design</h2>
+
+    <h3>iTunes Search API (read-only, no auth)</h3>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Action</th><th>Method</th><th>Endpoint</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Search tracks</td><td><code>GET</code></td><td><code>https://itunes.apple.com/search</code></td></tr>
+          <tr><td>Track detail</td><td><code>GET</code></td><td><code>https://itunes.apple.com/lookup</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Search Query Parameters</h3>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Param</th><th>Type</th><th>Example</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>term</code></td><td>String</td><td><code>"Taylor Swift"</code></td></tr>
+          <tr><td><code>media</code></td><td>String</td><td><code>"music"</code></td></tr>
+          <tr><td><code>limit</code></td><td>Int</td><td><code>20</code></td></tr>
+          <tr><td><code>offset</code></td><td>Int</td><td><code>0</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Lookup Query Parameters</h3>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Param</th><th>Type</th><th>Example</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>id</code></td><td>Int</td><td><code>1234567890</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Search Response Shape</h3>
+    <p>iTunes wraps results in an envelope object:</p>
+    <pre><code><span class="cm">// iTunes Search / Lookup response envelope</span>
+{
+  <span class="st">"results"</span>: [
+    {
+      <span class="st">"trackId"</span>: <span class="nm">123</span>,
+      <span class="st">"trackName"</span>: <span class="st">"Anti-Hero"</span>,
+      <span class="st">"artistName"</span>: <span class="st">"Taylor Swift"</span>,
+      <span class="st">"collectionName"</span>: <span class="st">"Midnights"</span>,
+      <span class="st">"artworkUrl100"</span>: <span class="st">"https://..."</span>,
+      <span class="st">"previewUrl"</span>: <span class="st">"https://..."</span>,
+      <span class="st">"primaryGenreName"</span>: <span class="st">"Pop"</span>,
+      <span class="st">"trackTimeMillis"</span>: <span class="nm">200690</span>
+    }
+  ]
+}</code></pre>
+
+    <h3>Playlist API (MockAPI.io, CRUD)</h3>
+    <p>Base URL: <code>https://6a09e642e7e3f433d483900b.mockapi.io/api/v1/playlist</code></p>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Action</th><th>Method</th><th>Endpoint</th><th>Body</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Fetch all playlists</td><td><code>GET</code></td><td><code>/playlist</code></td><td>—</td></tr>
+          <tr><td>Fetch single playlist</td><td><code>GET</code></td><td><code>/playlist/{id}</code></td><td>—</td></tr>
+          <tr><td>Create playlist</td><td><code>POST</code></td><td><code>/playlist</code></td><td><code>{ name, description, track_ids }</code></td></tr>
+          <tr><td>Update playlist</td><td><code>PUT</code></td><td><code>/playlist/{id}</code></td><td><code>{ name, description }</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Playlist Response Shape</h3>
+    <pre><code>{
+  <span class="st">"id"</span>: <span class="nm">1</span>,
+  <span class="st">"name"</span>: <span class="st">"Morning Vibes"</span>,
+  <span class="st">"description"</span>: <span class="st">"Chill tracks to start the day"</span>,
+  <span class="st">"track_ids"</span>: [<span class="nm">123</span>, <span class="nm">456</span>]
+}</code></pre>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════ 3. Data Model -->
+  <section id="data-model">
+    <h2>3. Data Model Design</h2>
+
+    <h3>Domain Models</h3>
+    <div class="callout">
+      <p>Pure Swift structs — zero external imports. Domain depends on nothing.</p>
+    </div>
+
+    <pre><code><span class="kw">struct</span> <span class="ty">Track</span> {
+    <span class="kw">let</span> <span class="nm">id</span>: <span class="ty">Int</span>
+    <span class="kw">let</span> <span class="nm">title</span>: <span class="ty">String</span>
+    <span class="kw">let</span> <span class="nm">artist</span>: <span class="ty">String</span>
+    <span class="kw">let</span> <span class="nm">album</span>: <span class="ty">String</span>
+    <span class="kw">let</span> <span class="nm">artworkURL</span>: <span class="ty">URL</span>?
+    <span class="kw">let</span> <span class="nm">previewURL</span>: <span class="ty">URL</span>?
+    <span class="kw">let</span> <span class="nm">genre</span>: <span class="ty">String</span>
+    <span class="kw">let</span> <span class="nm">durationMs</span>: <span class="ty">Int</span>
+}
+
+<span class="kw">struct</span> <span class="ty">Playlist</span> {
+    <span class="kw">let</span> <span class="nm">id</span>: <span class="ty">Int</span>
+    <span class="kw">let</span> <span class="nm">name</span>: <span class="ty">String</span>
+    <span class="kw">let</span> <span class="nm">description</span>: <span class="ty">String</span>
+    <span class="kw">let</span> <span class="nm">trackIds</span>: [<span class="ty">Int</span>]
+}
+
+<span class="kw">struct</span> <span class="ty">PlaylistDetail</span> {
+    <span class="kw">let</span> <span class="nm">playlist</span>: <span class="ty">Playlist</span>
+    <span class="kw">let</span> <span class="nm">tracks</span>: [<span class="ty">Track</span>]
+}
+
+<span class="kw">struct</span> <span class="ty">HomeData</span> {
+    <span class="kw">let</span> <span class="nm">featuredTracks</span>: [<span class="ty">Track</span>]
+    <span class="kw">let</span> <span class="nm">playlists</span>: [<span class="ty">Playlist</span>]
+}
+
+<span class="kw">struct</span> <span class="ty">HomeSection</span> {
+    <span class="kw">let</span> <span class="nm">genre</span>: <span class="ty">String</span>
+    <span class="kw">let</span> <span class="nm">tracks</span>: [<span class="ty">Track</span>]
+}</code></pre>
+
+    <h3>DTOs (Codable, mirror API shape exactly)</h3>
+    <pre><code><span class="cm">// iTunes API response item</span>
+<span class="kw">struct</span> <span class="ty">TrackDTO</span>: <span class="ty">Codable</span> {
+    <span class="kw">let</span> <span class="nm">trackId</span>: <span class="ty">Int</span>?
+    <span class="kw">let</span> <span class="nm">trackName</span>: <span class="ty">String</span>?
+    <span class="kw">let</span> <span class="nm">artistName</span>: <span class="ty">String</span>?
+    <span class="kw">let</span> <span class="nm">collectionName</span>: <span class="ty">String</span>?
+    <span class="kw">let</span> <span class="nm">artworkUrl100</span>: <span class="ty">String</span>?
+    <span class="kw">let</span> <span class="nm">previewUrl</span>: <span class="ty">String</span>?
+    <span class="kw">let</span> <span class="nm">primaryGenreName</span>: <span class="ty">String</span>?
+    <span class="kw">let</span> <span class="nm">trackTimeMillis</span>: <span class="ty">Int</span>?
+}
+
+<span class="cm">// MockAPI.io playlist item</span>
+<span class="kw">struct</span> <span class="ty">PlaylistDTO</span>: <span class="ty">Codable</span> {
+    <span class="kw">let</span> <span class="nm">id</span>: <span class="ty">Int</span>
+    <span class="kw">let</span> <span class="nm">name</span>: <span class="ty">String</span>
+    <span class="kw">let</span> <span class="nm">description</span>: <span class="ty">String</span>
+    <span class="kw">let</span> <span class="nm">trackIds</span>: [<span class="ty">Int</span>]      <span class="cm">// CodingKey: "track_ids"</span>
+}</code></pre>
+
+    <h3>Mapper</h3>
+    <div class="rule">
+      <p><strong>Rule:</strong> The Mapper is the only type that knows both DTO and Domain. It is the firewall between network shape and business model.</p>
+    </div>
+
+    <pre><code><span class="gr">TrackMapper</span>.toDomain(<span class="nm">_</span> <span class="nm">dto</span>: <span class="ty">TrackDTO</span>) -> <span class="ty">Track</span>?   <span class="cm">// returns nil if trackId or trackName is missing</span>
+<span class="gr">PlaylistMapper</span>.toDomain(<span class="nm">_</span> <span class="nm">dto</span>: <span class="ty">PlaylistDTO</span>) -> <span class="ty">Playlist</span></code></pre>
+
+    <div class="callout">
+      <p><strong>Why return <code>Track?</code> from the mapper?</strong> iTunes API fields are all optional — bad data should be silently dropped, not crash the app. The Repository filters out <code>nil</code> results before returning to UseCases.</p>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════ 4. High-Level Design -->
+  <section id="high-level-design">
+    <h2>4. High-Level Design</h2>
+
+    <div class="ascii-diagram">┌─────────────────────────────────────────────────────────────────┐
+│  Presentation (UIKit + Combine)                                 │
+│  TrackListViewController / TrackListViewModel                   │
+│  TrackDetailViewController / TrackDetailViewModel               │
+│  HomeViewController / HomeViewModel                             │
+│  PlaylistDetailViewController / PlaylistDetailViewModel         │
+└───────────────────────────┬─────────────────────────────────────┘
+                            │ calls UseCases via protocol
+┌───────────────────────────▼─────────────────────────────────────┐
+│  Domain                                                         │
+│  UseCases: SearchTracksUseCase, GetTrackDetailUseCase,          │
+│            FetchHomeDataUseCase, FetchHomeSectionsUseCase,      │
+│            PlaylistDetailUseCase, CreatePlaylistUseCase,        │
+│            UpdatePlaylistUseCase                                │
+│  Services: SearchSessionService (stateful: query + page state)  │
+│  Protocols: TrackRepositoryProtocol, PlaylistRepositoryProtocol │
+│             ImageRepositoryProtocol                             │
+└───────────────────────────┬─────────────────────────────────────┘
+                            │ implements protocols
+┌───────────────────────────▼─────────────────────────────────────┐
+│  Data                                                           │
+│  TrackRepository — coordinates remote + local; applies FetchPolicy  │
+│  PlaylistRepository — remote-only; no LocalDataSource, no policy    │
+│  ImageRepository — image fetch + prefetch                           │
+│  TrackRemoteDataSource → iTunes API (via CoreKit.APIClient)         │
+│  TrackLocalDataSource  → UserDefaults-backed persistent cache       │
+│  PlaylistRemoteDataSource → MockAPI.io (via CoreKit.APIClient)      │
+│  TrackMapper, PlaylistMapper                                        │
+└───────────────────────────┬─────────────────────────────────────┘
+                            │ imports
+┌───────────────────────────▼─────────────────────────────────────┐
+│  CoreKit (shared SPM package)                                   │
+│  APIClient, LocalDataSourceProtocol, ImageDataSourceProtocol    │
+│  ImagePrefetcherProtocol, AnalyticsGatewayProtocol              │
+└─────────────────────────────────────────────────────────────────┘</div>
+
+    <h3>Architecture Layer Breakdown</h3>
+    <div class="stack">
+      <div class="stack-row">
+        <div class="stack-label">Presentation</div>
+        <div class="stack-content">
+          <strong>ViewControllers</strong>
+          <code>TrackListViewController</code> <code>TrackDetailViewController</code> <code>HomeViewController</code> <code>PlaylistDetailViewController</code>
+          <strong>ViewModels (Combine @Published)</strong>
+          <code>TrackListViewModel</code> <code>TrackDetailViewModel</code> <code>HomeViewModel</code> <code>PlaylistDetailViewModel</code>
+        </div>
+      </div>
+      <div class="stack-row">
+        <div class="stack-label">Domain</div>
+        <div class="stack-content">
+          <strong>UseCases</strong>
+          <code>SearchTracksUseCase</code> <code>GetTrackDetailUseCase</code> <code>FetchHomeDataUseCase</code> <code>FetchHomeSectionsUseCase</code> <code>PlaylistDetailUseCase</code> <code>CreatePlaylistUseCase</code> <code>UpdatePlaylistUseCase</code>
+          <strong>Services</strong>
+          <code>SearchSessionService</code>
+          <strong>Protocols</strong>
+          <code>TrackRepositoryProtocol</code> <code>PlaylistRepositoryProtocol</code> <code>ImageRepositoryProtocol</code>
+        </div>
+      </div>
+      <div class="stack-row">
+        <div class="stack-label">Infrastructure</div>
+        <div class="stack-content">None — gateway abstraction lives in CoreKit; no dedicated Infrastructure layer in MusicApp</div>
+      </div>
+      <div class="stack-row">
+        <div class="stack-label">Data</div>
+        <div class="stack-content">
+          <strong>Repositories</strong>
+          <code>TrackRepository</code> <code>PlaylistRepository</code> <code>ImageRepository</code>
+          <strong>DataSources</strong>
+          <code>TrackRemoteDataSource</code> <code>TrackLocalDataSource</code> <code>PlaylistRemoteDataSource</code>
+          <strong>Mappers</strong>
+          <code>TrackMapper</code> <code>PlaylistMapper</code>
+          <strong>DTOs</strong>
+          <code>TrackDTO</code> <code>PlaylistDTO</code>
+        </div>
+      </div>
+      <div class="stack-row">
+        <div class="stack-label">External</div>
+        <div class="stack-content">
+          <code>URLSession</code> <code>UserDefaults</code> <code>AVFoundation</code> <code>Combine</code>
+        </div>
+      </div>
+      <div class="stack-row">
+        <div class="stack-label">Application</div>
+        <div class="stack-content">
+          <code>AppDelegate</code> — wires window, creates <code>MusicCoordinator</code> as composition root, builds full DI graph
+          <strong>Coordinators</strong>
+          <code>MusicCoordinator</code> <code>SearchCoordinator</code> <code>HomeCoordinator</code>
+        </div>
+      </div>
+    </div>
+
+    <h3>Navigation (Coordinator Pattern)</h3>
+    <div class="callout">
+      <p><code>MusicCoordinator</code> is the composition root — it builds the full dependency graph and injects all dependencies into ViewModels via <code>init</code>.</p>
+    </div>
+
+    <pre><code><span class="gr">MusicCoordinator</span>
+  └── <span class="ty">UITabBarController</span>
+        ├── <span class="gr">SearchCoordinator</span>  → <span class="ty">TrackListViewController</span> → <span class="ty">TrackDetailViewController</span>
+        └── <span class="gr">HomeCoordinator</span>    → <span class="ty">HomeViewController</span> → <span class="ty">PlaylistDetailViewController</span></code></pre>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════ 5. Data Flow -->
+  <section id="data-flow">
+    <h2>5. Data Flow</h2>
+
+    <!-- Search flow -->
+    <h3>Search Flow</h3>
+    <pre><code><span class="cm">// User types in search bar</span>
+<span class="ty">User</span> types in search bar
+  → <span class="ty">TrackListViewModel</span>.<span class="nm">search</span>(term:)
+      → <span class="gr">SearchSessionService</span>.<span class="nm">begin</span>(query: term, genre: <span class="kw">nil</span>)   <span class="cm">// resets to page 1</span>
+          → returns <span class="ty">SearchSession</span> { request: <span class="ty">SearchTracksRequest</span>(query: .init(term:, page: <span class="nm">1</span>, limit: <span class="nm">20</span>), policy: .fresh) }
+      → <span class="nm">isLoading</span> = <span class="kw">true</span>
+      → <span class="gr">SearchTracksUseCase</span>.<span class="nm">execute</span>(request: session.request)
+          → <span class="kw">guard</span> !term.trimmingCharacters(in: .whitespaces).isEmpty <span class="kw">else return</span> []
+          → <span class="gr">TrackRepository</span>.<span class="nm">searchTracks</span>(request:)
+              → <span class="ty">FetchPolicy</span> check (policy lives on Request, read only here — never passed further down):
+                  policy.force &amp;&amp; !policy.allowStale  → .fresh  → <span class="gr">TrackRemoteDataSource</span> → <span class="ty">GET</span> /search?term=...
+                  !policy.force &amp;&amp;  policy.allowStale → .cached → UserDefaults lookup; if hit return, else remote
+                  !policy.force &amp;&amp; !policy.allowStale → .strict → UserDefaults lookup; throws <span class="ty">APIError</span>.notFound on miss
+              → <span class="gr">TrackMapper</span>.<span class="nm">toDomain</span>(dto) → <span class="ty">Track</span>? (<span class="kw">nil</span> dropped — invalid data never crashes)
+          → returns [<span class="ty">Track</span>]
+      → ViewModel maps [<span class="ty">Track</span>] → [<span class="ty">TrackUIModel</span>]
+      → @Published tracks updated → <span class="ty">UICollectionView</span> reloads
+      → <span class="kw">defer</span>: <span class="nm">isLoading</span> = <span class="kw">false</span>
+
+<span class="cm">// Next page (pagination)</span>
+Next page:
+  → <span class="gr">SearchSessionService</span>.<span class="nm">advance</span>()   <span class="cm">// increments page, policy: .cached</span>
+  → <span class="gr">SearchTracksUseCase</span>.<span class="nm">execute</span>(request: session.request) — same flow</code></pre>
+
+    <div class="rule">
+      <p><strong>FetchPolicy rules:</strong> <code>.fresh</code> — always hit network. <code>.cached</code> — try UserDefaults first, fall through to network on miss. <code>.strict</code> — UserDefaults only; throws on miss. Policy is set by the ViewModel and consumed solely by the Repository — no layer below ever receives it.</p>
+    </div>
+
+    <!-- Home flow -->
+    <h3>Home Featured + Playlists Flow (<code>async let</code>)</h3>
+    <pre><code><span class="ty">HomeViewController</span>.viewDidLoad()
+  → <span class="ty">HomeViewModel</span>.<span class="nm">load</span>()
+      → <span class="nm">isLoading</span> = <span class="kw">true</span>
+      → <span class="gr">FetchHomeDataUseCase</span>.<span class="nm">execute</span>(request:)
+          <span class="cm">// Two concurrent fetches — neither blocks the other</span>
+          → <span class="kw">async let</span> <span class="nm">tracks</span>    = <span class="gr">TrackRepository</span>.<span class="nm">searchTracks</span>(<span class="ty">SearchTracksRequest</span>(query: request.query.trackQuery))
+          → <span class="kw">async let</span> <span class="nm">playlists</span> = <span class="gr">PlaylistRepository</span>.<span class="nm">fetchPlaylists</span>()   <span class="cm">// always remote, no FetchPolicy</span>
+          → <span class="ty">HomeData</span>(featuredTracks: <span class="kw">try await</span> tracks, playlists: <span class="kw">try await</span> playlists)
+      → ViewModel maps <span class="ty">HomeData</span> → UIModels
+      → @Published state updated → View renders
+      → <span class="kw">defer</span>: <span class="nm">isLoading</span> = <span class="kw">false</span></code></pre>
+
+    <div class="callout">
+      <p><strong>Why <code>async let</code> instead of sequential awaits?</strong> Two independent network calls — featured tracks and playlists — would be serialized unnecessarily with sequential <code>await</code>. <code>async let</code> fires both concurrently; total latency is <code>max(tracks, playlists)</code> instead of <code>tracks + playlists</code>. Use <code>async let</code> for a known, fixed set of concurrent fetches.</p>
+    </div>
+
+    <!-- Home genre sections flow -->
+    <h3>Home Genre Sections Flow (<code>withThrowingTaskGroup</code>)</h3>
+    <pre><code><span class="ty">HomeViewController</span> (genre sections mode)
+  → <span class="ty">HomeViewModel</span>.<span class="nm">loadSections</span>(genres: [<span class="st">"Pop"</span>, <span class="st">"Rock"</span>, <span class="st">"Hip-Hop"</span>])
+      → <span class="nm">isLoading</span> = <span class="kw">true</span>
+      → <span class="gr">FetchHomeSectionsUseCase</span>.<span class="nm">execute</span>(request: <span class="ty">FetchHomeSectionsRequest</span>(query: .init(genreQueries: [...])))
+          <span class="cm">// N concurrent fetches — one task per genre</span>
+          → <span class="kw">withThrowingTaskGroup</span>(of: <span class="ty">HomeSection</span>.<span class="kw">self</span>) { group <span class="kw">in</span>
+                <span class="kw">for</span> (genre, query) <span class="kw">in</span> request.query.genreQueries:
+                    group.<span class="nm">addTask</span> {
+                        <span class="kw">let</span> <span class="nm">tracks</span> = <span class="kw">try await</span> <span class="gr">TrackRepository</span>.<span class="nm">searchTracks</span>(<span class="ty">SearchTracksRequest</span>(query: query))
+                        <span class="kw">return</span> <span class="ty">HomeSection</span>(genre: genre, tracks: tracks)
+                    }
+                <span class="cm">// collect results, re-sort to original genre order</span>
+                <span class="kw">return</span> sections.sorted { ... }
+            }
+      → ViewModel maps [<span class="ty">HomeSection</span>] → UIModels
+      → <span class="kw">defer</span>: <span class="nm">isLoading</span> = <span class="kw">false</span></code></pre>
+
+    <div class="callout">
+      <p><strong>Why <code>withThrowingTaskGroup</code> instead of <code>async let</code>?</strong> The number of genre queries is dynamic (N from config or server). <code>async let</code> requires a fixed, compile-time-known number of concurrent branches. <code>withThrowingTaskGroup</code> handles arbitrary N. Results arrive out of order — sort back to original genre order before returning.</p>
+    </div>
+
+    <!-- Playlist detail flow -->
+    <h3>Playlist Detail Flow (<code>withThrowingTaskGroup</code>)</h3>
+    <pre><code><span class="ty">PlaylistDetailViewController</span>.viewDidLoad()
+  → <span class="ty">PlaylistDetailViewModel</span>.<span class="nm">load</span>(playlistId:)
+      → <span class="nm">isLoading</span> = <span class="kw">true</span>
+      → <span class="gr">PlaylistDetailUseCase</span>.<span class="nm">execute</span>(request: <span class="ty">PlaylistDetailRequest</span>(path: .init(playlistId:)))
+          → <span class="gr">PlaylistRepository</span>.<span class="nm">fetchPlaylist</span>(id:) → <span class="ty">Playlist</span>   <span class="cm">// remote, no cache</span>
+          <span class="cm">// Resolve each trackId to a full Track in parallel</span>
+          → <span class="kw">withThrowingTaskGroup</span>(of: <span class="ty">Track</span>.<span class="kw">self</span>) { group <span class="kw">in</span>
+                <span class="kw">for</span> trackId <span class="kw">in</span> playlist.trackIds:
+                    group.<span class="nm">addTask</span> {
+                        <span class="kw">try await</span> <span class="gr">TrackRepository</span>.<span class="nm">getTrackDetail</span>(<span class="ty">GetTrackDetailRequest</span>(path: .init(id: trackId)))
+                    }
+                <span class="cm">// returns [Track] — unordered; ordering preserved by trackIds at ViewModel level</span>
+            }
+          → <span class="ty">PlaylistDetail</span>(playlist:, tracks:)
+      → ViewModel maps <span class="ty">PlaylistDetail</span> → UIModel
+      → <span class="kw">defer</span>: <span class="nm">isLoading</span> = <span class="kw">false</span></code></pre>
+
+    <div class="rule">
+      <p><strong>Ordering note:</strong> Task group results arrive in completion order, not insertion order. Track ordering is restored at the ViewModel level by re-sorting against the original <code>playlist.trackIds</code> array.</p>
+    </div>
+
+    <!-- Create playlist flow -->
+    <h3>Create Playlist Flow (Mutation)</h3>
+    <pre><code><span class="ty">User</span> taps <span class="st">"New Playlist"</span>, enters name + description
+  → <span class="ty">HomeViewModel</span>.<span class="nm">createPlaylist</span>(name:, description:)
+      → <span class="nm">isLoading</span> = <span class="kw">true</span>
+      → <span class="gr">CreatePlaylistUseCase</span>.<span class="nm">execute</span>(request: <span class="ty">CreatePlaylistRequest</span>(name:, description:))
+          → <span class="kw">guard</span> !name.isEmpty <span class="kw">else throw</span> <span class="ty">PlaylistError</span>.emptyName
+          → <span class="gr">PlaylistRepository</span>.<span class="nm">createPlaylist</span>(request:)
+              → <span class="gr">PlaylistRemoteDataSource</span>.<span class="nm">createPlaylist</span> → <span class="ty">POST</span> /playlist { name, description, track_ids: [] }
+              → <span class="ty">PlaylistDTO</span> → <span class="gr">PlaylistMapper</span>.<span class="nm">toDomain</span> → <span class="ty">Playlist</span>
+      → ViewModel appends new <span class="ty">Playlist</span> to playlists array
+      → @Published state → View reloads
+      → <span class="kw">defer</span>: <span class="nm">isLoading</span> = <span class="kw">false</span></code></pre>
+
+    <div class="callout">
+      <p><strong>Validation at the UseCase boundary:</strong> <code>guard !name.isEmpty</code> lives in the UseCase, not the ViewModel or DataSource. Business rules belong in Domain — the ViewModel delegates validation entirely to the UseCase layer.</p>
+    </div>
+
+    <div class="rule">
+      <p><strong>Pattern to remember:</strong> <code>defer { isLoading = false }</code> appears in every ViewModel load/mutation method. It fires on all exit paths — success, throw, and cancellation — guaranteeing the loading spinner always clears.</p>
+    </div>
+  </section>
+
+  <div class="bottom-nav">
+    <a href="../index.html">← Home</a>
+    <span></span>
+  </div>
+
+</body>
+</html>
