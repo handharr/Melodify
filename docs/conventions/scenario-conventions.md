@@ -75,6 +75,55 @@ Layer order (top to bottom in docs): **Presentation → Domain → Data → Appl
 
 ---
 
+## Section 3b — Dependencies Layer and Component Annotations
+
+### Dependencies layer
+
+The bottom layer of every High-Level Design diagram is always named **`Dependencies`** — never `CoreKit`, `External`, or `Infrastructure`.
+
+It lists every external SDK or SPM package that any layer in the app imports, one line per framework:
+
+```
+│  Dependencies                                                       │
+│  CoreKit             WebSocketClient · APIClient · ChannelRouter    │
+│  CoreData            NSPersistentContainer · NSFetchRequest         │
+│  Network             NWPathMonitor                                  │
+│  BackgroundTasks     BGTaskScheduler · BGAppRefreshTask             │
+│  UserNotifications   APNs silent push handling                      │
+```
+
+Rules:
+- Internal SPM packages (e.g. `CoreKit`) listed before Apple frameworks
+- List only frameworks with non-obvious usage; omit `Foundation` and `UIKit` unless a specific type (e.g. `FileManager`) needs calling out
+- Each line: `FrameworkName   Type1 · Type2` — dot-separated type list, no parentheses
+
+### Component dependency annotations
+
+Any **Data layer** component that wraps or directly imports an external dependency carries an inline bracket annotation on the same line:
+
+```
+│  MessageLocalDataSource               [CoreData]                    │
+│  MessageRemoteDataSource              [CoreKit · APIClient]         │
+│  PendingMessageQueue (actor)          [Foundation · FileManager]    │
+│  ConnectionManager (actor)            [CoreKit · WebSocketClient    │
+│                                        Network · NWPathMonitor]     │
+```
+
+Format: `[FrameworkName · TypeName]` — comma-free, dot-separated. Multi-line wrap is allowed for long annotations; indent continuation to align with the opening bracket.
+
+**Application layer** components also carry annotations for OS-level frameworks they register or observe:
+
+```
+│  ChatCoordinator              [UIKit · BackgroundTasks ·            │
+│                                UserNotifications]                   │
+```
+
+**Domain layer** components must never carry dependency annotations — Domain depends on nothing. Any annotation on a Domain component is a layer violation.
+
+**Presentation layer** UIKit/Combine dependency is noted once in the layer header `(UIKit · Combine)`, not per component.
+
+---
+
 ## Section 4 — SDK Wrapper Placement
 
 | SDK footprint | Wrap as | Layer |
@@ -129,6 +178,52 @@ Rules:
 - Every `### Why` subsection must be scenario-specific (blocklist test: would it appear unchanged in every other app? If yes → remove)
 - The `### Interview Q&A` table is always the last subsection
 - Minimum 3 `### Why` subsections per app; typical range 5–7
+
+---
+
+## Section 9 — HTML Deck: Delta Section
+
+Every `docs/deck/SystemDesign/<App>SystemDesign.html` must include a `#delta` section as the **first section** of the deck (before `#requirements`).
+
+### Purpose
+
+A compact, at-a-glance summary of the architectural decisions unique to this app — what this scenario adds to or deviates from the generic architecture in `docs/ios-app-system-design-philosophy.md`. It is a quick-reference surface for interview prep, not a duplicate of the full rationale in `#technical-deep-dive`.
+
+### Content source
+
+Each `### Why` subsection in `## 6. Technical Deep-dive` of the app's `.md` maps to one delta card. The `### Interview Q&A` table is **not** included here — it stays in `#technical-deep-dive` only.
+
+### Card count
+
+5–8 cards. If there are more `### Why` subsections than 8, prioritise by interview relevance — decisions most likely to be challenged in a live session first.
+
+### HTML structure
+
+```html
+<section id="delta">
+  <h2>Delta — Key Decisions</h2>
+  <div class="delta-grid">
+    <div class="delta-card">
+      <div class="delta-topic">Short label (3–6 words)</div>
+      <div class="delta-decision">The key decision — one line</div>
+      <div class="delta-rationale">One-sentence why — scenario-specific only</div>
+    </div>
+    <!-- one .delta-card per selected ### Why subsection, max 8 -->
+  </div>
+</section>
+```
+
+### Field rules
+
+| Field | Source | Format |
+|---|---|---|
+| `delta-topic` | `### Why` heading, distilled | 3–6 words, no "Why" prefix (e.g. `Transport split`, `Message ordering`) |
+| `delta-decision` | First sentence / key claim of the `### Why` body | One line; use `·` as separator for compound decisions |
+| `delta-rationale` | One sentence from the `### Why` body | Must pass Section 5 blocklist test — scenario-specific only |
+
+### Generic content rule
+
+Every `delta-rationale` must pass the **Section 5 blocklist test**: if the sentence would appear unchanged in every other app (e.g. "Why Clean Architecture?", "Why MVVM?"), omit the card entirely. The delta section must contain zero generic rationale.
 
 ---
 
