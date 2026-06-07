@@ -101,7 +101,7 @@ Write the updated `.md` back to its original path.
 
 ```
 ### Applied — <scenario name>
-**File:** docs/scenarios/<filename>.md
+**File:** docs/SystemDesign/<AppName>/<AppName>SystemDesign.md
 
 **Changes applied:**
 - <description of each change made>

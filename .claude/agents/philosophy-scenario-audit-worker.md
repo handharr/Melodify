@@ -56,8 +56,8 @@ Return a structured report for this scenario:
 
 ```
 ### Scenario: <scenario name>
-**File:** docs/scenarios/<filename>.md
-**HTML:** docs/deck/scenarios/<filename>.html
+**File:** docs/SystemDesign/<AppName>/<AppName>SystemDesign.md
+**HTML:** docs/deck/SystemDesign/<AppName>SystemDesign.html
 
 #### Check A — Delta Section
 ✅ / ⚠️ / ❌ <finding>

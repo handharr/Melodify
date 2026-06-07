@@ -10,7 +10,7 @@ Read the **Mode** (`refactor` or `create`) and **Phase** (`analyze` or `apply`) 
 
 ## REFACTOR MODE
 
-Use when the input file is already a clean scenario `.md` inside `docs/scenarios/`.
+Use when the input file is already a clean system design `.md` inside `docs/SystemDesign/`.
 
 ---
 
@@ -22,8 +22,8 @@ Read:
 1. The existing scenario `.md` at the provided path
 2. `docs/ios-app-system-design-philosophy.md` — source of truth for current naming and patterns
 3. `docs/conventions/scenario-conventions.md` — authoritative rules for naming, layer, SDK wrapper, and blocklist checks
-4. The existing HTML deck at `docs/deck/scenarios/<scenario-name>.html`
-5. `docs/deck/scenarios/music-streaming-system-design.html` — CSS/style reference
+4. The existing HTML deck at `docs/deck/SystemDesign/<AppName>SystemDesign.html`
+5. `docs/deck/SystemDesign/MusicAppSystemDesign.html` — CSS/style reference
 
 #### R-Step 2 — Identify what needs updating
 
@@ -94,7 +94,7 @@ Instruct the orchestrating skill to spawn `philosophy-scenario-html-worker` in `
 ## Refactor Complete — <scenario name>
 
 ### .md updated
-- `docs/scenarios/<filename>.md`
+- `docs/SystemDesign/<AppName>/<AppName>SystemDesign.md`
 
 ### Changes applied
 - Renamed: <term> → <term> (N occurrences)
@@ -113,7 +113,7 @@ Spawn philosophy-scenario-html-worker (generate mode) for this scenario.
 
 ## CREATE MODE
 
-Use when the input file is raw notes located anywhere outside `docs/scenarios/`.
+Use when the input file is raw notes located anywhere outside `docs/SystemDesign/`.
 
 ---
 
@@ -125,7 +125,7 @@ Read:
 1. The raw notes file provided by the user
 2. `docs/ios-app-system-design-philosophy.md` — generic architecture (source of truth)
 3. `docs/conventions/scenario-conventions.md` — authoritative rules for naming, layer, SDK wrapper, and blocklist checks
-4. `docs/deck/scenarios/music-streaming-system-design.html` — style reference
+4. `docs/deck/SystemDesign/MusicAppSystemDesign.html` — style reference
 
 #### C-Step 2 — Vocabulary mapping
 
@@ -165,7 +165,7 @@ The prompt specifies the raw notes path + approved vocabulary mapping and delta 
 
 #### C-Step 5 — Produce the .md doc
 
-Write a clean `.md` file at `docs/scenarios/ios-<scenario-name>-system-design.md`. Use a descriptive kebab-case scenario name derived from the content.
+Write a clean `.md` file at `docs/SystemDesign/<AppName>/<AppName>SystemDesign.md`. Use a PascalCase app name derived from the content (e.g. `RideSharing` → `docs/SystemDesign/RideSharingApp/RideSharingAppSystemDesign.md`).
 
 Structure:
 
@@ -235,7 +235,7 @@ Verify the doc passes every rule in `docs/conventions/scenario-conventions.md` b
 
 #### C-Step 7 — Write the .md file
 
-Write the file at `docs/scenarios/ios-<scenario-name>-system-design.md`.
+Write the file at `docs/SystemDesign/<AppName>/<AppName>SystemDesign.md`.
 
 #### C-Step 8 — Instruct HTML generation
 
@@ -247,7 +247,7 @@ Instruct the orchestrating skill to spawn `philosophy-scenario-html-worker` in `
 ## Created — <scenario name>
 
 ### .md created
-- `docs/scenarios/<filename>.md`
+- `docs/SystemDesign/<AppName>/<AppName>SystemDesign.md`
 
 ### Delta table
 <paste the delta table here>

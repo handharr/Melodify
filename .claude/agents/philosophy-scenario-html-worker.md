@@ -8,7 +8,7 @@ You handle ONE scenario at a time. The prompt will specify:
 - **Mode:** `diff` or `generate`
 - **Scenario .md path** — source of truth for content
 - **HTML deck path** — existing HTML to compare against (or note if it doesn't exist yet)
-- **Style reference** — always `docs/deck/scenarios/music-streaming-system-design.html`
+- **Style reference** — always `docs/deck/SystemDesign/MusicAppSystemDesign.html`
 
 ---
 
@@ -17,7 +17,7 @@ You handle ONE scenario at a time. The prompt will specify:
 Read:
 1. The scenario `.md` at the specified path
 2. The existing HTML deck at the specified path — note if it doesn't exist yet (full creation needed)
-3. `docs/deck/scenarios/music-streaming-system-design.html` — to understand the CSS and component classes
+3. `docs/deck/SystemDesign/MusicAppSystemDesign.html` — to understand the CSS and component classes
 
 Compare `.md` content against the HTML section by section. List sections that differ (added, changed, or missing in HTML) and sections already in sync.
 
@@ -42,13 +42,13 @@ Return:
 
 Read:
 1. The scenario `.md` at the specified path
-2. `docs/deck/scenarios/music-streaming-system-design.html` — CSS/style reference (always required)
+2. `docs/deck/SystemDesign/MusicAppSystemDesign.html` — CSS/style reference (always required)
 
-Produce the full HTML file following every rule below. Write it to `docs/deck/scenarios/<scenario-name>.html`.
+Produce the full HTML file following every rule below. Write it to `docs/deck/SystemDesign/<AppName>SystemDesign.html`.
 
-Derive the output filename from the `.md` filename — strip the `ios-` prefix and change the extension to `.html`:
-- `ios-music-streaming-system-design.md` → `scenarios/music-streaming-system-design.html`
-- `ios-ride-sharing-system-design.md` → `ride-sharing-system-design.html`
+Derive the output filename from the `.md` filename — keep the same base name, change extension to `.html`, output into `docs/deck/SystemDesign/`:
+- `docs/SystemDesign/MusicApp/MusicAppSystemDesign.md` → `docs/deck/SystemDesign/MusicAppSystemDesign.html`
+- `docs/SystemDesign/ChatApp/ChatAppSystemDesign.md` → `docs/deck/SystemDesign/ChatAppSystemDesign.html`
 
 ---
 
@@ -58,7 +58,7 @@ For naming conventions, layer rules, and SDK wrapper rules, read `docs/conventio
 
 ### CSS
 
-Copy the `<style>` block **verbatim** from `docs/deck/scenarios/music-streaming-system-design.html`. Never modify, abbreviate, or summarize it.
+Copy the `<style>` block **verbatim** from `docs/deck/SystemDesign/MusicAppSystemDesign.html`. Never modify, abbreviate, or summarize it.
 
 ### Component classes
 
@@ -138,7 +138,7 @@ These are generic architecture rationale that belong only in `ios-app-system-des
 
 ```
 ### Generated — <scenario name>
-**Output:** docs/deck/scenarios/<filename>.html
+**Output:** docs/deck/SystemDesign/<AppName>SystemDesign.html
 **Sections rendered:** <count>
 **Sections updated vs previous:** <list of changed sections, or "Full creation">
 **Flagged .md content (not rendered):** <any generic blocklist items found — recommend removing from .md>

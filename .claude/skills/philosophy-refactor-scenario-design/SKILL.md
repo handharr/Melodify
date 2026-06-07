@@ -6,10 +6,10 @@ user-invocable: true
 
 The user provides a file path as the argument.
 
-**If no path provided:** list all files in `docs/scenarios/` and ask: "Which scenario do you want to refactor, or provide a path to raw notes for a new scenario?"
+**If no path provided:** list all files in `docs/SystemDesign/` and ask: "Which system design doc do you want to refactor, or provide a path to raw notes for a new app?"
 
 **Mode detection:**
-- Path inside `docs/scenarios/` → **Refactor mode**: update the existing scenario `.md` in place + regenerate HTML
+- Path inside `docs/SystemDesign/` → **Refactor mode**: update the existing `.md` in place + regenerate HTML
 - Any other path → **Create mode**: treat as raw notes, produce new `.md` + HTML from scratch
 
 ---
@@ -18,7 +18,7 @@ The user provides a file path as the argument.
 
 Use agent `philosophy-refactor-scenario-design-worker` with:
 > **Mode: [refactor|create]. Phase: analyze.** Input file: [path].
-> In refactor mode: also read the existing HTML deck + `docs/deck/scenarios/music-streaming-system-design.html` as style reference.
+> In refactor mode: also read the existing HTML deck + `docs/deck/SystemDesign/MusicAppSystemDesign.html` as style reference.
 > Return a full structured plan.
 
 Present the plan to the user. Ask: **"Apply all changes? Or select specific items?"**
@@ -30,7 +30,7 @@ After confirmation, use agent `philosophy-refactor-scenario-design-worker` with:
 > Apply all approved changes, cross-check the result, write the `.md` file.
 
 The worker will indicate when to spawn `philosophy-scenario-html-worker`. When it does, spawn that worker with:
-> **Mode: generate.** Scenario .md: [output .md path]. HTML deck path: [target HTML path]. Style reference: `docs/deck/scenarios/music-streaming-system-design.html`.
+> **Mode: generate.** Scenario .md: [output .md path]. HTML deck path: [target HTML path]. Style reference: `docs/deck/SystemDesign/MusicAppSystemDesign.html`.
 
 ## Report
 
