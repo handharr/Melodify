@@ -1,8 +1,8 @@
 import Foundation
 
-// URLSession-based loader with no caching. Use in tests and dev previews.
-// Swap for SDWebImageLoader in production coordinators.
-public final class URLSessionImageLoader: ImageLoaderProtocol {
+// URLSession-based DataSource with no caching. Use in tests and dev previews.
+// Swap for ImageDataSource in production coordinators.
+public final class URLSessionImageDataSource: ImageDataSourceProtocol {
     private let session: URLSession
 
     public init(session: URLSession = .shared) {

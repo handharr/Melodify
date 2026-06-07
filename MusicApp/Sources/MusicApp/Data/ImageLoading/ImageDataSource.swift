@@ -5,7 +5,7 @@ import CoreKit
 // Production concrete. Conforms to both protocols — SDWebImage handles
 // memory + disk caching and batch prefetching transparently.
 //
-// public final class ImageLoader: ImageLoaderProtocol, ImagePrefetcherProtocol {
+// public final class ImageDataSource: ImageDataSourceProtocol, ImagePrefetcherProtocol {
 //
 //     public init() {}
 //

@@ -1,5 +1,5 @@
 import Foundation
 
-public protocol ImageLoaderProtocol: Sendable {
+public protocol ImageDataSourceProtocol: Sendable {
     func load(url: URL) async throws -> Data
 }
