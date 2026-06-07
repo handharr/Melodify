@@ -95,6 +95,8 @@ No optionals for content type. Switch exhaustively in the cell factory.
 - [x] Wire host app launcher (tab bar — Music Search, Music Home, Chat placeholder, Feed placeholder)
 - [x] `WebSocketClient` in `CoreKit/Network/` — channel-multiplexed transport (`subscribe(channel:) → AsyncStream<String>`), `ChannelRouter` actor guards continuations
 - [x] `AnalyticsEvent` made app-agnostic — protocol with `name`/`params` in CoreKit; `MusicAnalyticsEvent` enum in `MusicApp/Domain/Analytics/`
+- [x] Analytics concretes in CoreKit — `ConsoleAnalyticsGateway` (dev/debug), `NoOpAnalyticsGateway` (test/preview); host app `ConsoleAnalyticsService` removed
+- [x] Image loading stack — `ImageDataSourceProtocol` + `ImagePrefetcherProtocol` in CoreKit; `URLSessionImageDataSource` + `NoOpImagePrefetcher` as dev/test stubs; `ImageDataSource` (SDWebImage stub) in `MusicApp/Data/`; `ImageRepositoryProtocol` in `MusicApp/Domain/`; `ImageRepository` in `MusicApp/Data/` wires DataSource + Prefetcher
 
 ### Phase 2 — ChatApp
 - [ ] Design WebSocket multiplexing layer in CoreKit
