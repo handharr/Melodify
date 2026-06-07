@@ -233,7 +233,7 @@ SwiftUI screen (View)
 - [x] `AppCoordinator` refactored — root is a single `UINavigationController` with `HomeViewController` at the base; each mini-app pushed onto that stack
 - [x] MusicApp entry — push a `UITabBarController` (Search + Home tabs) so Music retains its two-tab internal structure
 - [x] Deep link handling updated — resolve to `HomeCoordinator` → push correct mini-app → drill to target screen
-- [ ] `DSCatalogViewController` — live in-app component browser; replaces scattered `*Preview.swift` files; shows all MDS components in a scrollable list with light/dark toggle
+- [x] `DSCatalogViewController` — live in-app component browser; replaces scattered `*Preview.swift` files; shows all MDS components in a scrollable list with light/dark toggle
 
 #### Interview Angle
 
