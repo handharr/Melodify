@@ -19,7 +19,7 @@ final class AppCoordinator: DeepLinkHandler {
     }
 
     func start() {
-        let analytics = ConsoleAnalyticsService()
+        let analytics = ConsoleAnalyticsGateway()
 
         let music = MusicCoordinator(analytics: analytics)
         music.start()
