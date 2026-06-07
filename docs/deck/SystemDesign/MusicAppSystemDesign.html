@@ -411,6 +411,7 @@
       <li><a href="#data-model">Data Model Design</a></li>
       <li><a href="#high-level-design">High-Level Design</a></li>
       <li><a href="#data-flow">Data Flow</a></li>
+      <li><a href="#technical-deep-dive">Technical Deep-dive</a></li>
     </ol>
   </nav>
 
@@ -832,6 +833,56 @@ Next page:
 
     <div class="rule">
       <p><strong>Pattern to remember:</strong> <code>defer { isLoading = false }</code> appears in every ViewModel load/mutation method. It fires on all exit paths — success, throw, and cancellation — guaranteeing the loading spinner always clears.</p>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════ 6. Technical Deep-dive -->
+  <section id="technical-deep-dive">
+    <h2>6. Technical Deep-dive</h2>
+
+    <h3>Why <code>FetchPolicy</code> lives on <code>Request</code>, not as a UseCase/Repository parameter</h3>
+    <div class="callout">
+      <p>Passing <code>policy:</code> as a separate argument forces every call site to carry it, and UseCase signatures change whenever the policy surface changes. Embedding it in <code>Request.policy</code> keeps the public API of <code>UseCase.execute(request:)</code> stable — callers set the policy when they build the <code>Request</code>, and the Repository reads it only at the cache-vs-network decision point. Nothing in between touches it.</p>
+    </div>
+
+    <h3>Why <code>async let</code> for home fetch but <code>withThrowingTaskGroup</code> for genre sections</h3>
+    <div class="callout">
+      <p><code>async let</code> is clean for a fixed small number of concurrent tasks (featured tracks + playlists = 2). <code>withThrowingTaskGroup</code> is necessary when N is dynamic — the genre list is user-configurable and could be 1 or 10. Choosing the wrong primitive in the other direction would either be over-engineered (group for 2 tasks) or broken at runtime (<code>async let</code> for a variable-length array).</p>
+    </div>
+
+    <h3>Why <code>SearchSessionService</code> in Domain instead of state in <code>TrackListViewModel</code></h3>
+    <div class="callout">
+      <p>Query state (<code>term</code>, <code>page</code>, <code>policy</code>) is used by both search and pagination flows. If it lived in the ViewModel, it would be duplicated for every screen that needs to page through results. A Domain Service is the right home: it outlives a single user action, it's injected, and it encodes a business rule — "reset to page 1 on a new query, advance page on scroll." ViewModels call <code>begin(query:)</code> and <code>advance()</code> without knowing the state shape.</p>
+    </div>
+
+    <h3>Why <code>PlaylistRepository</code> has no <code>LocalDataSource</code> and no <code>FetchPolicy</code></h3>
+    <div class="callout">
+      <p>Playlists are user-owned mutable data. Showing a stale cached playlist while the network loads would hide edits the user just made on another device. The benefit of a cache (avoiding a spinner) is outweighed by the risk of stale state for a list that can be mutated. Remote-only with no caching is the correct trade-off — it keeps <code>PlaylistRepository</code> simpler and avoids a cache-invalidation problem.</p>
+    </div>
+
+    <h3>Why <code>Mapper.toDomain</code> returns <code>Optional</code> instead of throwing</h3>
+    <div class="callout">
+      <p>A throwing Mapper would force every call site to handle a <code>try</code> — but an individual invalid DTO inside a list of 50 is not a fatal error. Returning <code>nil</code> lets the Repository filter silently: <code>dtos.compactMap(TrackMapper.toDomain)</code> drops the bad item and returns the rest. The user sees 49 tracks instead of an error. Throwing is appropriate at the network layer (bad status code, missing auth); not at the DTO-to-domain translation layer.</p>
+    </div>
+
+    <h3>Why <code>@MainActor</code> on ViewModel instead of <code>DispatchQueue.main.async</code> per update</h3>
+    <div class="callout">
+      <p><code>@MainActor</code> is a compile-time guarantee. <code>DispatchQueue.main.async</code> is a runtime call that can be forgotten, duplicated, or placed at the wrong granularity. With <code>@MainActor</code>, the compiler enforces that all <code>@Published</code> mutations happen on the main thread — there is no way to forget.</p>
+    </div>
+
+    <h3>Interview Q&amp;A</h3>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Question</th><th>Answer</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Where does <code>FetchPolicy</code> come from and who reads it?</td><td>Set by the ViewModel on the <code>Request</code>; read only by <code>TrackRepository</code> at the cache branch. Nothing in between touches it.</td></tr>
+          <tr><td>Why two <code>async let</code> instead of sequential awaits on the home screen?</td><td>Both fetches are independent — sequential would wait for featured tracks before starting playlists, adding unnecessary latency. <code>async let</code> runs them concurrently with a single line of composition.</td></tr>
+          <tr><td>What happens when <code>TrackMapper.toDomain</code> returns <code>nil</code>?</td><td><code>compactMap</code> drops the nil. The user sees fewer results; the app never crashes on a bad DTO.</td></tr>
+          <tr><td>Why no playlist cache?</td><td>Playlist data is mutable and user-owned. Stale cache creates a worse experience than a spinner. No cache = no cache-invalidation problem.</td></tr>
+        </tbody>
+      </table>
     </div>
   </section>
 

@@ -277,6 +277,7 @@
       <li><a href="#data-model">Data Model Design</a></li>
       <li><a href="#high-level-design">High-Level Design</a></li>
       <li><a href="#data-flow">Data Flow</a></li>
+      <li><a href="#technical-deep-dive">Technical Deep-dive</a></li>
     </ol>
   </nav>
 
@@ -728,6 +729,85 @@ Incoming frame: { <span class="st">"channel"</span>: <span class="st">"conv-abc"
     <div class="callout">
       <strong>Why HTTP POST for outbound, not WebSocket?</strong>
       HTTP POST gives you delivery confirmation, typed status codes (409 conflict, 5xx retry), and idempotency keys enforced at the protocol level. WebSocket fire-and-forget has none of these guarantees. Splitting outbound (HTTP) and inbound (WebSocket) is the correct architectural decision — not a simplification.
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════ 6. Technical Deep-dive -->
+  <section id="technical-deep-dive">
+    <h2>Technical Deep-dive</h2>
+
+    <h3>Why HTTP POST for outbound, not WebSocket?</h3>
+
+    <div class="callout">
+      WebSocket is a transport — it has no delivery semantics. If you send a message over WebSocket and the frame is dropped, you get no error. HTTP POST gives you: a status code (200 sent, 409 conflict, 5xx retry), a request body you can log and replay, and a confirmed response with the server-assigned message ID. The idempotency key (<code>clientId</code>) only works over a request/response protocol. The split is intentional: WebSocket for inbound real-time events, HTTP for outbound actions that need a result.
+    </div>
+
+    <h3>Why one WebSocket connection instead of one per conversation?</h3>
+
+    <div class="callout">
+      One socket per conversation is O(conversations) connections per user. A user with 50 open conversations would hold 50 persistent TCP connections — unsustainable on server and mobile battery. One shared <code>WebSocketClient</code> with channel multiplexing is O(1) per user. The <code>ChannelRouter</code> actor maps channel strings to continuations; subscribing to a new conversation adds one entry to the router's dictionary, not a new socket.
+    </div>
+
+    <h3>Why <code>MessageContent</code> enum instead of optional fields?</h3>
+
+    <div class="callout">
+      Optional fields (<code>text: String?</code>, <code>imageURL: URL?</code>) make invalid states representable at the type level. A <code>MessageDTO</code> with no text and no image URL is syntactically valid Swift but semantically illegal in the domain. The <code>MessageContent</code> enum makes illegal states unrepresentable: every <code>Message</code> has exactly one content case. The switch in the cell factory is exhaustive at compile time — adding a new message type without handling it is a build error, not a runtime crash.
+    </div>
+
+    <h3>Why <code>clientId</code> (idempotency key) generated in <code>SendMessageRequest.init</code>?</h3>
+
+    <div class="callout">
+      If generated at the ViewModel call site, the same action (e.g. a button tap that retries) would produce different UUIDs each time — defeating idempotency. If generated in the Repository or DataSource, the key is not accessible to the offline queue. Generating it in <code>SendMessageRequest.init</code> means: the same <code>Request</code> object always carries the same <code>clientId</code>, the queue can persist it, and retries (whether from queue flush or network retry) re-use the same key. The server deduplicates on <code>client_id</code> — safe to call twice with the same UUID.
+    </div>
+
+    <h3>Why <code>PendingMessageQueue</code> is a Swift actor?</h3>
+
+    <div class="callout">
+      The queue is accessed from multiple concurrency contexts: the send path (ViewModel → UseCase → Repository), the flush path (Coordinator on app foreground), and potentially background retry logic. A class with a lock would work but requires manual locking discipline. An actor serialises all access automatically — no lock, no data race, compiler-enforced.
+    </div>
+
+    <h3>Why flush is triggered in <code>ChatCoordinator</code>, not in a ViewController?</h3>
+
+    <div class="callout">
+      <code>UIApplication.didBecomeActiveNotification</code> fires app-wide — it doesn't belong to any one screen. If the <code>ConversationListViewController</code> owned the flush, it would miss events while another screen is active. <code>ChatCoordinator</code> is app-scoped for the chat feature; it lives as long as the chat module is active and is the correct owner of cross-screen infrastructure concerns.
+    </div>
+
+    <h3>Why <code>MessageLocalDataSource</code> is in-memory (actor) rather than disk-backed?</h3>
+
+    <div class="callout">
+      Message history for the current session is loaded from bundled mock JSON via the local data source. In a production app it would be backed by Core Data or SQLite. The actor boundary is already in place — swapping the storage backend is a one-file change inside <code>MessageLocalDataSource</code> without touching any caller.
+    </div>
+
+    <h3>Interview Q&amp;A</h3>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Question</th><th>Answer</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Why WebSocket for inbound but HTTP for outbound?</td>
+            <td>HTTP gives you delivery confirmation, status codes, and idempotency. WebSocket fire-and-forget has none of those guarantees. The direction of the data determines the protocol.</td>
+          </tr>
+          <tr>
+            <td>Why one socket?</td>
+            <td>O(1) connections per user. O(conversations) is unsustainable. Channel multiplexing handles any number of conversations on one TCP connection.</td>
+          </tr>
+          <tr>
+            <td>Why enum for message type, not optionals?</td>
+            <td>Illegal states become unrepresentable. The cell factory switch is exhaustive at compile time — adding a new type without handling it is a build error, not a runtime crash.</td>
+          </tr>
+          <tr>
+            <td>What happens if a send fails while offline?</td>
+            <td><code>PendingMessageQueue.enqueue(PendingMessageDTO)</code> persists it to disk. On next app foreground, <code>ChatCoordinator</code> triggers <code>FlushPendingMessagesUseCase</code> which re-sends with the same <code>clientId</code> — server deduplicates.</td>
+          </tr>
+          <tr>
+            <td>Why is <code>clientId</code> generated in <code>SendMessageRequest.init</code>?</td>
+            <td>So the same request object always carries the same key. Retries and queue flushes re-use it automatically — no caller needs to track the UUID.</td>
+          </tr>
+        </tbody>
+      </table>
     </div>
   </section>
 
