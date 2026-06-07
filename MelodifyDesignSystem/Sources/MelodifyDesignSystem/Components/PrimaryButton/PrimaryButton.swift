@@ -11,12 +11,12 @@ public final class MDSPrimaryButton: UIButton {
     required init?(coder: NSCoder) { fatalError() }
 
     private func setup() {
-        layer.cornerRadius = 12
-        titleLabel?.font = .titleMedium
-        setTitleColor(.white, for: .normal)
-        setTitleColor(.white.withAlphaComponent(0.6), for: .disabled)
+        layer.cornerRadius = Radius.md
+        titleLabel?.font = Typography.title
+        setTitleColor(MDSColor.onPrimary, for: .normal)
+        setTitleColor(MDSColor.onPrimary.withAlphaComponent(0.6), for: .disabled)
 
-        activityIndicator.color = .white
+        activityIndicator.color = MDSColor.onPrimary
         activityIndicator.translatesAutoresizingMaskIntoConstraints = false
         addSubview(activityIndicator)
         NSLayoutConstraint.activate([
@@ -27,8 +27,8 @@ public final class MDSPrimaryButton: UIButton {
 
     public func configure(with config: MDSPrimaryButtonConfiguration) {
         setTitle(config.isLoading ? nil : config.title, for: .normal)
-        isEnabled        = config.isEnabled
-        backgroundColor  = config.isEnabled ? .brandPrimary : .systemGray4
+        isEnabled       = config.isEnabled
+        backgroundColor = config.isEnabled ? MDSColor.primary : .systemGray4
         config.isLoading ? activityIndicator.startAnimating() : activityIndicator.stopAnimating()
     }
 }

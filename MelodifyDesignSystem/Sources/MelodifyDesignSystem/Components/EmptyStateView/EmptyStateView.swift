@@ -4,15 +4,15 @@ public final class MDSEmptyStateView: UIView {
     private let imageView: UIImageView = {
         let v = UIImageView()
         v.contentMode = .scaleAspectFit
-        v.tintColor = .textSecondary
+        v.tintColor = MDSColor.textSecondary
         v.translatesAutoresizingMaskIntoConstraints = false
         return v
     }()
 
     private let titleLabel: UILabel = {
         let l = UILabel()
-        l.font = .titleMedium
-        l.textColor = .textPrimary
+        l.font = Typography.title
+        l.textColor = MDSColor.textPrimary
         l.textAlignment = .center
         l.translatesAutoresizingMaskIntoConstraints = false
         return l
@@ -20,8 +20,8 @@ public final class MDSEmptyStateView: UIView {
 
     private let subtitleLabel: UILabel = {
         let l = UILabel()
-        l.font = .bodyRegular
-        l.textColor = .textSecondary
+        l.font = Typography.body
+        l.textColor = MDSColor.textSecondary
         l.textAlignment = .center
         l.numberOfLines = 0
         l.translatesAutoresizingMaskIntoConstraints = false

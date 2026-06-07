@@ -5,32 +5,32 @@ public final class MDSTrackRowView: UIView {
         let v = UIImageView()
         v.contentMode = .scaleAspectFill
         v.clipsToBounds = true
-        v.layer.cornerRadius = 8
-        v.backgroundColor = .backgroundElevated
+        v.layer.cornerRadius = Radius.sm
+        v.backgroundColor = MDSColor.surfaceElevated
         v.translatesAutoresizingMaskIntoConstraints = false
         return v
     }()
 
     private let titleLabel: UILabel = {
         let l = UILabel()
-        l.font = .titleMedium
-        l.textColor = .textPrimary
+        l.font = Typography.title
+        l.textColor = MDSColor.textPrimary
         l.translatesAutoresizingMaskIntoConstraints = false
         return l
     }()
 
     private let subtitleLabel: UILabel = {
         let l = UILabel()
-        l.font = .bodyRegular
-        l.textColor = .textSecondary
+        l.font = Typography.body
+        l.textColor = MDSColor.textSecondary
         l.translatesAutoresizingMaskIntoConstraints = false
         return l
     }()
 
     private let durationLabel: UILabel = {
         let l = UILabel()
-        l.font = .captionSmall
-        l.textColor = .textSecondary
+        l.font = Typography.caption
+        l.textColor = MDSColor.textSecondary
         l.translatesAutoresizingMaskIntoConstraints = false
         return l
     }()
