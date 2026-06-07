@@ -224,7 +224,7 @@ SwiftUI screen (View)
 - [x] `ChatViewController` input bar — `MDSPrimaryButton` replaces inline `UIButton`; `Spacing` tokens replace magic numbers; `MDSColor.surfaceElevated` for input bar background
 
 **Previews catalog**
-- [ ] One `*Preview.swift` file per component showing all variants in light + dark mode
+- [x] ~~One `*Preview.swift` file per component~~ — superseded by `DSCatalogViewController` (live in-app browser)
 
 **Host app — Workspace Home screen**
 - [x] Replace flat `UITabBarController` root with a hub-and-spoke `HomeViewController`
