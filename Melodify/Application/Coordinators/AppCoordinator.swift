@@ -48,7 +48,7 @@ final class AppCoordinator: DeepLinkHandler {
         case .music:    pushMusicApp()
         case .chat:     pushChatApp()
         case .feed:     pushPlaceholder(title: "Feed", icon: "newspaper.fill")
-        case .dsCatalog: pushPlaceholder(title: "DS Catalog", icon: "paintpalette.fill")
+        case .dsCatalog: navigationController.pushViewController(DSCatalogViewController(), animated: true)
         }
     }
 
