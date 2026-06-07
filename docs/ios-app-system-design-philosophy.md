@@ -149,6 +149,23 @@ FetchPolicy
 | Lifetime | Per call | Injected, lives as needed |
 | Imports | Nothing | Nothing (pure Swift) |
 
+**Three tests for Domain Service — all must pass:**
+
+1. **Is the state domain state, not infrastructure state?** The Service holds business concepts (`currentTrack`, `isPlaying`, session token) — not SDK handles. AVFoundation is injected via protocol; the Service owns the business state it wraps.
+2. **Does it outlive a single screen or action?** A Domain Service is app-scoped or feature-scoped. If only one screen cares about it, it's probably a UseCase or Repository instead.
+3. **Does it encode business rules, not data rules?** Business rule: "can't play two tracks simultaneously." Data rule: "check cache before network." The boundary — would a product manager describe this rule? If yes, it belongs in Domain.
+
+**Domain Service vs Repository — the smell test:**
+If multiple ViewModels need to observe or share the same state simultaneously, it's a Domain Service. If only one screen needs data fetched and returned, it's a Repository + UseCase.
+
+| Service | State it owns | Business rule |
+|---|---|---|
+| `PlayerService` | `currentTrack`, `isPlaying`, `progress` | Can't play two tracks simultaneously |
+| `AuthService` | session token, expiry | Refresh before expiry, re-auth on 401 |
+| `SearchSessionService` | current query, page, policy | Reset page on new query |
+
+**Why image loading is not a Domain Service:** No domain state (which image is loading is not a business concept), doesn't outlive a screen, no business rule. It's pure data fetching — Repository territory.
+
 ### Data
 
 ```
