@@ -8,12 +8,13 @@ let package = Package(
         .library(name: "ChatApp", targets: ["ChatApp"])
     ],
     dependencies: [
-        .package(path: "../CoreKit")
+        .package(path: "../CoreKit"),
+        .package(path: "../MelodifyDesignSystem")
     ],
     targets: [
         .target(
             name: "ChatApp",
-            dependencies: ["CoreKit"],
+            dependencies: ["CoreKit", "MelodifyDesignSystem"],
             path: "Sources/ChatApp",
             resources: [
                 .process("Data/MockData")

@@ -1,5 +1,6 @@
 import UIKit
 import Combine
+import MelodifyDesignSystem
 
 public final class ConversationListViewController: UIViewController {
     var onSelectConversation: ((String) -> Void)?
@@ -15,6 +16,18 @@ public final class ConversationListViewController: UIViewController {
         tv.estimatedRowHeight = 72
         tv.delegate = self
         return tv
+    }()
+
+    private lazy var emptyStateView: MDSEmptyStateView = {
+        let v = MDSEmptyStateView()
+        v.translatesAutoresizingMaskIntoConstraints = false
+        v.isHidden = true
+        v.configure(with: MDSEmptyStateConfiguration(
+            systemImageName: "bubble.left.and.bubble.right",
+            title: "No Conversations",
+            subtitle: "Your messages will appear here."
+        ))
+        return v
     }()
 
     private lazy var dataSource = UITableViewDiffableDataSource<Int, ConversationUIModel>(
@@ -38,7 +51,7 @@ public final class ConversationListViewController: UIViewController {
     public override func viewDidLoad() {
         super.viewDidLoad()
         title = "Messages"
-        view.backgroundColor = .systemBackground
+        view.backgroundColor = MDSColor.surface
         setupTableView()
         bindViewModel()
         viewModel.load()
@@ -46,11 +59,17 @@ public final class ConversationListViewController: UIViewController {
 
     private func setupTableView() {
         view.addSubview(tableView)
+        view.addSubview(emptyStateView)
         NSLayoutConstraint.activate([
             tableView.topAnchor.constraint(equalTo: view.topAnchor),
             tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+            tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+
+            emptyStateView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            emptyStateView.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+            emptyStateView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            emptyStateView.trailingAnchor.constraint(equalTo: view.trailingAnchor)
         ])
     }
 
@@ -58,10 +77,13 @@ public final class ConversationListViewController: UIViewController {
         viewModel.$conversations
             .receive(on: RunLoop.main)
             .sink { [weak self] items in
+                guard let self else { return }
                 var snapshot = NSDiffableDataSourceSnapshot<Int, ConversationUIModel>()
                 snapshot.appendSections([0])
                 snapshot.appendItems(items)
-                self?.dataSource.apply(snapshot, animatingDifferences: true)
+                dataSource.apply(snapshot, animatingDifferences: true)
+                emptyStateView.isHidden = !items.isEmpty
+                tableView.isHidden = items.isEmpty
             }
             .store(in: &cancellables)
     }

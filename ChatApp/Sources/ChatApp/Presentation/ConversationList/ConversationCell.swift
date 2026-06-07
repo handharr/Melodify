@@ -1,43 +1,44 @@
 import UIKit
+import MelodifyDesignSystem
 
 final class ConversationCell: UITableViewCell {
     static let reuseIdentifier = "ConversationCell"
 
+    private let avatarView: MDSAvatarView = {
+        let v = MDSAvatarView()
+        v.translatesAutoresizingMaskIntoConstraints = false
+        return v
+    }()
+
     private let titleLabel: UILabel = {
         let l = UILabel()
-        l.font = .systemFont(ofSize: 16, weight: .semibold)
+        l.font = Typography.title
+        l.textColor = MDSColor.textPrimary
+        l.translatesAutoresizingMaskIntoConstraints = false
         return l
     }()
 
     private let lastMessageLabel: UILabel = {
         let l = UILabel()
-        l.font = .systemFont(ofSize: 14)
-        l.textColor = .secondaryLabel
+        l.font = Typography.body
+        l.textColor = MDSColor.textSecondary
         l.numberOfLines = 1
+        l.translatesAutoresizingMaskIntoConstraints = false
         return l
     }()
 
     private let timestampLabel: UILabel = {
         let l = UILabel()
-        l.font = .systemFont(ofSize: 12)
-        l.textColor = .tertiaryLabel
+        l.font = Typography.caption
+        l.textColor = MDSColor.textDisabled
+        l.translatesAutoresizingMaskIntoConstraints = false
         return l
     }()
 
-    private let badgeView: UIView = {
-        let v = UIView()
-        v.backgroundColor = .systemBlue
-        v.layer.cornerRadius = 8
-        v.isHidden = true
+    private let badgeView: MDSBadgeView = {
+        let v = MDSBadgeView()
+        v.translatesAutoresizingMaskIntoConstraints = false
         return v
-    }()
-
-    private let badgeLabel: UILabel = {
-        let l = UILabel()
-        l.font = .systemFont(ofSize: 11, weight: .bold)
-        l.textColor = .white
-        l.textAlignment = .center
-        return l
     }()
 
     override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
@@ -48,43 +49,37 @@ final class ConversationCell: UITableViewCell {
     required init?(coder: NSCoder) { fatalError() }
 
     func configure(with model: ConversationUIModel) {
+        avatarView.configure(with: MDSAvatarConfiguration(name: model.title, size: .medium))
         titleLabel.text = model.title
         lastMessageLabel.text = model.lastMessage
         timestampLabel.text = model.timestamp
-        badgeView.isHidden = !model.hasUnread
-        badgeLabel.text = "\(model.unreadCount)"
+        badgeView.configure(with: MDSBadgeConfiguration(count: model.unreadCount))
     }
 
     private func setupViews() {
-        badgeView.addSubview(badgeLabel)
-        [titleLabel, lastMessageLabel, timestampLabel, badgeView].forEach {
-            $0.translatesAutoresizingMaskIntoConstraints = false
-            contentView.addSubview($0)
-        }
-        badgeLabel.translatesAutoresizingMaskIntoConstraints = false
+        [avatarView, titleLabel, lastMessageLabel, timestampLabel, badgeView]
+            .forEach { contentView.addSubview($0) }
 
         NSLayoutConstraint.activate([
-            titleLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 12),
-            titleLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
-            titleLabel.trailingAnchor.constraint(equalTo: timestampLabel.leadingAnchor, constant: -8),
+            avatarView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: Spacing.md),
+            avatarView.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
+            avatarView.topAnchor.constraint(greaterThanOrEqualTo: contentView.topAnchor, constant: Spacing.sm),
+            avatarView.bottomAnchor.constraint(lessThanOrEqualTo: contentView.bottomAnchor, constant: -Spacing.sm),
+
+            titleLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: Spacing.sm + 4),
+            titleLabel.leadingAnchor.constraint(equalTo: avatarView.trailingAnchor, constant: Spacing.sm),
+            titleLabel.trailingAnchor.constraint(equalTo: timestampLabel.leadingAnchor, constant: -Spacing.sm),
 
             timestampLabel.centerYAnchor.constraint(equalTo: titleLabel.centerYAnchor),
-            timestampLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
+            timestampLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -Spacing.md),
 
-            lastMessageLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 4),
+            lastMessageLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: Spacing.xs),
             lastMessageLabel.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
-            lastMessageLabel.trailingAnchor.constraint(equalTo: badgeView.leadingAnchor, constant: -8),
-            lastMessageLabel.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -12),
+            lastMessageLabel.trailingAnchor.constraint(equalTo: badgeView.leadingAnchor, constant: -Spacing.sm),
+            lastMessageLabel.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -(Spacing.sm + 4)),
 
             badgeView.centerYAnchor.constraint(equalTo: lastMessageLabel.centerYAnchor),
-            badgeView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
-            badgeView.widthAnchor.constraint(greaterThanOrEqualToConstant: 16),
-            badgeView.heightAnchor.constraint(equalToConstant: 16),
-
-            badgeLabel.centerXAnchor.constraint(equalTo: badgeView.centerXAnchor),
-            badgeLabel.centerYAnchor.constraint(equalTo: badgeView.centerYAnchor),
-            badgeLabel.leadingAnchor.constraint(equalTo: badgeView.leadingAnchor, constant: 4),
-            badgeLabel.trailingAnchor.constraint(equalTo: badgeView.trailingAnchor, constant: -4)
+            badgeView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -Spacing.md)
         ])
     }
 }

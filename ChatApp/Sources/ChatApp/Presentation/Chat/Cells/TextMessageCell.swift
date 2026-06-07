@@ -1,27 +1,11 @@
 import UIKit
+import MelodifyDesignSystem
 
 final class TextMessageCell: UICollectionViewCell {
-    private let bubbleView: UIView = {
-        let v = UIView()
-        v.layer.cornerRadius = 16
+    private let bubble: MDSMessageBubble = {
+        let v = MDSMessageBubble()
         v.translatesAutoresizingMaskIntoConstraints = false
         return v
-    }()
-
-    private let textLabel: UILabel = {
-        let l = UILabel()
-        l.font = .systemFont(ofSize: 16)
-        l.numberOfLines = 0
-        l.translatesAutoresizingMaskIntoConstraints = false
-        return l
-    }()
-
-    private let metaLabel: UILabel = {
-        let l = UILabel()
-        l.font = .systemFont(ofSize: 11)
-        l.textColor = .tertiaryLabel
-        l.translatesAutoresizingMaskIntoConstraints = false
-        return l
     }()
 
     private var leadingConstraint: NSLayoutConstraint?
@@ -29,27 +13,17 @@ final class TextMessageCell: UICollectionViewCell {
 
     override init(frame: CGRect) {
         super.init(frame: frame)
-        bubbleView.addSubview(textLabel)
-        bubbleView.addSubview(metaLabel)
-        contentView.addSubview(bubbleView)
+        contentView.addSubview(bubble)
 
-        let leading = bubbleView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16)
-        let trailing = bubbleView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16)
-        leadingConstraint = leading
+        let leading  = bubble.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: Spacing.md)
+        let trailing = bubble.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -Spacing.md)
+        leadingConstraint  = leading
         trailingConstraint = trailing
 
         NSLayoutConstraint.activate([
-            bubbleView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 4),
-            bubbleView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -4),
-            bubbleView.widthAnchor.constraint(lessThanOrEqualTo: contentView.widthAnchor, multiplier: 0.75),
-
-            textLabel.topAnchor.constraint(equalTo: bubbleView.topAnchor, constant: 10),
-            textLabel.leadingAnchor.constraint(equalTo: bubbleView.leadingAnchor, constant: 12),
-            textLabel.trailingAnchor.constraint(equalTo: bubbleView.trailingAnchor, constant: -12),
-
-            metaLabel.topAnchor.constraint(equalTo: textLabel.bottomAnchor, constant: 4),
-            metaLabel.trailingAnchor.constraint(equalTo: bubbleView.trailingAnchor, constant: -12),
-            metaLabel.bottomAnchor.constraint(equalTo: bubbleView.bottomAnchor, constant: -8)
+            bubble.topAnchor.constraint(equalTo: contentView.topAnchor, constant: Spacing.xs),
+            bubble.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -Spacing.xs),
+            bubble.widthAnchor.constraint(lessThanOrEqualTo: contentView.widthAnchor, multiplier: 0.75)
         ])
     }
 
@@ -57,19 +31,19 @@ final class TextMessageCell: UICollectionViewCell {
 
     func configure(with model: ChatUIModel) {
         guard case .text(let text) = model.content else { return }
-        textLabel.text = text
-        metaLabel.text = "\(model.timestamp) · \(model.status)"
+        let variant: MDSBubbleVariant = model.isOutgoing ? .outgoing : .incoming
+        bubble.configure(with: MDSMessageBubbleConfiguration(
+            text: text,
+            variant: variant,
+            meta: "\(model.timestamp) · \(model.status)"
+        ))
 
         if model.isOutgoing {
-            bubbleView.backgroundColor = .systemBlue
-            textLabel.textColor = .white
-            leadingConstraint?.isActive = false
+            leadingConstraint?.isActive  = false
             trailingConstraint?.isActive = true
         } else {
-            bubbleView.backgroundColor = .secondarySystemBackground
-            textLabel.textColor = .label
             trailingConstraint?.isActive = false
-            leadingConstraint?.isActive = true
+            leadingConstraint?.isActive  = true
         }
     }
 }

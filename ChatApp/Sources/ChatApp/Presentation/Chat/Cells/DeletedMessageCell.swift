@@ -1,11 +1,12 @@
 import UIKit
+import MelodifyDesignSystem
 
 final class DeletedMessageCell: UICollectionViewCell {
     private let label: UILabel = {
         let l = UILabel()
         l.text = "This message was deleted"
-        l.font = .italicSystemFont(ofSize: 14)
-        l.textColor = .tertiaryLabel
+        l.font = .italicSystemFont(ofSize: Typography.body.pointSize)
+        l.textColor = MDSColor.textDisabled
         l.translatesAutoresizingMaskIntoConstraints = false
         return l
     }()
@@ -14,10 +15,10 @@ final class DeletedMessageCell: UICollectionViewCell {
         super.init(frame: frame)
         contentView.addSubview(label)
         NSLayoutConstraint.activate([
-            label.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 8),
-            label.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
-            label.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
-            label.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -8)
+            label.topAnchor.constraint(equalTo: contentView.topAnchor, constant: Spacing.sm),
+            label.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: Spacing.md),
+            label.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -Spacing.md),
+            label.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -Spacing.sm)
         ])
     }
 

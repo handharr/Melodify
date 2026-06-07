@@ -1,5 +1,6 @@
 import UIKit
 import Combine
+import MelodifyDesignSystem
 
 public final class ChatViewController: UIViewController {
     private let viewModel: ChatViewModel
@@ -63,7 +64,7 @@ public final class ChatViewController: UIViewController {
 
     private let inputBar: UIView = {
         let v = UIView()
-        v.backgroundColor = .secondarySystemBackground
+        v.backgroundColor = MDSColor.surfaceElevated
         v.translatesAutoresizingMaskIntoConstraints = false
         return v
     }()
@@ -76,13 +77,10 @@ public final class ChatViewController: UIViewController {
         return tf
     }()
 
-    private let sendButton: UIButton = {
-        var config = UIButton.Configuration.filled()
-        config.title = "Send"
-        config.cornerStyle = .capsule
-        let btn = UIButton(configuration: config)
-        btn.translatesAutoresizingMaskIntoConstraints = false
-        return btn
+    private let sendButton: MDSPrimaryButton = {
+        let b = MDSPrimaryButton()
+        b.translatesAutoresizingMaskIntoConstraints = false
+        return b
     }()
 
     private var inputBarBottomConstraint: NSLayoutConstraint?
@@ -100,12 +98,13 @@ public final class ChatViewController: UIViewController {
 
     public override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = .systemBackground
+        view.backgroundColor = MDSColor.surface
+        sendButton.configure(with: MDSPrimaryButtonConfiguration(title: "Send"))
+        sendButton.addTarget(self, action: #selector(didTapSend), for: .touchUpInside)
         setupCollectionView()
         setupInputBar()
         setupKeyboardObservers()
         bindViewModel()
-        sendButton.addTarget(self, action: #selector(didTapSend), for: .touchUpInside)
     }
 
     public override func viewDidAppear(_ animated: Bool) {
@@ -143,13 +142,13 @@ public final class ChatViewController: UIViewController {
             inputBar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             bottom,
 
-            textField.topAnchor.constraint(equalTo: inputBar.topAnchor, constant: 8),
-            textField.leadingAnchor.constraint(equalTo: inputBar.leadingAnchor, constant: 12),
-            textField.trailingAnchor.constraint(equalTo: sendButton.leadingAnchor, constant: -8),
-            textField.bottomAnchor.constraint(equalTo: inputBar.bottomAnchor, constant: -8),
+            textField.topAnchor.constraint(equalTo: inputBar.topAnchor, constant: Spacing.sm),
+            textField.leadingAnchor.constraint(equalTo: inputBar.leadingAnchor, constant: Spacing.md),
+            textField.trailingAnchor.constraint(equalTo: sendButton.leadingAnchor, constant: -Spacing.sm),
+            textField.bottomAnchor.constraint(equalTo: inputBar.bottomAnchor, constant: -Spacing.sm),
 
             sendButton.centerYAnchor.constraint(equalTo: textField.centerYAnchor),
-            sendButton.trailingAnchor.constraint(equalTo: inputBar.trailingAnchor, constant: -12)
+            sendButton.trailingAnchor.constraint(equalTo: inputBar.trailingAnchor, constant: -Spacing.md)
         ])
     }
 
