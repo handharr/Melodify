@@ -244,13 +244,43 @@ SwiftUI screen (View)
 | What does "token-first" buy you? | Theming is a token swap, not a component rewrite. Dark mode, brand refresh, white-labelling — all handled at the token layer. |
 | Why UIHostingView over UIHostingController? | Avoids an extra child ViewController for inline embeddings. UIHostingView is a plain UIView — it slots into Auto Layout like any other view. |
 
-### Phase 4 — FeedApp
+### Phase 4 — Documentation
+
+**Goal:** Produce a precise system design document for every already-built module. Each doc is self-contained — a cold reader (or interviewer) should be able to reconstruct the full picture from the doc alone without reading the code.
+
+#### Directory structure
+
+```
+docs/SystemDesign/
+├── MusicApp/              MusicAppSystemDesign.md
+├── ChatApp/               ChatAppSystemDesign.md
+├── CoreKit/               CoreKitSystemDesign.md
+└── MelodifyDesignSystem/  MelodifyDesignSystemSystemDesign.md
+```
+
+#### Sections (each doc)
+
+1. **Requirements** — functional + non-functional; explicit about what is and isn't supported
+2. **API Design** — HTTP endpoints (method, path, request/response shape) or module public interface for non-HTTP modules
+3. **Data Model Design** — domain models, DTOs, enums, configuration types; Mapper noted as the only crossing point
+4. **High-Level Design** — layer diagram, component list, navigation/coordinator ownership, who imports what
+5. **Data Flow** — concrete step-by-step traces for the main flows (load, stream, send, mutation, flush)
+
+#### Deliverables
+
+- [x] `MusicAppSystemDesign.md` — iTunes Search/Lookup APIs, Playlist CRUD, FetchPolicy, async let home fetch, TrackMapper, Coordinator DI
+- [x] `ChatAppSystemDesign.md` — WebSocket multiplexing, MessageContent enum, offline queue, flush flow, HTTP-POST-for-outbound rationale
+- [x] `CoreKitSystemDesign.md` — APIClient, WebSocketClient/ChannelRouter actor internals, LocalDataSourceProtocol, analytics and image loading protocols
+- [x] `MelodifyDesignSystemSystemDesign.md` — token API, UIKit and SwiftUI component APIs, Configuration pattern, UIHostingView bridge rationale
+
+### Phase 5 — FeedApp
+- [ ] `docs/SystemDesign/FeedApp/FeedAppSystemDesign.md` — Requirements, API Design, Data Model Design, High-Level Design, Data Flow
 - [ ] Heterogeneous feed items (post, story strip, ad, suggested users)
 - [ ] Cursor-based pagination
 - [ ] Realm offline-first reads
 - [ ] Image prefetching
 
-### Phase 5 — Drill Sessions
+### Phase 6 — Drill Sessions
 - [ ] For each app: whiteboard the architecture from scratch in <10 min
 - [ ] For each component: define exact interface + responsibilities out loud
 - [ ] Practice course-correcting when challenged on WebSocket / pagination / offline
