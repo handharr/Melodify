@@ -123,6 +123,13 @@ Domain Service
   └─ stable Apple frameworks (AVFoundation, CoreData) acceptable when logic genuinely belongs here — inject via protocol so tests never touch the real framework
   └─ examples: PlayerService, SessionService, AuthService
 
+RepositoryProtocol
+  └─ defined in Domain — the contract Domain needs from Data
+  └─ concrete implementation lives in Data, never in Domain
+  └─ Domain never imports the concrete — only the protocol
+  └─ this is Dependency Inversion: Domain owns the interface, Data fulfills it
+  └─ lives in Domain/Interfaces/
+
 Model
   └─ pure Swift structs — no import UIKit, no import Foundation networking
   └─ the only type that crosses all layers
