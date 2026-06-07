@@ -1,6 +1,6 @@
 import Foundation
 
-struct FetchPolicy: Sendable {
+struct FetchPolicy: Sendable, Equatable {
     let force: Bool
     let allowStale: Bool
 

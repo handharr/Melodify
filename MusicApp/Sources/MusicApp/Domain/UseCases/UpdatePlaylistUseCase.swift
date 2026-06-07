@@ -1,7 +1,7 @@
 import Foundation
 
 protocol UpdatePlaylistUseCaseProtocol {
-    func execute(param: UpdatePlaylistParam) async throws -> Playlist
+    func execute(request: UpdatePlaylistRequest) async throws -> Playlist
 }
 
 final class UpdatePlaylistUseCase: UpdatePlaylistUseCaseProtocol {
@@ -11,10 +11,10 @@ final class UpdatePlaylistUseCase: UpdatePlaylistUseCaseProtocol {
         self.repository = repository
     }
 
-    func execute(param: UpdatePlaylistParam) async throws -> Playlist {
-        guard !param.query.name.trimmingCharacters(in: .whitespaces).isEmpty else {
+    func execute(request: UpdatePlaylistRequest) async throws -> Playlist {
+        guard !request.query.name.trimmingCharacters(in: .whitespaces).isEmpty else {
             throw PlaylistError.emptyName
         }
-        return try await repository.updatePlaylist(param: param)
+        return try await repository.updatePlaylist(request: request)
     }
 }

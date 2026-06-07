@@ -4,4 +4,4 @@ struct GetTrackDetailPath: Sendable {
     let id: Int
 }
 
-typealias GetTrackDetailParam = Param<Void, GetTrackDetailPath>
+typealias GetTrackDetailRequest = Request<Void, GetTrackDetailPath>

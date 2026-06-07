@@ -4,4 +4,4 @@ struct FetchHomeDataQuery: Sendable {
     let trackQuery: SearchTracksQuery
 }
 
-typealias FetchHomeDataParam = Param<FetchHomeDataQuery, Void>
+typealias FetchHomeDataRequest = Request<FetchHomeDataQuery, Void>

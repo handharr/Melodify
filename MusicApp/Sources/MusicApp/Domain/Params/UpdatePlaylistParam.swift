@@ -9,4 +9,4 @@ struct UpdatePlaylistPath: Sendable {
     let id: Int
 }
 
-typealias UpdatePlaylistParam = Param<UpdatePlaylistQuery, UpdatePlaylistPath>
+typealias UpdatePlaylistRequest = Request<UpdatePlaylistQuery, UpdatePlaylistPath>

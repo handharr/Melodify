@@ -1,8 +1,7 @@
 import Foundation
 
 struct SearchSession {
-    let param: SearchTracksParam
-    let policy: FetchPolicy
+    let request: SearchTracksRequest
 }
 
 protocol SearchSessionServiceProtocol: Sendable {
@@ -34,15 +33,15 @@ final class SearchSessionService: SearchSessionServiceProtocol, @unchecked Senda
 
     private func build(policy: FetchPolicy) -> SearchSession {
         SearchSession(
-            param: SearchTracksParam(
+            request: SearchTracksRequest(
                 query: SearchTracksQuery(
                     term: currentQuery,
                     page: currentPage,
                     limit: limit,
                     genre: currentGenre
-                )
-            ),
-            policy: policy
+                ),
+                policy: policy
+            )
         )
     }
 }

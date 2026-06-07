@@ -1,7 +1,7 @@
 import Foundation
 
 protocol GetTrackDetailUseCaseProtocol: Sendable {
-    func execute(policy: FetchPolicy, param: GetTrackDetailParam) async throws -> Track
+    func execute(request: GetTrackDetailRequest) async throws -> Track
 }
 
 final class GetTrackDetailUseCase: GetTrackDetailUseCaseProtocol, @unchecked Sendable {
@@ -11,7 +11,7 @@ final class GetTrackDetailUseCase: GetTrackDetailUseCaseProtocol, @unchecked Sen
         self.repository = repository
     }
 
-    func execute(policy: FetchPolicy, param: GetTrackDetailParam) async throws -> Track {
-        try await repository.getTrackDetail(policy: policy, param: param)
+    func execute(request: GetTrackDetailRequest) async throws -> Track {
+        try await repository.getTrackDetail(request: request)
     }
 }

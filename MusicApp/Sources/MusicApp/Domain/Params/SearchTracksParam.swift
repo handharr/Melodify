@@ -16,4 +16,4 @@ struct SearchTracksQuery: Sendable, Equatable {
     }
 }
 
-typealias SearchTracksParam = Param<SearchTracksQuery, Void>
+typealias SearchTracksRequest = Request<SearchTracksQuery, Void>

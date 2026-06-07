@@ -1,7 +1,7 @@
 import Foundation
 
 protocol FetchHomeDataUseCaseProtocol: Sendable {
-    func execute(policy: FetchPolicy, param: FetchHomeDataParam) async throws -> HomeData
+    func execute(request: FetchHomeDataRequest) async throws -> HomeData
 }
 
 final class FetchHomeDataUseCase: FetchHomeDataUseCaseProtocol, @unchecked Sendable {
@@ -13,11 +13,11 @@ final class FetchHomeDataUseCase: FetchHomeDataUseCaseProtocol, @unchecked Senda
         self.playlistRepository = playlistRepository
     }
 
-    func execute(policy: FetchPolicy, param: FetchHomeDataParam) async throws -> HomeData {
-        let trackParam = SearchTracksParam(query: param.query.trackQuery)
+    func execute(request: FetchHomeDataRequest) async throws -> HomeData {
+        let trackRequest = SearchTracksRequest(query: request.query.trackQuery, policy: request.policy)
         let trackRepo = trackRepository
         let playlistRepo = playlistRepository
-        async let tracks = trackRepo.searchTracks(policy: policy, param: trackParam)
+        async let tracks = trackRepo.searchTracks(request: trackRequest)
         async let playlists = playlistRepo.fetchPlaylists()
         return HomeData(featuredTracks: try await tracks, playlists: try await playlists)
     }

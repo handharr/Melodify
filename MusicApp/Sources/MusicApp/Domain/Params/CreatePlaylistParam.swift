@@ -6,4 +6,4 @@ struct CreatePlaylistQuery: Sendable {
     let trackIds: [Int]
 }
 
-typealias CreatePlaylistParam = Param<CreatePlaylistQuery, Void>
+typealias CreatePlaylistRequest = Request<CreatePlaylistQuery, Void>

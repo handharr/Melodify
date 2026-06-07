@@ -1,21 +1,22 @@
 import Foundation
 
-struct Param<Query, Path> {
+struct Request<Query, Path> {
     let query: Query
     let path: Path
+    let policy: FetchPolicy
 }
 
-extension Param where Path == Void {
-    init(query: Query) {
-        self.init(query: query, path: ())
+extension Request where Path == Void {
+    init(query: Query, policy: FetchPolicy = .fresh) {
+        self.init(query: query, path: (), policy: policy)
     }
 }
 
-extension Param where Query == Void {
-    init(path: Path) {
-        self.init(query: (), path: path)
+extension Request where Query == Void {
+    init(path: Path, policy: FetchPolicy = .fresh) {
+        self.init(query: (), path: path, policy: policy)
     }
 }
 
-extension Param: Sendable where Query: Sendable, Path: Sendable {}
-extension Param: Equatable where Query: Equatable, Path: Equatable {}
+extension Request: Sendable where Query: Sendable, Path: Sendable {}
+extension Request: Equatable where Query: Equatable, Path: Equatable {}

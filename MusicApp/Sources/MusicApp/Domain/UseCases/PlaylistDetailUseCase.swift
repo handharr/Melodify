@@ -1,7 +1,7 @@
 import Foundation
 
 protocol PlaylistDetailUseCaseProtocol: Sendable {
-    func execute(policy: FetchPolicy, param: PlaylistDetailParam) async throws -> PlaylistDetail
+    func execute(request: PlaylistDetailRequest) async throws -> PlaylistDetail
 }
 
 final class PlaylistDetailUseCase: PlaylistDetailUseCaseProtocol, @unchecked Sendable {
@@ -13,14 +13,14 @@ final class PlaylistDetailUseCase: PlaylistDetailUseCaseProtocol, @unchecked Sen
         self.trackRepository = trackRepository
     }
 
-    func execute(policy: FetchPolicy, param: PlaylistDetailParam) async throws -> PlaylistDetail {
-        let playlist = try await playlistRepository.fetchPlaylist(id: param.path.playlistId)
+    func execute(request: PlaylistDetailRequest) async throws -> PlaylistDetail {
+        let playlist = try await playlistRepository.fetchPlaylist(id: request.path.playlistId)
 
         let trackRepo = trackRepository
-        let detailParams = playlist.trackIds.map { GetTrackDetailParam(path: GetTrackDetailPath(id: $0)) }
+        let detailRequests = playlist.trackIds.map { GetTrackDetailRequest(path: GetTrackDetailPath(id: $0)) }
         let tracks = try await withThrowingTaskGroup(of: Track.self) { group in
-            for p in detailParams {
-                group.addTask { try await trackRepo.getTrackDetail(policy: .fresh, param: p) }
+            for r in detailRequests {
+                group.addTask { try await trackRepo.getTrackDetail(request: r) }
             }
             var result: [Track] = []
             for try await track in group { result.append(track) }

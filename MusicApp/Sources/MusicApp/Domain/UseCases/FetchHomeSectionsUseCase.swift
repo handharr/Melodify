@@ -1,7 +1,7 @@
 import Foundation
 
 protocol FetchHomeSectionsUseCaseProtocol {
-    func execute(policy: FetchPolicy, param: FetchHomeSectionsParam) async throws -> [HomeSection]
+    func execute(request: FetchHomeSectionsRequest) async throws -> [HomeSection]
 }
 
 final class FetchHomeSectionsUseCase: FetchHomeSectionsUseCaseProtocol {
@@ -11,15 +11,15 @@ final class FetchHomeSectionsUseCase: FetchHomeSectionsUseCaseProtocol {
         self.repository = repository
     }
 
-    func execute(policy: FetchPolicy, param: FetchHomeSectionsParam) async throws -> [HomeSection] {
+    func execute(request: FetchHomeSectionsRequest) async throws -> [HomeSection] {
         let repository = repository
-        let genres = param.query.genreQueries.map { $0.genre }
+        let genres = request.query.genreQueries.map { $0.genre }
 
         return try await withThrowingTaskGroup(of: HomeSection.self) { group in
-            for (genre, query) in param.query.genreQueries {
-                let trackParam = SearchTracksParam(query: query)
+            for (genre, query) in request.query.genreQueries {
+                let trackRequest = SearchTracksRequest(query: query, policy: request.policy)
                 group.addTask {
-                    let tracks = try await repository.searchTracks(policy: policy, param: trackParam)
+                    let tracks = try await repository.searchTracks(request: trackRequest)
                     return HomeSection(genre: genre, tracks: tracks)
                 }
             }

@@ -1,7 +1,7 @@
 import Foundation
 
 protocol CreatePlaylistUseCaseProtocol {
-    func execute(param: CreatePlaylistParam) async throws -> Playlist
+    func execute(request: CreatePlaylistRequest) async throws -> Playlist
 }
 
 final class CreatePlaylistUseCase: CreatePlaylistUseCaseProtocol {
@@ -11,10 +11,10 @@ final class CreatePlaylistUseCase: CreatePlaylistUseCaseProtocol {
         self.repository = repository
     }
 
-    func execute(param: CreatePlaylistParam) async throws -> Playlist {
-        guard !param.query.name.trimmingCharacters(in: .whitespaces).isEmpty else {
+    func execute(request: CreatePlaylistRequest) async throws -> Playlist {
+        guard !request.query.name.trimmingCharacters(in: .whitespaces).isEmpty else {
             throw PlaylistError.emptyName
         }
-        return try await repository.createPlaylist(param: param)
+        return try await repository.createPlaylist(request: request)
     }
 }
