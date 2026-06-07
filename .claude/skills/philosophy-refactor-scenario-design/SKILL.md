@@ -30,7 +30,7 @@ After confirmation, use agent `philosophy-refactor-scenario-design-worker` with:
 > Apply all approved changes, cross-check the result, write the `.md` file.
 
 The worker will indicate when to spawn `philosophy-scenario-html-worker`. When it does, spawn that worker with:
-> **Mode: generate.** Scenario .md: [output .md path]. HTML deck path: [target HTML path]. Style reference: `docs/deck/SystemDesign/MusicAppSystemDesign.html`.
+> **Mode: generate.** Scenario .md: [output .md path]. HTML deck path: [target HTML path]. Style reference: `docs/deck/SystemDesign/MusicAppSystemDesign.html`. Before generating, read `docs/conventions/scenario-conventions.md` — Section 9 defines the required `#delta` section structure (`.delta-grid` / `.delta-card` / `.delta-topic` / `.delta-decision` / `.delta-rationale`). Do not use `.rule` or `.callout` classes for the delta section.
 
 ## Report
 

@@ -47,7 +47,7 @@ If all targets are already in sync, stop here.
 ## Phase 2 — Generate
 
 For each approved app, spawn `philosophy-scenario-html-worker` **in parallel** with:
-> **Mode: generate.** Scenario .md: [path]. HTML deck path: [current path]. Style reference: `docs/deck/SystemDesign/MusicAppSystemDesign.html`.
+> **Mode: generate.** Scenario .md: [path]. HTML deck path: [current path]. Style reference: `docs/deck/SystemDesign/MusicAppSystemDesign.html`. Before generating, read `docs/conventions/scenario-conventions.md` — Section 9 defines the required `#delta` section structure (`.delta-grid` / `.delta-card` / `.delta-topic` / `.delta-decision` / `.delta-rationale`). Do not use `.rule` or `.callout` classes for the delta section.
 
 ## Report
 

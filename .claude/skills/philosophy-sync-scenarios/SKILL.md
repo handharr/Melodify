@@ -41,7 +41,7 @@ After all system design `.md` files are written:
    Always regenerate this file, even if the philosophy doc itself wasn't changed.
 
 2. **Regenerate system design HTMLs** — for each app whose `.md` was updated, spawn `philosophy-scenario-html-worker` **in parallel** with:
-   > **Mode: generate.** Scenario .md: [path]. HTML deck path: [path]. Style reference: `docs/deck/SystemDesign/MusicAppSystemDesign.html`.
+   > **Mode: generate.** Scenario .md: [path]. HTML deck path: [path]. Style reference: `docs/deck/SystemDesign/MusicAppSystemDesign.html`. Before generating, read `docs/conventions/scenario-conventions.md` — Section 9 defines the required `#delta` section structure (`.delta-grid` / `.delta-card` / `.delta-topic` / `.delta-decision` / `.delta-rationale`). Do not use `.rule` or `.callout` classes for the delta section.
 
 ## Report
 
