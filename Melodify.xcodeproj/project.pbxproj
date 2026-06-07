@@ -8,6 +8,8 @@
 
 /* Begin PBXBuildFile section */
 		B4403E022FBE9E3B0004ADA9 /* MelodifyDesignSystem in Frameworks */ = {isa = PBXBuildFile; productRef = B4403E012FBE9E3B0004ADA9 /* MelodifyDesignSystem */; };
+		B4F25DFF2FD5289800F40E37 /* CoreKit in Frameworks */ = {isa = PBXBuildFile; productRef = B4F25DFE2FD5289800F40E37 /* CoreKit */; };
+		B4F25E022FD528A600F40E37 /* MusicApp in Frameworks */ = {isa = PBXBuildFile; productRef = B4F25E012FD528A600F40E37 /* MusicApp */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -56,6 +58,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B4F25E022FD528A600F40E37 /* MusicApp in Frameworks */,
+				B4F25DFF2FD5289800F40E37 /* CoreKit in Frameworks */,
 				B4403E022FBE9E3B0004ADA9 /* MelodifyDesignSystem in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -118,6 +122,8 @@
 			name = Melodify;
 			packageProductDependencies = (
 				B4403E012FBE9E3B0004ADA9 /* MelodifyDesignSystem */,
+				B4F25DFE2FD5289800F40E37 /* CoreKit */,
+				B4F25E012FD528A600F40E37 /* MusicApp */,
 			);
 			productName = Melodify;
 			productReference = B4FEE2132FB84A5F00626790 /* Melodify.app */;
@@ -203,6 +209,8 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				B4403E002FBE9E3B0004ADA9 /* XCLocalSwiftPackageReference "MelodifyDesignSystem" */,
+				B4F25DFD2FD5289800F40E37 /* XCLocalSwiftPackageReference "CoreKit" */,
+				B4F25E002FD528A600F40E37 /* XCLocalSwiftPackageReference "MusicApp" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = B4FEE2142FB84A5F00626790 /* Products */;
@@ -630,12 +638,28 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = MelodifyDesignSystem;
 		};
+		B4F25DFD2FD5289800F40E37 /* XCLocalSwiftPackageReference "CoreKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = CoreKit;
+		};
+		B4F25E002FD528A600F40E37 /* XCLocalSwiftPackageReference "MusicApp" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = MusicApp;
+		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
 		B4403E012FBE9E3B0004ADA9 /* MelodifyDesignSystem */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = MelodifyDesignSystem;
+		};
+		B4F25DFE2FD5289800F40E37 /* CoreKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = CoreKit;
+		};
+		B4F25E012FD528A600F40E37 /* MusicApp */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = MusicApp;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

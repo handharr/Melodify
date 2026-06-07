@@ -1,9 +1,10 @@
 import UIKit
+import CoreKit
+import MusicApp
 
 final class AppCoordinator: DeepLinkHandler {
     private let window: UIWindow
-    private var searchCoordinator: SearchCoordinator?
-    private var homeCoordinator: HomeCoordinator?
+    private var musicCoordinator: MusicCoordinator?
     private var tabBarController: UITabBarController?
     private var deepLinkObserver: Any?
 
@@ -18,30 +19,23 @@ final class AppCoordinator: DeepLinkHandler {
     }
 
     func start() {
-        let client = APIClient()
-        let localDataSource = TrackLocalDataSource()
-        let trackRepository = TrackRepository(
-            remoteDataSource: TrackRemoteDataSource(client: client),
-            localDataSource: localDataSource
-        )
-        let playlistRepository = PlaylistRepository(remoteDataSource: PlaylistRemoteDataSource(client: client))
         let analytics = ConsoleAnalyticsService()
 
-        let search = SearchCoordinator(trackRepository: trackRepository, analytics: analytics)
-        let home = HomeCoordinator(trackRepository: trackRepository, playlistRepository: playlistRepository, analytics: analytics)
-        searchCoordinator = search
-        homeCoordinator = home
-
-        search.start()
-        home.start()
+        let music = MusicCoordinator(analytics: analytics)
+        music.start()
+        musicCoordinator = music
 
         let tabBar = UITabBarController()
-        tabBar.viewControllers = [search.navigationController, home.navigationController]
+        tabBar.viewControllers = [
+            music.searchNavigationController,
+            music.homeNavigationController,
+            makePlaceholder(title: "Chat", icon: "message", tag: 2),
+            makePlaceholder(title: "Feed", icon: "newspaper", tag: 3)
+        ]
         tabBarController = tabBar
         window.rootViewController = tabBar
         window.makeKeyAndVisible()
 
-        // Handle deep links arriving from push notification taps (via NotificationCenter)
         deepLinkObserver = NotificationCenter.default.addObserver(
             forName: .handleDeepLink, object: nil, queue: .main
         ) { [weak self] notification in
@@ -54,13 +48,31 @@ final class AppCoordinator: DeepLinkHandler {
         switch link {
         case .track(let id):
             tabBarController?.selectedIndex = 0
-            searchCoordinator?.showTrackDetail(id: id)
+            musicCoordinator?.showTrackDetail(id: id)
         case .playlist(let id):
             tabBarController?.selectedIndex = 1
-            homeCoordinator?.showPlaylistDetail(id: id)
+            musicCoordinator?.showPlaylistDetail(id: id)
         case .search(let query):
             tabBarController?.selectedIndex = 0
-            searchCoordinator?.triggerSearch(query: query)
+            musicCoordinator?.triggerSearch(query: query)
         }
+    }
+
+    private func makePlaceholder(title: String, icon: String, tag: Int) -> UINavigationController {
+        let vc = UIViewController()
+        vc.view.backgroundColor = .systemBackground
+        let label = UILabel()
+        label.text = "\(title) — Coming Soon"
+        label.font = .systemFont(ofSize: 17, weight: .medium)
+        label.textColor = .secondaryLabel
+        label.translatesAutoresizingMaskIntoConstraints = false
+        vc.view.addSubview(label)
+        NSLayoutConstraint.activate([
+            label.centerXAnchor.constraint(equalTo: vc.view.centerXAnchor),
+            label.centerYAnchor.constraint(equalTo: vc.view.centerYAnchor)
+        ])
+        let nav = UINavigationController(rootViewController: vc)
+        nav.tabBarItem = UITabBarItem(title: title, image: UIImage(systemName: icon), tag: tag)
+        return nav
     }
 }
