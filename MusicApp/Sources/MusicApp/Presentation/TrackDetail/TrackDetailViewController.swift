@@ -1,5 +1,6 @@
 import UIKit
 import Combine
+import MelodifyDesignSystem
 
 final class TrackDetailViewController: UIViewController {
     private let viewModel: TrackDetailViewModel
@@ -21,7 +22,7 @@ final class TrackDetailViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = .systemBackground
+        view.backgroundColor = MDSColor.surface
         setupLayout()
         bindViewModel()
         viewModel.load()
@@ -30,20 +31,20 @@ final class TrackDetailViewController: UIViewController {
     private func setupLayout() {
         artworkImageView.contentMode = .scaleAspectFit
         artworkImageView.clipsToBounds = true
-        artworkImageView.backgroundColor = .systemGray5
-        artworkImageView.layer.cornerRadius = 8
+        artworkImageView.backgroundColor = MDSColor.surfaceElevated
+        artworkImageView.layer.cornerRadius = Radius.md
         artworkImageView.translatesAutoresizingMaskIntoConstraints = false
 
-        titleLabel.font = .systemFont(ofSize: 22, weight: .bold)
+        titleLabel.font = Typography.display
         titleLabel.numberOfLines = 0
-        artistLabel.font = .systemFont(ofSize: 17)
-        artistLabel.textColor = .secondaryLabel
-        albumLabel.font = .systemFont(ofSize: 15)
-        albumLabel.textColor = .secondaryLabel
-        genreLabel.font = .systemFont(ofSize: 14)
-        genreLabel.textColor = .tertiaryLabel
+        artistLabel.font = Typography.title
+        artistLabel.textColor = MDSColor.textSecondary
+        albumLabel.font = Typography.body
+        albumLabel.textColor = MDSColor.textSecondary
+        genreLabel.font = Typography.caption
+        genreLabel.textColor = MDSColor.textDisabled
         durationLabel.font = .monospacedDigitSystemFont(ofSize: 14, weight: .regular)
-        durationLabel.textColor = .secondaryLabel
+        durationLabel.textColor = MDSColor.textSecondary
 
         let stack = UIStackView(arrangedSubviews: [titleLabel, artistLabel, albumLabel, genreLabel, durationLabel])
         stack.axis = .vertical

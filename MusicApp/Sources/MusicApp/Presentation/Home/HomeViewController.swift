@@ -1,5 +1,6 @@
 import UIKit
 import Combine
+import MelodifyDesignSystem
 
 @MainActor
 protocol HomeDelegate: AnyObject {
@@ -13,7 +14,13 @@ final class HomeViewController: UIViewController {
     private var cancellables = Set<AnyCancellable>()
 
     private let tableView = UITableView()
-    private let activityIndicator = UIActivityIndicatorView(style: .medium)
+
+    private let loadingView: MDSLoadingView = {
+        let v = MDSLoadingView()
+        v.translatesAutoresizingMaskIntoConstraints = false
+        v.isHidden = true
+        return v
+    }()
 
     init(viewModel: HomeViewModel) {
         self.viewModel = viewModel
@@ -25,9 +32,9 @@ final class HomeViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         title = "Home"
-        view.backgroundColor = .systemBackground
+        view.backgroundColor = MDSColor.surface
         setupTableView()
-        setupActivityIndicator()
+        setupLoadingView()
         bindViewModel()
         viewModel.loadHome()
     }
@@ -47,12 +54,13 @@ final class HomeViewController: UIViewController {
         ])
     }
 
-    private func setupActivityIndicator() {
-        activityIndicator.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(activityIndicator)
+    private func setupLoadingView() {
+        view.addSubview(loadingView)
         NSLayoutConstraint.activate([
-            activityIndicator.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            activityIndicator.centerYAnchor.constraint(equalTo: view.centerYAnchor)
+            loadingView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            loadingView.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+            loadingView.widthAnchor.constraint(equalToConstant: 80),
+            loadingView.heightAnchor.constraint(equalToConstant: 80)
         ])
     }
 
@@ -65,8 +73,9 @@ final class HomeViewController: UIViewController {
         viewModel.$isLoading
             .receive(on: DispatchQueue.main)
             .sink { [weak self] loading in
-                loading ? self?.activityIndicator.startAnimating()
-                        : self?.activityIndicator.stopAnimating()
+                guard let self else { return }
+                loadingView.isHidden = !loading
+                if loading { loadingView.configure(with: MDSLoadingConfiguration()) }
             }
             .store(in: &cancellables)
 

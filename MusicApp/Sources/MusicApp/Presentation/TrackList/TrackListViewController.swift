@@ -1,5 +1,6 @@
 import UIKit
 import Combine
+import MelodifyDesignSystem
 
 @MainActor
 protocol TrackListDelegate: AnyObject {
@@ -14,7 +15,25 @@ final class TrackListViewController: UIViewController {
 
     private let tableView = UITableView()
     private let searchController = UISearchController(searchResultsController: nil)
-    private let activityIndicator = UIActivityIndicatorView(style: .medium)
+
+    private let loadingView: MDSLoadingView = {
+        let v = MDSLoadingView()
+        v.translatesAutoresizingMaskIntoConstraints = false
+        v.isHidden = true
+        return v
+    }()
+
+    private let emptyStateView: MDSEmptyStateView = {
+        let v = MDSEmptyStateView()
+        v.translatesAutoresizingMaskIntoConstraints = false
+        v.isHidden = true
+        v.configure(with: MDSEmptyStateConfiguration(
+            systemImageName: "music.note.list",
+            title: "No Results",
+            subtitle: "Search for a track to get started."
+        ))
+        return v
+    }()
 
     init(viewModel: TrackListViewModel) {
         self.viewModel = viewModel
@@ -26,10 +45,10 @@ final class TrackListViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         title = "Music"
-        view.backgroundColor = .systemBackground
+        view.backgroundColor = MDSColor.surface
         setupTableView()
         setupSearch()
-        setupActivityIndicator()
+        setupOverlays()
         bindViewModel()
         viewModel.search(query: "arctic monkeys")
     }
@@ -57,26 +76,43 @@ final class TrackListViewController: UIViewController {
         navigationItem.hidesSearchBarWhenScrolling = false
     }
 
-    private func setupActivityIndicator() {
-        activityIndicator.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(activityIndicator)
+    private func setupOverlays() {
+        view.addSubview(loadingView)
+        view.addSubview(emptyStateView)
         NSLayoutConstraint.activate([
-            activityIndicator.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            activityIndicator.centerYAnchor.constraint(equalTo: view.centerYAnchor)
+            loadingView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            loadingView.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+            loadingView.widthAnchor.constraint(equalToConstant: 80),
+            loadingView.heightAnchor.constraint(equalToConstant: 80),
+
+            emptyStateView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            emptyStateView.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+            emptyStateView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            emptyStateView.trailingAnchor.constraint(equalTo: view.trailingAnchor)
         ])
     }
 
     private func bindViewModel() {
         viewModel.$tracks
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in self?.tableView.reloadData() }
+            .sink { [weak self] tracks in
+                guard let self else { return }
+                tableView.reloadData()
+                emptyStateView.isHidden = !tracks.isEmpty || viewModel.isLoading
+            }
             .store(in: &cancellables)
 
         viewModel.$isLoading
             .receive(on: DispatchQueue.main)
             .sink { [weak self] loading in
-                loading ? self?.activityIndicator.startAnimating()
-                        : self?.activityIndicator.stopAnimating()
+                guard let self else { return }
+                loadingView.isHidden = !loading
+                if loading {
+                    loadingView.configure(with: MDSLoadingConfiguration())
+                    emptyStateView.isHidden = true
+                } else {
+                    emptyStateView.isHidden = !viewModel.tracks.isEmpty
+                }
             }
             .store(in: &cancellables)
 
