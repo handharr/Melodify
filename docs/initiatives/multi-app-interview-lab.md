@@ -156,14 +156,15 @@ MelodifyDesignSystem/
 │   │   └── MDSTrackRowView  ← existing, hardened
 │   └── SwiftUI/             ← View-based, for SwiftUI screens
 │       ├── DSButton         ← ButtonStyle + filled/outlined variants
-│       ├── DSEmptyState     ← View (wraps MDSEmptyStateView via representable)
-│       ├── DSAvatar         ← View (wraps MDSAvatarView via representable)
+│       ├── DSEmptyState     ← native SwiftUI View, same tokens as MDSEmptyStateView
+│       ├── DSAvatar         ← native SwiftUI View, same tokens as MDSAvatarView
 │       ├── DSBadge          ← ViewModifier
 │       └── DSLoadingOverlay ← View, fullscreen translucent spinner
 └── Bridge/
-    ├── UIHostingView.swift       ← UIView subclass hosting a SwiftUI View
-    │                               (no UIViewController needed — avoids lifecycle noise)
-    └── UIViewRepresentable+DS.swift ← convenience representable wrappers for UIKit DS components
+    ├── UIHostingView.swift              ← UIView subclass hosting a SwiftUI View
+    │                                      (no UIViewController needed — avoids lifecycle noise)
+    └── MDSAudioPlayerRepresentable.swift ← UIViewRepresentable for MDSAudioPlayerView only
+                                            (stateful animation — no clean SwiftUI equivalent)
 ```
 
 #### Hybrid Strategy
@@ -199,13 +200,13 @@ SwiftUI screen (View)
 **SwiftUI components**
 - [ ] `DSButton` *(atom)* — ButtonStyle with filled and outlined variants
 - [ ] `DSBadge` *(atom)* — ViewModifier, overlays a count badge on any View
-- [ ] `DSAvatar` *(molecule)* — async image + initials fallback, wraps `MDSAvatarView` via representable
-- [ ] `DSEmptyState` *(organism)* — icon + title + subtitle + optional action, wraps `MDSEmptyStateView`
-- [ ] `DSLoadingOverlay` *(molecule)* — translucent fullscreen spinner, shown via `.overlay`
+- [ ] `DSAvatar` *(molecule)* — native SwiftUI: async image + initials fallback; same tokens as `MDSAvatarView`, no UIViewRepresentable wrapper (component is simple enough for a native implementation)
+- [ ] `DSEmptyState` *(organism)* — native SwiftUI: icon + title + subtitle + optional action; same tokens as `MDSEmptyStateView`, no UIViewRepresentable wrapper
+- [ ] `DSLoadingOverlay` *(molecule)* — translucent fullscreen spinner, shown via `.overlay`; visually identical to `MDSLoadingView` — same tokens, two implementations for two contexts
 
 **Bridge**
 - [ ] `UIHostingView<Content>` — UIView subclass hosting a SwiftUI View inline (no child ViewController)
-- [ ] `UIViewRepresentable` wrappers for `MDSAvatarView` and `MDSAudioPlayerView`
+- [ ] `UIViewRepresentable` wrapper for `MDSAudioPlayerView` — the only UIKit component with no clean native SwiftUI equivalent (stateful play/pause + waveform animation); `MDSAvatarView` and `MDSEmptyStateView` are not wrapped — their SwiftUI counterparts are native implementations
 
 **Retrofit — MusicApp**
 - [ ] `TrackCell` — replace inline artwork + label stack with `MDSTrackRowView` (already in DS)
