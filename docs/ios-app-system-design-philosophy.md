@@ -13,7 +13,7 @@ Machine-readable naming and layer conventions: [`docs/conventions/scenario-conve
 
 ```
 Presentation    →  ViewController + ViewModel (Combine @Published)
-Domain          →  UseCase + Service + Protocol + Model + Param + FetchPolicy
+Domain          →  UseCase + Service + Protocol + Model + Request + FetchPolicy
 Data            →  Repository + DataSource + DTO + Mapper
 Application     →  AppDelegate + Coordinator + DI (manual init injection)
 Infrastructure  →  Gateway
@@ -23,6 +23,8 @@ External        →  SDKs + OS Frameworks (Stripe, CoreData, AVFoundation, Fireb
 **Layer dependency rule: Presentation → Domain ← Data. Infrastructure conforms to Domain protocols. Domain depends on nothing. External is the outermost ring — only wrapper layers (Gateway, DataSource, Service) import from it; nothing in Domain or Presentation touches External directly.**
 
 The Data layer knows Domain models (via Mapper). The Presentation layer knows Domain models (via UseCase). Infrastructure implements Domain protocols but is never imported by Domain, Data, or Presentation — only wired by Application. External depends on nothing inside the app; it is the dependency.
+
+**Multi-app variant — CoreKit.** In a workspace with multiple mini-apps (MusicApp, ChatApp, FeedApp…), networking and persistence primitives that every app needs (`APIClient`, `WebSocketClient`, `LocalDataSourceProtocol`, image loading protocols) live in a shared SPM local package called `CoreKit`. CoreKit is the multi-app equivalent of the Data networking/persistence layer — it holds no domain knowledge and imports no app-specific types. Each mini-app's Data layer imports CoreKit; Domain never does. Gateway protocols and concretes that are app-agnostic (e.g. `AnalyticsGatewayProtocol`, `ConsoleAnalyticsGateway`) also live in CoreKit so every app can wire them without duplication.
 
 ---
 
@@ -401,7 +403,7 @@ ViewController.viewDidLoad()
       → defer: isLoading = false
 ```
 
-**Why two calls, not one?** `async/await` returns once. A single `execute(policy: .cached)` can only yield one value — it can't update the UI twice. For cache-then-network, the ViewModel must make two distinct awaits, one per phase.
+**Why two calls, not one?** `async/await` returns once. A single `execute(request:)` can only yield one value — it can't update the UI twice. For cache-then-network, the ViewModel must make two distinct awaits, one per phase.
 
 **`.strict` for phase 1, `.fresh` for phase 2.** `.strict` = cache only, throws on miss (zero network cost). The `try?` suppresses the throw so a cold cache silently skips phase 1 and the user just sees a brief loading state before the network result arrives. `.fresh` = always hits network regardless of cache state.
 
@@ -424,16 +426,16 @@ The UseCase returns an `AsyncStream<[Model]>` that yields twice — cache first,
 ViewController sends user input
   → ViewModel.submit(input)
       → isLoading = true
-      → UseCase.execute(param:)
-          → (validates param — throws if invalid)
-          → Repository.create/update(param:)
+      → UseCase.execute(request:)
+          → (validates request — throws if invalid)
+          → Repository.create/update(request:)
               → RemoteDataSource.post/put() → DTO → Mapper → Model
           → returns Model
       → ViewModel maps Model → UIModel → updates @Published state
       → defer: isLoading = false
 ```
 
-**Idempotency keys on mutations** — for any mutation that could be retried (network timeout, app restart during request), generate a client-side UUID before building the request and include it as a field (e.g. `localId`). If the request is retried with the same UUID, the server returns the existing record rather than creating a duplicate. This applies to reservations, orders, payments, and any operation where a duplicate would cause business harm. The UUID is generated at the `Param` struct call site, not inside the Repository or DataSource.
+**Idempotency keys on mutations** — for any mutation that could be retried (network timeout, app restart during request), generate a client-side UUID before building the request and include it as a field (e.g. `localId`). If the request is retried with the same UUID, the server returns the existing record rather than creating a duplicate. This applies to reservations, orders, payments, and any operation where a duplicate would cause business harm. The UUID is generated at the `Request` struct call site, not inside the Repository or DataSource.
 
 ---
 
@@ -445,10 +447,11 @@ APIClient
   └─ func get<T: Decodable>(_ url: URL) async throws -> T
   └─ func post<T: Decodable, B: Encodable>(_ url: URL, body: B) async throws -> T
 
-Request structs
-  └─ one per endpoint: TrackSearchRequest, CreatePlaylistRequest, etc.
+APIRequest structs
+  └─ one per endpoint: TrackSearchAPIRequest, CreatePlaylistAPIRequest, etc.
   └─ carries the fields needed to build the URL and body
   └─ lives at Data/Network/Requests/
+  └─ named *APIRequest (not *Request) to avoid collision with Domain Request typealiases
 
 Error handling
   └─ typed APIError enum: .invalidURL, .notFound, .networkError, .decodingError, .conflict
@@ -551,8 +554,8 @@ defer { isLoading = false } — cleanup on any exit path
 ```
 MockUseCase
   └─ var stubbedResult: Result<Output, Error>
-  └─ private(set) var lastParam: Param?
-  └─ func execute(...) async throws → returns stubbedResult
+  └─ private(set) var lastRequest: Request?
+  └─ func execute(request:) async throws → returns stubbedResult
 
 Test pattern:
   1. Arrange: set stubbed result on mock
