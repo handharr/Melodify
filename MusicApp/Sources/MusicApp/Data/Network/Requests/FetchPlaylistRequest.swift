@@ -1,3 +1,3 @@
-struct FetchPlaylistRequest {
+struct FetchPlaylistAPIRequest {
     let id: Int
 }

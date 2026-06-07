@@ -1,6 +1,6 @@
 import Foundation
 
-struct CreatePlaylistRequest: Encodable, Sendable {
+struct CreatePlaylistAPIRequest: Encodable, Sendable {
     let name: String
     let description: String
     let trackIds: [Int]

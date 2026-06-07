@@ -1,6 +1,6 @@
 import Foundation
 
-struct UpdatePlaylistRequest: Encodable, Sendable {
+struct UpdatePlaylistAPIRequest: Encodable, Sendable {
     let id: Int
     let name: String
     let description: String

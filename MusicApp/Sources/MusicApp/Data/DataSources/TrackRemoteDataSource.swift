@@ -9,7 +9,7 @@ final class TrackRemoteDataSource: TrackRemoteDataSourceProtocol {
         self.client = client
     }
 
-    func searchTracks(_ request: TrackSearchRequest) async throws -> [TrackDTO] {
+    func searchTracks(_ request: TrackSearchAPIRequest) async throws -> [TrackDTO] {
         var components = URLComponents(string: "\(baseURL)/search")
         components?.queryItems = [
             URLQueryItem(name: "term", value: request.query),
@@ -22,7 +22,7 @@ final class TrackRemoteDataSource: TrackRemoteDataSourceProtocol {
         return response.results
     }
 
-    func getTrackDetail(_ request: TrackDetailRequest) async throws -> TrackDTO {
+    func getTrackDetail(_ request: TrackDetailAPIRequest) async throws -> TrackDTO {
         var components = URLComponents(string: "\(baseURL)/lookup")
         components?.queryItems = [
             URLQueryItem(name: "id", value: "\(request.id)")

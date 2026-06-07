@@ -1,5 +1,5 @@
 import Foundation
 
-struct TrackDetailRequest {
+struct TrackDetailAPIRequest {
     let id: Int
 }

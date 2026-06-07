@@ -1,6 +1,6 @@
 import Foundation
 
-struct TrackSearchRequest {
+struct TrackSearchAPIRequest {
     let query: String
     let offset: Int
     let limit: Int
