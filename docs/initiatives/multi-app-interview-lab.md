@@ -155,11 +155,11 @@ MelodifyDesignSystem/
 │   │   ├── MDSEmptyStateView ← existing, hardened
 │   │   └── MDSTrackRowView  ← existing, hardened
 │   └── SwiftUI/             ← View-based, for SwiftUI screens
-│       ├── DSButton         ← ButtonStyle + filled/outlined variants
-│       ├── DSEmptyState     ← native SwiftUI View, same tokens as MDSEmptyStateView
-│       ├── DSAvatar         ← native SwiftUI View, same tokens as MDSAvatarView
-│       ├── DSBadge          ← ViewModifier
-│       └── DSLoadingOverlay ← View, fullscreen translucent spinner
+│       ├── MDSButton        ← ButtonStyle + filled/outlined variants
+│       ├── MDSEmptyState    ← native SwiftUI View, same tokens as MDSEmptyStateView
+│       ├── MDSAvatar        ← native SwiftUI View, same tokens as MDSAvatarView
+│       ├── MDSBadge         ← ViewModifier
+│       └── MDSLoadingOverlay ← View, fullscreen translucent spinner
 └── Bridge/
     ├── UIHostingView.swift              ← UIView subclass hosting a SwiftUI View
     │                                      (no UIViewController needed — avoids lifecycle noise)
@@ -171,13 +171,13 @@ MelodifyDesignSystem/
 
 ```
 UIKit screen (ViewController)
-  └── uses UIKit DS components directly (MDSMessageBubble, MDSAvatarView…)
-  └── embeds SwiftUI DS components via UIHostingView<DSLoadingOverlay>
+  └── uses UIKit MDS components directly (MDSMessageBubble, MDSAvatarView…)
+  └── embeds SwiftUI MDS components via UIHostingView<MDSLoadingOverlay>
         (no UIHostingController — avoids unnecessary VC hierarchy)
 
 SwiftUI screen (View)
-  └── uses SwiftUI DS components directly (DSButton, DSEmptyState…)
-  └── embeds UIKit DS components via UIViewRepresentable wrappers
+  └── uses SwiftUI MDS components directly (MDSButton, MDSEmptyState…)
+  └── embeds UIKit MDS components via UIViewRepresentable wrappers
         (only when UIKit component has no SwiftUI equivalent)
 ```
 
@@ -198,11 +198,11 @@ SwiftUI screen (View)
 - [ ] `MDSAudioPlayerView` *(molecule)* — waveform icon + duration label + play/pause state
 
 **SwiftUI components**
-- [ ] `DSButton` *(atom)* — ButtonStyle with filled and outlined variants
-- [ ] `DSBadge` *(atom)* — ViewModifier, overlays a count badge on any View
-- [ ] `DSAvatar` *(molecule)* — native SwiftUI: async image + initials fallback; same tokens as `MDSAvatarView`, no UIViewRepresentable wrapper (component is simple enough for a native implementation)
-- [ ] `DSEmptyState` *(organism)* — native SwiftUI: icon + title + subtitle + optional action; same tokens as `MDSEmptyStateView`, no UIViewRepresentable wrapper
-- [ ] `DSLoadingOverlay` *(molecule)* — translucent fullscreen spinner, shown via `.overlay`; visually identical to `MDSLoadingView` — same tokens, two implementations for two contexts
+- [ ] `MDSButton` *(atom)* — ButtonStyle with filled and outlined variants
+- [ ] `MDSBadge` *(atom)* — ViewModifier, overlays a count badge on any View
+- [ ] `MDSAvatar` *(molecule)* — native SwiftUI: async image + initials fallback; same tokens as `MDSAvatarView`, no UIViewRepresentable wrapper (component is simple enough for a native implementation)
+- [ ] `MDSEmptyState` *(organism)* — native SwiftUI: icon + title + subtitle + optional action; same tokens as `MDSEmptyStateView`, no UIViewRepresentable wrapper
+- [ ] `MDSLoadingOverlay` *(molecule)* — translucent fullscreen spinner, shown via `.overlay`; visually identical to `MDSLoadingView` — same tokens, two implementations for two contexts
 
 **Bridge**
 - [ ] `UIHostingView<Content>` — UIView subclass hosting a SwiftUI View inline (no child ViewController)
