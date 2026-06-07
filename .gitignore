@@ -1,0 +1,10 @@
+# Xcode user data
+xcuserdata/
+*.xcuserstate
+
+# SPM build artifacts
+.build/
+.swiftpm/
+
+# macOS
+.DS_Store
