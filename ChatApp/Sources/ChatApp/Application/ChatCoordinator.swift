@@ -6,7 +6,7 @@ import CoreKit
 // observes UIApplication.didBecomeActiveNotification so the retry logic lives here,
 // not in any ViewController.
 public final class ChatCoordinator {
-    public let navigationController: UINavigationController
+    private let navigationController: UINavigationController
     private var foregroundObserver: Any?
 
     // Shared infrastructure
@@ -16,20 +16,16 @@ public final class ChatCoordinator {
     private let pendingQueue = PendingMessageQueue()
     private let messageLocalDataSource = MessageLocalDataSource()
 
-    public init(webSocketClient: WebSocketClientProtocol) {
+    // navigationController is the host app's main nav — ChatCoordinator pushes onto it.
+    public init(webSocketClient: WebSocketClientProtocol, navigationController: UINavigationController) {
         self.webSocketClient = webSocketClient
-        navigationController = UINavigationController()
-        navigationController.tabBarItem = UITabBarItem(
-            title: "Chat",
-            image: UIImage(systemName: "message"),
-            tag: 2
-        )
+        self.navigationController = navigationController
     }
 
     @MainActor
     public func start() {
         let listVC = makeConversationListViewController()
-        navigationController.setViewControllers([listVC], animated: false)
+        navigationController.pushViewController(listVC, animated: true)
 
         foregroundObserver = NotificationCenter.default.addObserver(
             forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main

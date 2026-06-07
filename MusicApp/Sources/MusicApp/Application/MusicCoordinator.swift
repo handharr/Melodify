@@ -2,12 +2,15 @@ import UIKit
 import CoreKit
 
 /// Public entry point for the MusicApp module.
-/// The host app creates this, calls start(), and uses the exposed navigation controllers
-/// as tab bar children. All internal dependency wiring happens here.
+/// The host app creates this, calls start(), then pushes tabBarController onto its nav stack.
+/// All internal dependency wiring happens here.
 @MainActor
 public final class MusicCoordinator {
-    public var searchNavigationController: UINavigationController { searchCoordinator.navigationController }
-    public var homeNavigationController: UINavigationController { homeCoordinator.navigationController }
+    public private(set) lazy var tabBarController: UITabBarController = {
+        let tab = UITabBarController()
+        tab.viewControllers = [searchCoordinator.navigationController, homeCoordinator.navigationController]
+        return tab
+    }()
 
     private let searchCoordinator: SearchCoordinator
     private let homeCoordinator: HomeCoordinator
