@@ -537,10 +537,7 @@
   <section id="data-model">
     <h2>3. Data Model Design</h2>
 
-    <h3>Domain Models</h3>
-    <div class="callout">
-      <p>Pure Swift structs — zero external imports. Domain depends on nothing.</p>
-    </div>
+    <h3>Domain Models (pure Swift structs, no external imports)</h3>
 
     <pre><code><span class="kw">struct</span> <span class="ty">Track</span> {
     <span class="kw">let</span> <span class="nm">id</span>: <span class="ty">Int</span>
@@ -596,17 +593,9 @@
     <span class="kw">let</span> <span class="nm">trackIds</span>: [<span class="ty">Int</span>]      <span class="cm">// CodingKey: "track_ids"</span>
 }</code></pre>
 
-    <h3>Mapper</h3>
-    <div class="rule">
-      <p><strong>Rule:</strong> The Mapper is the only type that knows both DTO and Domain. It is the firewall between network shape and business model.</p>
-    </div>
-
-    <pre><code><span class="gr">TrackMapper</span>.toDomain(<span class="nm">_</span> <span class="nm">dto</span>: <span class="ty">TrackDTO</span>) -> <span class="ty">Track</span>?   <span class="cm">// returns nil if trackId or trackName is missing</span>
-<span class="gr">PlaylistMapper</span>.toDomain(<span class="nm">_</span> <span class="nm">dto</span>: <span class="ty">PlaylistDTO</span>) -> <span class="ty">Playlist</span></code></pre>
-
-    <div class="callout">
-      <p><strong>Why return <code>Track?</code> from the mapper?</strong> iTunes API fields are all optional — bad data should be silently dropped, not crash the app. The Repository filters out <code>nil</code> results before returning to UseCases.</p>
-    </div>
+    <h3>Mapper (the only type that knows both DTO and Domain)</h3>
+    <pre><code><span class="nm">TrackMapper</span>.toDomain(<span class="nm">_</span> <span class="nm">dto</span>: <span class="ty">TrackDTO</span>) -> <span class="ty">Track</span>?   <span class="cm">// returns nil if trackId or trackName is missing</span>
+<span class="nm">PlaylistMapper</span>.toDomain(<span class="nm">_</span> <span class="nm">dto</span>: <span class="ty">PlaylistDTO</span>) -> <span class="ty">Playlist</span></code></pre>
   </section>
 
   <!-- ═══════════════════════════════════════════════════ 4. High-Level Design -->
@@ -691,7 +680,7 @@
       <div class="stack-row">
         <div class="stack-label">External</div>
         <div class="stack-content">
-          <code>URLSession</code> <code>UserDefaults</code> <code>AVFoundation</code> <code>Combine</code>
+          <code>URLSession</code> · <code>UserDefaults</code> · <code>AVFoundation</code> · <code>Combine</code>
         </div>
       </div>
       <div class="stack-row">
@@ -705,36 +694,31 @@
     </div>
 
     <h3>Navigation (Coordinator Pattern)</h3>
-    <div class="callout">
-      <p><code>MusicCoordinator</code> is the composition root — it builds the full dependency graph and injects all dependencies into ViewModels via <code>init</code>.</p>
-    </div>
-
-    <pre><code><span class="gr">MusicCoordinator</span>
+    <p><code>MusicCoordinator</code> is the composition root — it builds the full dependency graph and injects all dependencies into ViewModels via <code>init</code>.</p>
+    <pre><code><span class="nm">MusicCoordinator</span>
   └── <span class="ty">UITabBarController</span>
-        ├── <span class="gr">SearchCoordinator</span>  → <span class="ty">TrackListViewController</span> → <span class="ty">TrackDetailViewController</span>
-        └── <span class="gr">HomeCoordinator</span>    → <span class="ty">HomeViewController</span> → <span class="ty">PlaylistDetailViewController</span></code></pre>
+        ├── <span class="nm">SearchCoordinator</span>  → <span class="ty">TrackListViewController</span> → <span class="ty">TrackDetailViewController</span>
+        └── <span class="nm">HomeCoordinator</span>    → <span class="ty">HomeViewController</span> → <span class="ty">PlaylistDetailViewController</span></code></pre>
   </section>
 
   <!-- ═══════════════════════════════════════════════════ 5. Data Flow -->
   <section id="data-flow">
     <h2>5. Data Flow</h2>
 
-    <!-- Search flow -->
     <h3>Search Flow</h3>
-    <pre><code><span class="cm">// User types in search bar</span>
-<span class="ty">User</span> types in search bar
+    <pre><code><span class="ty">User</span> types in search bar
   → <span class="ty">TrackListViewModel</span>.<span class="nm">search</span>(term:)
-      → <span class="gr">SearchSessionService</span>.<span class="nm">begin</span>(query: term, genre: <span class="kw">nil</span>)   <span class="cm">// resets to page 1</span>
+      → <span class="nm">SearchSessionService</span>.<span class="nm">begin</span>(query: term, genre: <span class="kw">nil</span>)   <span class="cm">// resets to page 1</span>
           → returns <span class="ty">SearchSession</span> { request: <span class="ty">SearchTracksRequest</span>(query: .init(term:, page: <span class="nm">1</span>, limit: <span class="nm">20</span>), policy: .fresh) }
       → <span class="nm">isLoading</span> = <span class="kw">true</span>
-      → <span class="gr">SearchTracksUseCase</span>.<span class="nm">execute</span>(request: session.request)
+      → <span class="nm">SearchTracksUseCase</span>.<span class="nm">execute</span>(request: session.request)
           → <span class="kw">guard</span> !term.trimmingCharacters(in: .whitespaces).isEmpty <span class="kw">else return</span> []
-          → <span class="gr">TrackRepository</span>.<span class="nm">searchTracks</span>(request:)
+          → <span class="nm">TrackRepository</span>.<span class="nm">searchTracks</span>(request:)
               → <span class="ty">FetchPolicy</span> check (policy lives on Request, read only here — never passed further down):
-                  policy.force &amp;&amp; !policy.allowStale  → .fresh  → <span class="gr">TrackRemoteDataSource</span> → <span class="ty">GET</span> /search?term=...
+                  policy.force &amp;&amp; !policy.allowStale  → .fresh  → <span class="nm">TrackRemoteDataSource</span> → <span class="gr">GET</span> /search?term=...
                   !policy.force &amp;&amp;  policy.allowStale → .cached → UserDefaults lookup; if hit return, else remote
                   !policy.force &amp;&amp; !policy.allowStale → .strict → UserDefaults lookup; throws <span class="ty">APIError</span>.notFound on miss
-              → <span class="gr">TrackMapper</span>.<span class="nm">toDomain</span>(dto) → <span class="ty">Track</span>? (<span class="kw">nil</span> dropped — invalid data never crashes)
+              → <span class="nm">TrackMapper</span>.<span class="nm">toDomain</span>(dto) → <span class="ty">Track</span>? (<span class="kw">nil</span> dropped — invalid data never crashes)
           → returns [<span class="ty">Track</span>]
       → ViewModel maps [<span class="ty">Track</span>] → [<span class="ty">TrackUIModel</span>]
       → @Published tracks updated → <span class="ty">UICollectionView</span> reloads
@@ -742,42 +726,32 @@
 
 <span class="cm">// Next page (pagination)</span>
 Next page:
-  → <span class="gr">SearchSessionService</span>.<span class="nm">advance</span>()   <span class="cm">// increments page, policy: .cached</span>
-  → <span class="gr">SearchTracksUseCase</span>.<span class="nm">execute</span>(request: session.request) — same flow</code></pre>
+  → <span class="nm">SearchSessionService</span>.<span class="nm">advance</span>()   <span class="cm">// increments page, policy: .cached</span>
+  → <span class="nm">SearchTracksUseCase</span>.<span class="nm">execute</span>(request: session.request) — same flow</code></pre>
 
-    <div class="rule">
-      <p><strong>FetchPolicy rules:</strong> <code>.fresh</code> — always hit network. <code>.cached</code> — try UserDefaults first, fall through to network on miss. <code>.strict</code> — UserDefaults only; throws on miss. Policy is set by the ViewModel and consumed solely by the Repository — no layer below ever receives it.</p>
-    </div>
-
-    <!-- Home flow -->
     <h3>Home Featured + Playlists Flow (<code>async let</code>)</h3>
     <pre><code><span class="ty">HomeViewController</span>.viewDidLoad()
   → <span class="ty">HomeViewModel</span>.<span class="nm">load</span>()
       → <span class="nm">isLoading</span> = <span class="kw">true</span>
-      → <span class="gr">FetchHomeDataUseCase</span>.<span class="nm">execute</span>(request:)
+      → <span class="nm">FetchHomeDataUseCase</span>.<span class="nm">execute</span>(request:)
           <span class="cm">// Two concurrent fetches — neither blocks the other</span>
-          → <span class="kw">async let</span> <span class="nm">tracks</span>    = <span class="gr">TrackRepository</span>.<span class="nm">searchTracks</span>(<span class="ty">SearchTracksRequest</span>(query: request.query.trackQuery))
-          → <span class="kw">async let</span> <span class="nm">playlists</span> = <span class="gr">PlaylistRepository</span>.<span class="nm">fetchPlaylists</span>()   <span class="cm">// always remote, no FetchPolicy</span>
+          → <span class="kw">async let</span> <span class="nm">tracks</span>    = <span class="nm">TrackRepository</span>.<span class="nm">searchTracks</span>(<span class="ty">SearchTracksRequest</span>(query: request.query.trackQuery))
+          → <span class="kw">async let</span> <span class="nm">playlists</span> = <span class="nm">PlaylistRepository</span>.<span class="nm">fetchPlaylists</span>()   <span class="cm">// always remote, no FetchPolicy</span>
           → <span class="ty">HomeData</span>(featuredTracks: <span class="kw">try await</span> tracks, playlists: <span class="kw">try await</span> playlists)
       → ViewModel maps <span class="ty">HomeData</span> → UIModels
       → @Published state updated → View renders
       → <span class="kw">defer</span>: <span class="nm">isLoading</span> = <span class="kw">false</span></code></pre>
 
-    <div class="callout">
-      <p><strong>Why <code>async let</code> instead of sequential awaits?</strong> Two independent network calls — featured tracks and playlists — would be serialized unnecessarily with sequential <code>await</code>. <code>async let</code> fires both concurrently; total latency is <code>max(tracks, playlists)</code> instead of <code>tracks + playlists</code>. Use <code>async let</code> for a known, fixed set of concurrent fetches.</p>
-    </div>
-
-    <!-- Home genre sections flow -->
     <h3>Home Genre Sections Flow (<code>withThrowingTaskGroup</code>)</h3>
     <pre><code><span class="ty">HomeViewController</span> (genre sections mode)
   → <span class="ty">HomeViewModel</span>.<span class="nm">loadSections</span>(genres: [<span class="st">"Pop"</span>, <span class="st">"Rock"</span>, <span class="st">"Hip-Hop"</span>])
       → <span class="nm">isLoading</span> = <span class="kw">true</span>
-      → <span class="gr">FetchHomeSectionsUseCase</span>.<span class="nm">execute</span>(request: <span class="ty">FetchHomeSectionsRequest</span>(query: .init(genreQueries: [...])))
+      → <span class="nm">FetchHomeSectionsUseCase</span>.<span class="nm">execute</span>(request: <span class="ty">FetchHomeSectionsRequest</span>(query: .init(genreQueries: [...])))
           <span class="cm">// N concurrent fetches — one task per genre</span>
           → <span class="kw">withThrowingTaskGroup</span>(of: <span class="ty">HomeSection</span>.<span class="kw">self</span>) { group <span class="kw">in</span>
                 <span class="kw">for</span> (genre, query) <span class="kw">in</span> request.query.genreQueries:
                     group.<span class="nm">addTask</span> {
-                        <span class="kw">let</span> <span class="nm">tracks</span> = <span class="kw">try await</span> <span class="gr">TrackRepository</span>.<span class="nm">searchTracks</span>(<span class="ty">SearchTracksRequest</span>(query: query))
+                        <span class="kw">let</span> <span class="nm">tracks</span> = <span class="kw">try await</span> <span class="nm">TrackRepository</span>.<span class="nm">searchTracks</span>(<span class="ty">SearchTracksRequest</span>(query: query))
                         <span class="kw">return</span> <span class="ty">HomeSection</span>(genre: genre, tracks: tracks)
                     }
                 <span class="cm">// collect results, re-sort to original genre order</span>
@@ -786,22 +760,17 @@ Next page:
       → ViewModel maps [<span class="ty">HomeSection</span>] → UIModels
       → <span class="kw">defer</span>: <span class="nm">isLoading</span> = <span class="kw">false</span></code></pre>
 
-    <div class="callout">
-      <p><strong>Why <code>withThrowingTaskGroup</code> instead of <code>async let</code>?</strong> The number of genre queries is dynamic (N from config or server). <code>async let</code> requires a fixed, compile-time-known number of concurrent branches. <code>withThrowingTaskGroup</code> handles arbitrary N. Results arrive out of order — sort back to original genre order before returning.</p>
-    </div>
-
-    <!-- Playlist detail flow -->
     <h3>Playlist Detail Flow (<code>withThrowingTaskGroup</code>)</h3>
     <pre><code><span class="ty">PlaylistDetailViewController</span>.viewDidLoad()
   → <span class="ty">PlaylistDetailViewModel</span>.<span class="nm">load</span>(playlistId:)
       → <span class="nm">isLoading</span> = <span class="kw">true</span>
-      → <span class="gr">PlaylistDetailUseCase</span>.<span class="nm">execute</span>(request: <span class="ty">PlaylistDetailRequest</span>(path: .init(playlistId:)))
-          → <span class="gr">PlaylistRepository</span>.<span class="nm">fetchPlaylist</span>(id:) → <span class="ty">Playlist</span>   <span class="cm">// remote, no cache</span>
+      → <span class="nm">PlaylistDetailUseCase</span>.<span class="nm">execute</span>(request: <span class="ty">PlaylistDetailRequest</span>(path: .init(playlistId:)))
+          → <span class="nm">PlaylistRepository</span>.<span class="nm">fetchPlaylist</span>(id:) → <span class="ty">Playlist</span>   <span class="cm">// remote, no cache</span>
           <span class="cm">// Resolve each trackId to a full Track in parallel</span>
           → <span class="kw">withThrowingTaskGroup</span>(of: <span class="ty">Track</span>.<span class="kw">self</span>) { group <span class="kw">in</span>
                 <span class="kw">for</span> trackId <span class="kw">in</span> playlist.trackIds:
                     group.<span class="nm">addTask</span> {
-                        <span class="kw">try await</span> <span class="gr">TrackRepository</span>.<span class="nm">getTrackDetail</span>(<span class="ty">GetTrackDetailRequest</span>(path: .init(id: trackId)))
+                        <span class="kw">try await</span> <span class="nm">TrackRepository</span>.<span class="nm">getTrackDetail</span>(<span class="ty">GetTrackDetailRequest</span>(path: .init(id: trackId)))
                     }
                 <span class="cm">// returns [Track] — unordered; ordering preserved by trackIds at ViewModel level</span>
             }
@@ -809,31 +778,18 @@ Next page:
       → ViewModel maps <span class="ty">PlaylistDetail</span> → UIModel
       → <span class="kw">defer</span>: <span class="nm">isLoading</span> = <span class="kw">false</span></code></pre>
 
-    <div class="rule">
-      <p><strong>Ordering note:</strong> Task group results arrive in completion order, not insertion order. Track ordering is restored at the ViewModel level by re-sorting against the original <code>playlist.trackIds</code> array.</p>
-    </div>
-
-    <!-- Create playlist flow -->
     <h3>Create Playlist Flow (Mutation)</h3>
     <pre><code><span class="ty">User</span> taps <span class="st">"New Playlist"</span>, enters name + description
   → <span class="ty">HomeViewModel</span>.<span class="nm">createPlaylist</span>(name:, description:)
       → <span class="nm">isLoading</span> = <span class="kw">true</span>
-      → <span class="gr">CreatePlaylistUseCase</span>.<span class="nm">execute</span>(request: <span class="ty">CreatePlaylistRequest</span>(name:, description:))
+      → <span class="nm">CreatePlaylistUseCase</span>.<span class="nm">execute</span>(request: <span class="ty">CreatePlaylistRequest</span>(name:, description:))
           → <span class="kw">guard</span> !name.isEmpty <span class="kw">else throw</span> <span class="ty">PlaylistError</span>.emptyName
-          → <span class="gr">PlaylistRepository</span>.<span class="nm">createPlaylist</span>(request:)
-              → <span class="gr">PlaylistRemoteDataSource</span>.<span class="nm">createPlaylist</span> → <span class="ty">POST</span> /playlist { name, description, track_ids: [] }
-              → <span class="ty">PlaylistDTO</span> → <span class="gr">PlaylistMapper</span>.<span class="nm">toDomain</span> → <span class="ty">Playlist</span>
+          → <span class="nm">PlaylistRepository</span>.<span class="nm">createPlaylist</span>(request:)
+              → <span class="nm">PlaylistRemoteDataSource</span>.<span class="nm">createPlaylist</span> → <span class="gr">POST</span> /playlist { name, description, track_ids: [] }
+              → <span class="ty">PlaylistDTO</span> → <span class="nm">PlaylistMapper</span>.<span class="nm">toDomain</span> → <span class="ty">Playlist</span>
       → ViewModel appends new <span class="ty">Playlist</span> to playlists array
       → @Published state → View reloads
       → <span class="kw">defer</span>: <span class="nm">isLoading</span> = <span class="kw">false</span></code></pre>
-
-    <div class="callout">
-      <p><strong>Validation at the UseCase boundary:</strong> <code>guard !name.isEmpty</code> lives in the UseCase, not the ViewModel or DataSource. Business rules belong in Domain — the ViewModel delegates validation entirely to the UseCase layer.</p>
-    </div>
-
-    <div class="rule">
-      <p><strong>Pattern to remember:</strong> <code>defer { isLoading = false }</code> appears in every ViewModel load/mutation method. It fires on all exit paths — success, throw, and cancellation — guaranteeing the loading spinner always clears.</p>
-    </div>
   </section>
 
   <!-- ═══════════════════════════════════════════════════ 6. Technical Deep-dive -->
@@ -877,10 +833,22 @@ Next page:
           <tr><th>Question</th><th>Answer</th></tr>
         </thead>
         <tbody>
-          <tr><td>Where does <code>FetchPolicy</code> come from and who reads it?</td><td>Set by the ViewModel on the <code>Request</code>; read only by <code>TrackRepository</code> at the cache branch. Nothing in between touches it.</td></tr>
-          <tr><td>Why two <code>async let</code> instead of sequential awaits on the home screen?</td><td>Both fetches are independent — sequential would wait for featured tracks before starting playlists, adding unnecessary latency. <code>async let</code> runs them concurrently with a single line of composition.</td></tr>
-          <tr><td>What happens when <code>TrackMapper.toDomain</code> returns <code>nil</code>?</td><td><code>compactMap</code> drops the nil. The user sees fewer results; the app never crashes on a bad DTO.</td></tr>
-          <tr><td>Why no playlist cache?</td><td>Playlist data is mutable and user-owned. Stale cache creates a worse experience than a spinner. No cache = no cache-invalidation problem.</td></tr>
+          <tr>
+            <td>Where does <code>FetchPolicy</code> come from and who reads it?</td>
+            <td>Set by the ViewModel on the <code>Request</code>; read only by <code>TrackRepository</code> at the cache branch. Nothing in between touches it.</td>
+          </tr>
+          <tr>
+            <td>Why two <code>async let</code> instead of sequential awaits on the home screen?</td>
+            <td>Both fetches are independent — sequential would wait for featured tracks before starting playlists, adding unnecessary latency. <code>async let</code> runs them concurrently with a single line of composition.</td>
+          </tr>
+          <tr>
+            <td>What happens when <code>TrackMapper.toDomain</code> returns <code>nil</code>?</td>
+            <td><code>compactMap</code> drops the nil. The user sees fewer results; the app never crashes on a bad DTO.</td>
+          </tr>
+          <tr>
+            <td>Why no playlist cache?</td>
+            <td>Playlist data is mutable and user-owned. Stale cache creates a worse experience than a spinner. No cache = no cache-invalidation problem.</td>
+          </tr>
         </tbody>
       </table>
     </div>

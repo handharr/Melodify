@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MelodifyDesignSystem — System Design</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --surface-elevated: #21262d;
+      --border: #30363d;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --text-muted: #8b949e;
+      --accent: #58a6ff;
+      --accent-muted: #1f3a5f;
+      --green: #3fb950;
+      --green-muted: #1a3626;
+      --orange: #d29922;
+      --orange-muted: #3a2a0a;
+      --purple: #bc8cff;
+      --purple-muted: #2d1f4e;
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      line-height: 1.6;
+      max-width: 900px;
+      margin: auto;
+      padding: 2rem;
+      padding-bottom: 5rem;
+    }
+
+    a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    h2 {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: var(--text);
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 1.25rem;
+    }
+
+    h3 {
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: var(--accent);
+      margin: 1.25rem 0 0.75rem;
+    }
+
+    p {
+      margin: 0.75rem 0;
+    }
+
+    ul, ol {
+      padding-left: 1.5rem;
+      margin: 0.5rem 0 0.75rem;
+    }
+
+    li {
+      margin: 0.3rem 0;
+    }
+
+    strong {
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    /* nav breadcrumb */
+    nav.breadcrumb {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin-bottom: 1.5rem;
+    }
+
+    nav.breadcrumb a {
+      color: var(--accent);
+    }
+
+    /* header */
+    header {
+      padding: 2rem 0 1.5rem;
+    }
+
+    header h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 0.4rem;
+    }
+
+    header p {
+      color: var(--text-muted);
+      font-size: 1rem;
+      margin: 0;
+    }
+
+    /* toc */
+    nav.toc {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 2rem;
+    }
+
+    nav.toc h4 {
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+      margin-bottom: 0.75rem;
+    }
+
+    nav.toc ol {
+      list-style: none;
+      padding: 0;
+      counter-reset: toc-counter;
+    }
+
+    nav.toc ol li {
+      counter-increment: toc-counter;
+      display: flex;
+      align-items: baseline;
+      gap: 0.6rem;
+      padding: 0.3rem 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    nav.toc ol li:last-child {
+      border-bottom: none;
+    }
+
+    nav.toc ol li::before {
+      content: counter(toc-counter, decimal-leading-zero);
+      color: var(--accent);
+      font-size: 0.8rem;
+      font-weight: 700;
+      min-width: 1.8rem;
+    }
+
+    nav.toc ol li a {
+      color: var(--text);
+      text-decoration: none;
+      font-size: 0.95rem;
+    }
+
+    nav.toc ol li a:hover {
+      color: var(--accent);
+    }
+
+    /* sections */
+    section {
+      padding: 2rem 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    section:last-of-type {
+      border-bottom: none;
+    }
+
+    /* callout */
+    .callout {
+      border-left: 4px solid var(--accent);
+      background: var(--accent-muted);
+      padding: 1rem 1.25rem;
+      border-radius: 6px;
+      margin: 1rem 0;
+    }
+
+    .callout p {
+      margin: 0;
+    }
+
+    /* rule */
+    .rule {
+      border-left: 4px solid var(--green);
+      background: var(--green-muted);
+      padding: 1rem 1.25rem;
+      border-radius: 6px;
+      margin: 1rem 0;
+    }
+
+    .rule p {
+      margin: 0;
+    }
+
+    /* warn */
+    .warn {
+      border-left: 4px solid var(--orange);
+      background: var(--orange-muted);
+      padding: 1rem 1.25rem;
+      border-radius: 6px;
+      margin: 1rem 0;
+    }
+
+    .warn p {
+      margin: 0;
+    }
+
+    /* table */
+    .table-wrap {
+      overflow-x: auto;
+      margin: 1rem 0;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+
+    thead tr {
+      background: var(--surface);
+    }
+
+    thead th {
+      color: var(--text-muted);
+      font-weight: 600;
+      text-align: left;
+      padding: 0.6rem 1rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    tbody tr:nth-child(even) {
+      background: var(--surface-elevated);
+    }
+
+    tbody td {
+      padding: 0.6rem 1rem;
+      border-bottom: 1px solid var(--border);
+      color: var(--text);
+    }
+
+    tbody tr:last-child td {
+      border-bottom: none;
+    }
+
+    /* code */
+    code {
+      background: var(--surface-elevated);
+      color: var(--text);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.85em;
+      font-family: monospace;
+    }
+
+    pre {
+      margin: 1rem 0;
+      border-radius: 6px;
+      overflow-x: auto;
+      border: 1px solid var(--border);
+    }
+
+    pre code {
+      display: block;
+      background: var(--surface-elevated);
+      color: var(--text);
+      padding: 1rem;
+      border-radius: 6px;
+      font-size: 0.875rem;
+      line-height: 1.7;
+      overflow-x: auto;
+      white-space: pre;
+    }
+
+    /* syntax highlight */
+    .kw { color: var(--accent); }          /* keywords: struct, let, func, etc. */
+    .ty { color: #79c0ff; }                /* type names */
+    .st { color: #ffa657; }                /* string literals */
+    .cm { color: var(--text-muted); }      /* comments */
+    .nm { color: #d2a8ff; }                /* property / param names */
+    .gr { color: var(--green); }           /* architectural / special terms */
+
+    /* stack */
+    .stack {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 1rem 0;
+    }
+
+    .stack-row {
+      display: flex;
+      flex-direction: row;
+      align-items: flex-start;
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid var(--border);
+      gap: 1rem;
+    }
+
+    .stack-row:last-child {
+      border-bottom: none;
+    }
+
+    .stack-row:nth-child(even) {
+      background: var(--surface-elevated);
+    }
+
+    .stack-label {
+      min-width: 120px;
+      font-weight: 700;
+      color: var(--accent);
+      font-size: 0.85rem;
+      padding-top: 0.1rem;
+    }
+
+    .stack-content {
+      color: var(--text);
+      font-size: 0.9rem;
+      line-height: 1.7;
+      flex: 1;
+    }
+
+    .stack-content code {
+      margin: 0 2px;
+    }
+
+    .stack-content strong {
+      color: var(--text-muted);
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      display: block;
+      margin-top: 0.3rem;
+    }
+
+    .stack-content strong:first-child {
+      margin-top: 0;
+    }
+
+    /* bottom nav */
+    .bottom-nav {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: var(--surface-elevated);
+      border-top: 1px solid var(--border);
+      display: flex;
+      flex-direction: row;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.75rem 2rem;
+      font-size: 0.9rem;
+    }
+
+    .bottom-nav a {
+      color: var(--accent);
+    }
+
+    /* ascii diagram */
+    .ascii-diagram {
+      font-family: monospace;
+      font-size: 0.78rem;
+      line-height: 1.5;
+      color: var(--text-muted);
+      background: var(--surface-elevated);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 1rem;
+      overflow-x: auto;
+      white-space: pre;
+      margin: 1rem 0;
+    }
+
+    .ascii-diagram .ascii-layer-label {
+      color: var(--accent);
+      font-weight: 700;
+    }
+  </style>
+</head>
+<body>
+
+  <nav class="breadcrumb">← <a href="../index.html">Home</a></nav>
+
+  <header>
+    <h1>MelodifyDesignSystem</h1>
+    <p>System Design — Melodify Interview Lab</p>
+  </header>
+
+  <nav class="toc">
+    <h4>Contents</h4>
+    <ol>
+      <li><a href="#delta">Delta — Key Decisions</a></li>
+      <li><a href="#requirements">Requirements</a></li>
+      <li><a href="#component-api">Component API (Public Interface)</a></li>
+      <li><a href="#data-model">Data Model Design</a></li>
+      <li><a href="#high-level-design">High-Level Design</a></li>
+      <li><a href="#data-flow">Data Flow</a></li>
+      <li><a href="#technical-deep-dive">Technical Deep-dive</a></li>
+    </ol>
+  </nav>
+
+  <!-- ═══════════════════════════════════════════════════ Delta -->
+  <section id="delta">
+    <h2>Delta — Key Decisions Unique to This Scenario</h2>
+
+    <div class="rule">
+      <p><strong>Token-first architecture:</strong> Every visual decision (color, spacing, radius, shadow) resolves to a named constant. A brand refresh or dark-mode audit touches only the token files — never component internals.</p>
+    </div>
+
+    <div class="rule">
+      <p><strong>Configuration value type as public API:</strong> Every component receives a complete <code>*Configuration</code> snapshot via a single <code>configure(_:)</code> call. No partial-update bugs from direct property setters — the component owns layout, the caller owns data.</p>
+    </div>
+
+    <div class="callout">
+      <p><strong>Hybrid UIKit + SwiftUI strategy:</strong> UIKit for scroll-heavy lists and collection view cells (prefetching via <code>UICollectionViewDataSourcePrefetching</code>); SwiftUI for self-contained surfaces (empty states, modals, loading overlays). Each framework is used where it has a clear advantage.</p>
+    </div>
+
+    <div class="callout">
+      <p><strong><code>UIHostingView</code> over <code>UIHostingController</code>:</strong> Inline SwiftUI in UIKit uses a plain <code>UIView</code> subclass — no extra view controller in the hierarchy, no irrelevant lifecycle callbacks, no coordinator delegate wiring.</p>
+    </div>
+
+    <div class="rule">
+      <p><strong>SPM local package enforces hard module boundaries:</strong> A target that does not list <code>MelodifyDesignSystem</code> in its dependencies cannot import it at compile time. Soft folder-group boundaries would allow accidental imports from <code>Domain</code> or <code>Data</code>.</p>
+    </div>
+
+    <div class="rule">
+      <p><strong>Only one <code>UIViewRepresentable</code> wrapper — <code>MDSAudioPlayerRepresentable</code>:</strong> All other UIKit components have native SwiftUI counterparts. The audio player is wrapped because its stateful waveform animation and <code>onPlayPause</code> callback have no SwiftUI equivalent without fully reimplementing the animation logic.</p>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════ 1. Requirements -->
+  <section id="requirements">
+    <h2>1. Requirements</h2>
+
+    <h3>Functional</h3>
+    <ul>
+      <li><strong>Token layer:</strong> named constants for color, typography, spacing, corner radius, and shadow elevation — all visual decisions resolve to a token</li>
+      <li><strong>UIKit components (atoms → molecules):</strong> <code>MDSAvatarView</code>, <code>MDSBadgeView</code>, <code>MDSLoadingView</code>, <code>MDSMessageBubble</code>, <code>MDSAudioPlayerView</code>; also legacy atoms <code>MDSPrimaryButton</code>, <code>MDSEmptyStateView</code>, <code>MDSTrackRowView</code></li>
+      <li><strong>SwiftUI components:</strong> <code>MDSButton</code>, <code>MDSBadge</code>, <code>MDSAvatar</code>, <code>MDSEmptyState</code>, <code>MDSLoadingOverlay</code></li>
+      <li><strong>Bridge layer:</strong> <code>UIHostingView&lt;Content&gt;</code> (inline SwiftUI in UIKit without a child VC), <code>MDSAudioPlayerRepresentable</code> (UIKit audio player in SwiftUI)</li>
+      <li><strong>Configuration pattern:</strong> every component exposes a <code>*Configuration</code> value type as its public API; callers own data, component owns layout</li>
+    </ul>
+
+    <h3>Non-Functional</h3>
+    <ul>
+      <li>Only <code>Presentation</code> and <code>Application</code> layers import <code>MelodifyDesignSystem</code> — <code>Domain</code> and <code>Data</code> never do</li>
+      <li>Dark/light mode handled automatically via system <code>UIColor</code> adaptations (<code>.label</code>, <code>.systemBackground</code>, etc.); no manual appearance switch</li>
+      <li>Theming is a token swap — changing a brand color touches <code>Color.swift</code> only, never component internals</li>
+      <li>SPM local package structure; ready to be extracted as a remote package without structural changes</li>
+      <li>No domain models, no networking, no business logic</li>
+    </ul>
+
+    <div class="rule">
+      <p><strong>Layer import rule:</strong> <code>Domain</code> and <code>Data</code> must never import <code>MelodifyDesignSystem</code>. The SPM package boundary enforces this at compile time — no convention needed.</p>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════ 2. Component API -->
+  <section id="component-api">
+    <h2>2. Component API (Public Interface)</h2>
+
+    <h3>Token API</h3>
+    <pre><code><span class="cm">// Color (MDSColor namespace)</span>
+<span class="ty">MDSColor</span>.<span class="nm">primary</span>              <span class="cm">// UIColor — brand blue</span>
+<span class="ty">MDSColor</span>.<span class="nm">primaryVariant</span>       <span class="cm">// UIColor — teal accent</span>
+<span class="ty">MDSColor</span>.<span class="nm">onPrimary</span>            <span class="cm">// UIColor — white (text on brand backgrounds)</span>
+<span class="ty">MDSColor</span>.<span class="nm">surface</span>              <span class="cm">// UIColor — .systemBackground (adapts light/dark)</span>
+<span class="ty">MDSColor</span>.<span class="nm">surfaceElevated</span>      <span class="cm">// UIColor — .secondarySystemBackground</span>
+<span class="ty">MDSColor</span>.<span class="nm">error</span>                <span class="cm">// UIColor — .systemRed</span>
+<span class="ty">MDSColor</span>.<span class="nm">warning</span>              <span class="cm">// UIColor — .systemOrange</span>
+<span class="ty">MDSColor</span>.<span class="nm">success</span>              <span class="cm">// UIColor — .systemGreen</span>
+<span class="ty">MDSColor</span>.<span class="nm">textPrimary</span>          <span class="cm">// UIColor — .label</span>
+<span class="ty">MDSColor</span>.<span class="nm">textSecondary</span>        <span class="cm">// UIColor — .secondaryLabel</span>
+<span class="ty">MDSColor</span>.<span class="nm">textDisabled</span>         <span class="cm">// UIColor — .tertiaryLabel</span>
+
+<span class="cm">// Typography</span>
+<span class="ty">Typography</span>.<span class="nm">display</span>            <span class="cm">// UIFont — 28pt bold</span>
+<span class="ty">Typography</span>.<span class="nm">title</span>              <span class="cm">// UIFont — 16pt semibold</span>
+<span class="ty">Typography</span>.<span class="nm">body</span>               <span class="cm">// UIFont — 14pt regular</span>
+<span class="ty">Typography</span>.<span class="nm">caption</span>            <span class="cm">// UIFont — 12pt regular</span>
+
+<span class="cm">// Spacing (CGFloat)</span>
+<span class="ty">Spacing</span>.<span class="nm">xs</span> = <span class="st">4</span>    <span class="ty">Spacing</span>.<span class="nm">sm</span> = <span class="st">8</span>    <span class="ty">Spacing</span>.<span class="nm">md</span> = <span class="st">16</span>    <span class="ty">Spacing</span>.<span class="nm">lg</span> = <span class="st">24</span>    <span class="ty">Spacing</span>.<span class="nm">xl</span> = <span class="st">32</span>
+
+<span class="cm">// Radius (CGFloat — corner radius scale)</span>
+<span class="ty">Radius</span>.<span class="nm">xs</span>     <span class="ty">Radius</span>.<span class="nm">sm</span>     <span class="ty">Radius</span>.<span class="nm">md</span>     <span class="ty">Radius</span>.<span class="nm">lg</span>     <span class="ty">Radius</span>.<span class="nm">full</span>   <span class="cm">// pill</span>
+
+<span class="cm">// Elevation (shadow descriptor — applied via UIView.applyShadow(_:))</span>
+<span class="ty">Elevation</span>.<span class="nm">low</span>     <span class="ty">Elevation</span>.<span class="nm">mid</span>     <span class="ty">Elevation</span>.<span class="nm">high</span></code></pre>
+
+    <h3>UIKit Component API</h3>
+    <pre><code><span class="cm">// MDSAvatarView — circular image with initials fallback</span>
+<span class="kw">struct</span> <span class="ty">MDSAvatarConfiguration</span> {
+    <span class="kw">var</span> <span class="nm">imageURL</span>: <span class="ty">URL</span>?
+    <span class="kw">var</span> <span class="nm">initials</span>: <span class="ty">String</span>         <span class="cm">// shown when imageURL is nil or load fails</span>
+    <span class="kw">var</span> <span class="nm">size</span>: <span class="ty">MDSAvatarSize</span>      <span class="cm">// .small | .medium | .large</span>
+    <span class="kw">var</span> <span class="nm">backgroundColor</span>: <span class="ty">UIColor</span>
+}
+
+<span class="cm">// MDSBadgeView — numeric unread badge, auto-hides at count == 0</span>
+<span class="kw">struct</span> <span class="ty">MDSBadgeConfiguration</span> {
+    <span class="kw">var</span> <span class="nm">count</span>: <span class="ty">Int</span>
+}
+
+<span class="cm">// MDSLoadingView — spinner + optional label</span>
+<span class="kw">struct</span> <span class="ty">MDSLoadingConfiguration</span> {
+    <span class="kw">var</span> <span class="nm">message</span>: <span class="ty">String</span>?
+    <span class="kw">var</span> <span class="nm">variant</span>: <span class="ty">MDSLoadingVariant</span>  <span class="cm">// .inline | .fullscreen</span>
+}
+
+<span class="cm">// MDSMessageBubble — chat bubble, outgoing/incoming</span>
+<span class="kw">struct</span> <span class="ty">MDSMessageBubbleConfiguration</span> {
+    <span class="kw">var</span> <span class="nm">text</span>: <span class="ty">String</span>
+    <span class="kw">var</span> <span class="nm">timestamp</span>: <span class="ty">String</span>
+    <span class="kw">var</span> <span class="nm">isOutgoing</span>: <span class="ty">Bool</span>
+    <span class="kw">var</span> <span class="nm">statusIcon</span>: <span class="ty">UIImage</span>?        <span class="cm">// nil for incoming</span>
+}
+
+<span class="cm">// MDSAudioPlayerView — play/pause + waveform icon + duration</span>
+<span class="kw">struct</span> <span class="ty">MDSAudioPlayerConfiguration</span> {
+    <span class="kw">var</span> <span class="nm">duration</span>: <span class="ty">TimeInterval</span>
+    <span class="kw">var</span> <span class="nm">isPlaying</span>: <span class="ty">Bool</span>
+    <span class="kw">var</span> <span class="nm">onPlayPause</span>: () -> <span class="ty">Void</span>
+}</code></pre>
+
+    <h3>SwiftUI Component API</h3>
+    <pre><code><span class="cm">// MDSButton — ButtonStyle variants</span>
+<span class="kw">struct</span> <span class="ty">MDSButton</span>: <span class="ty">View</span> { ... }    <span class="cm">// .mdsButtonStyle(.filled) or .mdsButtonStyle(.outlined)</span>
+
+<span class="cm">// MDSBadge — ViewModifier</span>
+<span class="ty">View</span>.<span class="nm">mdsBadge</span>(count: <span class="ty">Int</span>)         <span class="cm">// overlays a badge on any View</span>
+
+<span class="cm">// MDSAvatar — AsyncImage + initials fallback</span>
+<span class="ty">MDSAvatar</span>(name: <span class="ty">String</span>, url: <span class="ty">URL</span>?, size: <span class="ty">MDSAvatarSize</span>)
+
+<span class="cm">// MDSEmptyState — icon + title + subtitle + optional CTA</span>
+<span class="ty">MDSEmptyState</span>(
+    icon: <span class="ty">Image</span>,
+    title: <span class="ty">String</span>,
+    subtitle: <span class="ty">String</span>,
+    action: <span class="ty">MDSEmptyStateAction</span>?   <span class="cm">// label + closure</span>
+)
+
+<span class="cm">// MDSLoadingOverlay — fullscreen translucent spinner</span>
+<span class="ty">View</span>.overlay { <span class="ty">MDSLoadingOverlay</span>(isVisible: <span class="ty">Bool</span>) }</code></pre>
+
+    <h3>Bridge API</h3>
+    <pre><code><span class="cm">// UIView subclass — hosts a SwiftUI View inline in a UIKit hierarchy.</span>
+<span class="cm">// No UIHostingController needed; avoids adding an extra VC to the stack.</span>
+<span class="kw">class</span> <span class="ty">UIHostingView</span>&lt;<span class="ty">Content</span>: <span class="ty">View</span>&gt;: <span class="ty">UIView</span> {
+    <span class="kw">init</span>(<span class="nm">rootView</span>: <span class="ty">Content</span>)
+    <span class="kw">func</span> <span class="nm">update</span>(<span class="nm">rootView</span>: <span class="ty">Content</span>)   <span class="cm">// triggers re-render</span>
+}
+
+<span class="cm">// UIViewRepresentable wrapper for MDSAudioPlayerView.</span>
+<span class="cm">// Used only in SwiftUI screens that need the stateful animation — all other</span>
+<span class="cm">// MDS UIKit components have native SwiftUI counterparts and are not wrapped.</span>
+<span class="kw">struct</span> <span class="ty">MDSAudioPlayerRepresentable</span>: <span class="ty">UIViewRepresentable</span> { ... }</code></pre>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════ 3. Data Model -->
+  <section id="data-model">
+    <h2>3. Data Model Design</h2>
+
+    <p>MDS has no domain models and no persistence. Its only model layer is the configuration value types that form the component public API — documented fully under Section 2.</p>
+
+    <h3>Token → Configuration → Rendering chain</h3>
+    <pre><code><span class="ty">MDSColor</span>.<span class="nm">primary</span>      ─┐
+<span class="ty">Typography</span>.<span class="nm">title</span>      ─┤
+<span class="ty">Spacing</span>.<span class="nm">md</span>            ─┤→ <span class="ty">MDSAvatarConfiguration</span> → <span class="nm">MDSAvatarView</span>.<span class="nm">configure</span>(_:) → <span class="ty">UIView</span>.<span class="nm">layoutSubviews</span>
+<span class="ty">Radius</span>.<span class="nm">full</span>           ─┘</code></pre>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════ 4. High-Level Design -->
+  <section id="high-level-design">
+    <h2>4. High-Level Design</h2>
+
+    <pre><code><span class="ty">MelodifyDesignSystem</span>/
+├── <span class="ty">Tokens</span>/
+│   ├── <span class="nm">Color.swift</span>          <span class="cm">— MDSColor namespace</span>
+│   ├── <span class="nm">Typography.swift</span>     <span class="cm">— Typography namespace</span>
+│   ├── <span class="nm">Spacing.swift</span>        <span class="cm">— Spacing namespace</span>
+│   ├── <span class="nm">Radius.swift</span>         <span class="cm">— Radius scale</span>
+│   └── <span class="nm">Elevation.swift</span>      <span class="cm">— shadow descriptors + UIView.applyShadow(_:) extension</span>
+├── <span class="ty">Components</span>/
+│   ├── <span class="ty">UIKit</span>/
+│   │   ├── <span class="nm">MDSAvatarView</span>/        <span class="cm">— MDSAvatarView + MDSAvatarConfiguration + MDSAvatarSize</span>
+│   │   ├── <span class="nm">MDSBadgeView</span>/         <span class="cm">— MDSBadgeView + MDSBadgeConfiguration</span>
+│   │   ├── <span class="nm">MDSLoadingView</span>/       <span class="cm">— MDSLoadingView + MDSLoadingConfiguration + MDSLoadingVariant</span>
+│   │   ├── <span class="nm">MDSMessageBubble</span>/     <span class="cm">— MDSMessageBubble + MDSMessageBubbleConfiguration</span>
+│   │   └── <span class="nm">MDSAudioPlayerView</span>/   <span class="cm">— MDSAudioPlayerView + MDSAudioPlayerConfiguration</span>
+│   ├── <span class="ty">SwiftUI</span>/
+│   │   ├── <span class="nm">MDSButton.swift</span>       <span class="cm">— MDSButtonStyle, MDSButtonVariant, .mdsButtonStyle() extension</span>
+│   │   ├── <span class="nm">MDSBadge.swift</span>        <span class="cm">— MDSBadgeModifier, .mdsBadge(count:) extension</span>
+│   │   ├── <span class="nm">MDSAvatar.swift</span>       <span class="cm">— MDSAvatar View (AsyncImage + initials fallback)</span>
+│   │   ├── <span class="nm">MDSEmptyState.swift</span>   <span class="cm">— MDSEmptyState View + MDSEmptyStateAction</span>
+│   │   └── <span class="nm">MDSLoadingOverlay.swift</span> <span class="cm">— MDSLoadingOverlay View</span>
+│   └── <span class="ty">Legacy</span>/                   <span class="cm">— pre-DS components, retained and hardened with tokens</span>
+│       ├── <span class="nm">PrimaryButton</span>/        <span class="cm">— MDSPrimaryButton + PrimaryButtonConfiguration</span>
+│       ├── <span class="nm">EmptyStateView</span>/       <span class="cm">— MDSEmptyStateView + EmptyStateConfiguration</span>
+│       └── <span class="nm">TrackRowView</span>/         <span class="cm">— MDSTrackRowView + TrackRowConfiguration</span>
+└── <span class="ty">Bridge</span>/
+    ├── <span class="nm">UIHostingView.swift</span>               <span class="cm">— generic UIView subclass hosting SwiftUI</span>
+    └── <span class="nm">MDSAudioPlayerRepresentable.swift</span> <span class="cm">— UIViewRepresentable for MDSAudioPlayerView</span></code></pre>
+
+    <h3>Architecture Layer Breakdown</h3>
+    <div class="stack">
+      <div class="stack-row">
+        <div class="stack-label">Presentation</div>
+        <div class="stack-content">
+          <strong>ViewControllers + ViewModels (consumers of MDS)</strong>
+          Any <code>UIViewController</code> or <code>SwiftUI</code> <code>View</code> in the host app — imports <code>MelodifyDesignSystem</code> and uses component APIs directly
+        </div>
+      </div>
+      <div class="stack-row">
+        <div class="stack-label">Domain</div>
+        <div class="stack-content">
+          <strong>UseCases</strong> None — MDS has no business logic
+          <strong>Services</strong> None
+          <strong>Models</strong> None — configuration value types are UI-layer constructs, not domain models
+          <strong>Params</strong> None
+        </div>
+      </div>
+      <div class="stack-row">
+        <div class="stack-label">Infrastructure</div>
+        <div class="stack-content">None — MDS has no gateways, no network, no persistence</div>
+      </div>
+      <div class="stack-row">
+        <div class="stack-label">Data</div>
+        <div class="stack-content">
+          <strong>Repositories</strong> None
+          <strong>DataSources</strong> None
+          <strong>DTOs</strong> None
+          <strong>Mappers</strong> None — token values are Swift constants; no serialization layer
+        </div>
+      </div>
+      <div class="stack-row">
+        <div class="stack-label">External</div>
+        <div class="stack-content">
+          <code>UIKit</code> · <code>SwiftUI</code> · <code>Foundation</code>
+        </div>
+      </div>
+      <div class="stack-row">
+        <div class="stack-label">Application</div>
+        <div class="stack-content">
+          <code>Package.swift</code> — declares <code>MelodifyDesignSystem</code> as a local SPM target; consuming apps list it as a dependency in their own <code>Package.swift</code> or Xcode project
+        </div>
+      </div>
+    </div>
+
+    <h3>Hybrid Strategy Decision Table</h3>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Screen type</th>
+            <th>MDS UIKit components</th>
+            <th>MDS SwiftUI components</th>
+            <th>Bridge needed?</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>UIKit ViewController</td>
+            <td>Used directly</td>
+            <td>Embedded via <code>UIHostingView&lt;T&gt;</code></td>
+            <td>Yes — UIHostingView</td>
+          </tr>
+          <tr>
+            <td>SwiftUI View</td>
+            <td>Embedded via <code>UIViewRepresentable</code></td>
+            <td>Used directly</td>
+            <td>Only for MDSAudioPlayerView</td>
+          </tr>
+          <tr>
+            <td>UIKit cell (CollectionView)</td>
+            <td>Used directly</td>
+            <td>Not used — lifecycle complexity</td>
+            <td>No</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════ 5. Data Flow -->
+  <section id="data-flow">
+    <h2>5. Data Flow</h2>
+
+    <h3>UIKit component rendering pipeline</h3>
+    <pre><code><span class="cm">// Caller (ViewController / Cell)</span>
+<span class="ty">Caller</span> (ViewController / Cell)
+  → creates <span class="ty">MDSAvatarConfiguration</span>(initials: <span class="st">"AL"</span>, size: .medium, backgroundColor: <span class="ty">MDSColor</span>.<span class="nm">primary</span>)
+  → <span class="nm">avatarView</span>.<span class="nm">configure</span>(config)
+      → self.<span class="nm">size</span> = config.<span class="nm">size</span>.<span class="nm">dimension</span>            <span class="cm">// reads Radius token for cornerRadius</span>
+      → <span class="nm">backgroundColor</span> = config.<span class="nm">backgroundColor</span>
+      → <span class="kw">if</span> config.<span class="nm">imageURL</span> != <span class="kw">nil</span>: load image async
+        <span class="kw">else</span>: <span class="nm">initialsLabel</span>.<span class="nm">text</span> = config.<span class="nm">initials</span>
+      → <span class="nm">setNeedsLayout</span>()
+  → <span class="nm">layoutSubviews</span>()
+      → <span class="nm">cornerRadius</span> = bounds.<span class="nm">height</span> / <span class="st">2</span>             <span class="cm">// Radius.full = pill shape via layout</span>
+      → subviews positioned using <span class="ty">Spacing</span> tokens</code></pre>
+
+    <h3>SwiftUI component rendering pipeline</h3>
+    <pre><code><span class="cm">// Caller (SwiftUI View)</span>
+<span class="ty">Caller</span> (SwiftUI <span class="ty">View</span>)
+  → <span class="ty">MDSAvatar</span>(name: <span class="st">"Alice"</span>, url: url, size: .medium)
+      body:
+        <span class="ty">ZStack</span> {
+            <span class="ty">Circle</span>().fill(<span class="ty">MDSColor</span>.<span class="nm">primary</span>.<span class="nm">color</span>)   <span class="cm">// token access</span>
+            <span class="ty">AsyncImage</span>(url: url) { ... }
+              .placeholder { <span class="ty">Text</span>(<span class="st">"AL"</span>).<span class="nm">font</span>(.<span class="nm">from</span>(<span class="ty">Typography</span>.<span class="nm">title</span>)) }
+        }
+        .frame(width: size.<span class="nm">dimension</span>, height: size.<span class="nm">dimension</span>)
+  → SwiftUI diffing engine recomputes on state change — no manual <span class="nm">setNeedsLayout</span></code></pre>
+
+    <h3>Bridge: UIHostingView embedding in UIKit</h3>
+    <pre><code><span class="ty">TrackListViewController</span>
+  → <span class="kw">let</span> <span class="nm">loadingHost</span> = <span class="ty">UIHostingView</span>(rootView: <span class="ty">MDSLoadingOverlay</span>(isVisible: <span class="nm">isLoading</span>))
+  → view.<span class="nm">addSubview</span>(<span class="nm">loadingHost</span>)
+  → <span class="nm">loadingHost</span>.<span class="nm">translatesAutoresizingMaskIntoConstraints</span> = <span class="kw">false</span>
+  → <span class="ty">NSLayoutConstraint</span>.<span class="nm">activate</span>(...)  <span class="cm">// pins to edges like any UIView</span>
+  → when <span class="nm">isLoading</span> changes:
+      <span class="nm">loadingHost</span>.<span class="nm">update</span>(rootView: <span class="ty">MDSLoadingOverlay</span>(isVisible: newValue))
+      <span class="cm">// triggers SwiftUI body recompute; no VC lifecycle overhead</span></code></pre>
+
+    <h3>Token change impact (e.g. brand refresh)</h3>
+    <pre><code><span class="cm">// Color.swift — one-line change</span>
+<span class="ty">MDSColor</span>.<span class="nm">primary</span> = <span class="ty">UIColor</span>(red: <span class="st">0.85</span>, green: <span class="st">0.22</span>, blue: <span class="st">0.44</span>, alpha: <span class="st">1</span>)
+
+<span class="cm">// Impact path:</span>
+All <span class="ty">MDSAvatarView</span> instances → <span class="nm">backgroundColor</span> = <span class="ty">MDSColor</span>.<span class="nm">primary</span>   <span class="cm">// ✅ updated</span>
+All <span class="ty">MDSPrimaryButton</span> instances → <span class="nm">backgroundColor</span> = <span class="ty">MDSColor</span>.<span class="nm">primary</span> <span class="cm">// ✅ updated</span>
+All SwiftUI <span class="ty">MDSButton</span>(.filled) → uses <span class="ty">MDSColor</span>.<span class="nm">primary</span>              <span class="cm">// ✅ updated</span>
+No component internals touched — token is the single source of truth</code></pre>
+
+    <div class="rule">
+      <p><strong>Token propagation rule:</strong> No component hardcodes a color, spacing value, or corner radius literal. Every visual constant flows from the token namespace. A brand refresh is always one file, one line.</p>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════ 6. Technical Deep-dive -->
+  <section id="technical-deep-dive">
+    <h2>6. Technical Deep-dive</h2>
+
+    <h3>Why token-first instead of hardcoded values inside components?</h3>
+    <div class="callout">
+      <p>Without tokens, "brand blue" is <code>#0066CC</code> duplicated across 20 files. A brand refresh or dark-mode audit means finding and replacing every occurrence. With tokens, <code>MDSColor.primary</code> is the single source — change it once in <code>Color.swift</code> and every component that reads it updates automatically. Theming, white-labelling, and dark mode support all reduce to token swaps.</p>
+    </div>
+
+    <h3>Why a <code>*Configuration</code> value type instead of direct property setters on each component?</h3>
+    <div class="callout">
+      <p>Direct property setters (<code>avatarView.initials = "AL"</code>, <code>avatarView.size = .medium</code>) allow partial updates: a caller can set <code>initials</code> but forget to set <code>size</code>, leaving the view in an inconsistent intermediate state. A <code>Configuration</code> struct is atomic — the component receives a complete snapshot and applies it in one <code>configure(_:)</code> call. Invalid combinations can be caught at the struct level before any layout runs. The component owns layout and style; the caller owns data — clean separation.</p>
+    </div>
+
+    <h3>Why UIKit for collection view cells and scroll-heavy lists, not SwiftUI?</h3>
+    <div class="callout">
+      <p>SwiftUI's <code>List</code> and <code>LazyVStack</code> do not expose <code>UICollectionViewDataSourcePrefetching</code> — the protocol that lets you trigger image prefetch before a cell is visible. For chat and feed use cases, prefetching is the difference between smooth scroll and visible loading. UIKit's <code>willDisplay(_:forItemAt:)</code> and <code>prefetchDataSource</code> give granular scroll lifecycle control that SwiftUI abstracts away. SwiftUI is the right choice for state-driven, self-contained surfaces (empty states, modals, action sheets) where scroll lifecycle doesn't matter.</p>
+    </div>
+
+    <h3>Why <code>UIHostingView</code> over <code>UIHostingController</code> for inline SwiftUI?</h3>
+    <div class="callout">
+      <p><code>UIHostingController</code> is a <code>UIViewController</code>. Embedding it for a single view (e.g. a loading overlay) adds it to the view controller hierarchy — it participates in <code>viewWillAppear</code>, <code>viewDidLayoutSubviews</code>, and similar lifecycle calls that are irrelevant for an overlay. <code>UIHostingView&lt;Content&gt;</code> is a plain <code>UIView</code> subclass: it lives in the view hierarchy, not the controller hierarchy. Auto Layout treats it like any other view. No lifecycle noise, no extra coordinator delegate wiring.</p>
+    </div>
+
+    <h3>Why is <code>MDSAudioPlayerView</code> the only UIKit component with a <code>UIViewRepresentable</code> wrapper?</h3>
+    <div class="callout">
+      <p>All other MDS UIKit components (<code>MDSAvatarView</code>, <code>MDSEmptyStateView</code>) have native SwiftUI counterparts (<code>MDSAvatar</code>, <code>MDSEmptyState</code>) that are built with the same tokens and offer identical visual output. Wrapping them via <code>UIViewRepresentable</code> would add lifecycle boilerplate for no benefit. <code>MDSAudioPlayerView</code> has stateful waveform animation and a <code>onPlayPause</code> callback driven by <code>layoutSubviews</code> — there is no equivalent SwiftUI animation primitive without reimplementing the animation logic entirely. The wrapper is the pragmatic choice for this one case.</p>
+    </div>
+
+    <h3>Why SPM local package instead of embedded targets or a monolith?</h3>
+    <div class="callout">
+      <p>An SPM local package enforces hard module boundaries at compile time — a target that doesn't list <code>MelodifyDesignSystem</code> in its dependencies cannot import it. An embedded target or folder group is a soft boundary enforced only by convention. The SPM structure also means MDS is trivially extractable to a remote package (e.g. a versioned GitHub release) when the project grows to need it — the consuming apps would change one line in <code>Package.swift</code>.</p>
+    </div>
+
+    <h3>Interview Q&amp;A</h3>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Question</th><th>Answer</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>What does "token-first" mean in practice?</td>
+            <td>Every visual decision (color, spacing, radius, shadow) is a named constant. Changing the brand or supporting theming touches only the token files, never component internals.</td>
+          </tr>
+          <tr>
+            <td>Why <code>*Configuration</code> instead of setters?</td>
+            <td>Configuration is atomic — no partial-update bugs. The component receives a complete snapshot and applies it once. Setters allow invalid intermediate states.</td>
+          </tr>
+          <tr>
+            <td>Why UIKit for cells in the chat list?</td>
+            <td>Prefetching via <code>UICollectionViewDataSourcePrefetching</code>. SwiftUI has no equivalent API for scroll-ahead image loading.</td>
+          </tr>
+          <tr>
+            <td>Why <code>UIHostingView</code> and not <code>UIHostingController</code>?</td>
+            <td><code>UIHostingController</code> is a ViewController — it adds unnecessary lifecycle overhead for an inline view embedding. <code>UIHostingView</code> is a plain <code>UIView</code> and slots into Auto Layout directly.</td>
+          </tr>
+          <tr>
+            <td>Can MDS be shipped as a remote package?</td>
+            <td>Yes. The SPM local package structure is ready. Change the <code>Package.swift</code> dependency from a local path to a GitHub URL with a version — nothing inside MDS changes.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <div class="bottom-nav">
+    <a href="../index.html">← Home</a>
+    <span></span>
+  </div>
+
+</body>
+</html>

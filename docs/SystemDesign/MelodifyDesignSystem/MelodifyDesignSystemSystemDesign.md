@@ -138,9 +138,6 @@ struct MDSAudioPlayerRepresentable: UIViewRepresentable { ... }
 
 MDS has no domain models and no persistence. Its only model layer is the configuration value types that form the component public API — documented fully under Section 2.
 
-**Why configuration value types, not direct property setters?**  
-A `*Configuration` struct is the snapshot of all data the component needs. Passing one value to `configure(_ config:)` (UIKit) or as init params (SwiftUI) is atomic — no partial-update bugs. The component rejects invalid configurations at init, not after layout.
-
 **Token → Configuration → Rendering chain**
 
 ```
@@ -191,12 +188,6 @@ MelodifyDesignSystem/
 | UIKit ViewController | Used directly | Embedded via `UIHostingView<T>` | Yes — UIHostingView |
 | SwiftUI View | Embedded via `UIViewRepresentable` | Used directly | Only for MDSAudioPlayerView |
 | UIKit cell (CollectionView) | Used directly | Not used — lifecycle complexity | No |
-
-**Why `UIHostingView` over `UIHostingController`?**  
-For inline embeddings (e.g. a loading overlay inside a ViewController's view hierarchy), `UIHostingController` adds an unnecessary child ViewController with its own `viewWillAppear`/`viewDidLayoutSubviews` lifecycle. `UIHostingView<Content>` is a plain `UIView` subclass — it slots into Auto Layout like any other view, no lifecycle noise.
-
-**Why is `MDSAudioPlayerView` the only wrapped UIKit component?**  
-All other MDS UIKit atoms have equivalent native SwiftUI counterparts (`MDSAvatar`, `MDSEmptyState`). `MDSAudioPlayerView` has stateful waveform animation and a play/pause callback — there is no clean SwiftUI equivalent without rewriting the animation logic. The `UIViewRepresentable` wrapper is the pragmatic call.
 
 ---
 

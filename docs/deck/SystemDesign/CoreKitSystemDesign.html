@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CoreKit — System Design</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --surface-elevated: #21262d;
+      --border: #30363d;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --text-muted: #8b949e;
+      --accent: #58a6ff;
+      --accent-muted: #1f3a5f;
+      --green: #3fb950;
+      --green-muted: #1a3626;
+      --orange: #d29922;
+      --orange-muted: #3a2a0a;
+      --purple: #bc8cff;
+      --purple-muted: #2d1f4e;
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      line-height: 1.6;
+      max-width: 900px;
+      margin: auto;
+      padding: 2rem;
+      padding-bottom: 5rem;
+    }
+
+    a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    h2 {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: var(--text);
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 1.25rem;
+    }
+
+    h3 {
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: var(--accent);
+      margin: 1.25rem 0 0.75rem;
+    }
+
+    p {
+      margin: 0.75rem 0;
+    }
+
+    ul, ol {
+      padding-left: 1.5rem;
+      margin: 0.5rem 0 0.75rem;
+    }
+
+    li {
+      margin: 0.3rem 0;
+    }
+
+    strong {
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    /* nav breadcrumb */
+    nav.breadcrumb {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin-bottom: 1.5rem;
+    }
+
+    nav.breadcrumb a {
+      color: var(--accent);
+    }
+
+    /* header */
+    header {
+      padding: 2rem 0 1.5rem;
+    }
+
+    header h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 0.4rem;
+    }
+
+    header p {
+      color: var(--text-muted);
+      font-size: 1rem;
+      margin: 0;
+    }
+
+    /* toc */
+    nav.toc {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 2rem;
+    }
+
+    nav.toc h4 {
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+      margin-bottom: 0.75rem;
+    }
+
+    nav.toc ol {
+      list-style: none;
+      padding: 0;
+      counter-reset: toc-counter;
+    }
+
+    nav.toc ol li {
+      counter-increment: toc-counter;
+      display: flex;
+      align-items: baseline;
+      gap: 0.6rem;
+      padding: 0.3rem 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    nav.toc ol li:last-child {
+      border-bottom: none;
+    }
+
+    nav.toc ol li::before {
+      content: counter(toc-counter, decimal-leading-zero);
+      color: var(--accent);
+      font-size: 0.8rem;
+      font-weight: 700;
+      min-width: 1.8rem;
+    }
+
+    nav.toc ol li a {
+      color: var(--text);
+      text-decoration: none;
+      font-size: 0.95rem;
+    }
+
+    nav.toc ol li a:hover {
+      color: var(--accent);
+    }
+
+    /* sections */
+    section {
+      padding: 2rem 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    section:last-of-type {
+      border-bottom: none;
+    }
+
+    /* callout */
+    .callout {
+      border-left: 4px solid var(--accent);
+      background: var(--accent-muted);
+      padding: 1rem 1.25rem;
+      border-radius: 6px;
+      margin: 1rem 0;
+    }
+
+    .callout p {
+      margin: 0;
+    }
+
+    /* rule */
+    .rule {
+      border-left: 4px solid var(--green);
+      background: var(--green-muted);
+      padding: 1rem 1.25rem;
+      border-radius: 6px;
+      margin: 1rem 0;
+    }
+
+    .rule p {
+      margin: 0;
+    }
+
+    /* warn */
+    .warn {
+      border-left: 4px solid var(--orange);
+      background: var(--orange-muted);
+      padding: 1rem 1.25rem;
+      border-radius: 6px;
+      margin: 1rem 0;
+    }
+
+    .warn p {
+      margin: 0;
+    }
+
+    /* table */
+    .table-wrap {
+      overflow-x: auto;
+      margin: 1rem 0;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+
+    thead tr {
+      background: var(--surface);
+    }
+
+    thead th {
+      color: var(--text-muted);
+      font-weight: 600;
+      text-align: left;
+      padding: 0.6rem 1rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    tbody tr:nth-child(even) {
+      background: var(--surface-elevated);
+    }
+
+    tbody td {
+      padding: 0.6rem 1rem;
+      border-bottom: 1px solid var(--border);
+      color: var(--text);
+    }
+
+    tbody tr:last-child td {
+      border-bottom: none;
+    }
+
+    /* code */
+    code {
+      background: var(--surface-elevated);
+      color: var(--text);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.85em;
+      font-family: monospace;
+    }
+
+    pre {
+      margin: 1rem 0;
+      border-radius: 6px;
+      overflow-x: auto;
+      border: 1px solid var(--border);
+    }
+
+    pre code {
+      display: block;
+      background: var(--surface-elevated);
+      color: var(--text);
+      padding: 1rem;
+      border-radius: 6px;
+      font-size: 0.875rem;
+      line-height: 1.7;
+      overflow-x: auto;
+      white-space: pre;
+    }
+
+    /* syntax highlight */
+    .kw { color: var(--accent); }          /* keywords: struct, let, func, etc. */
+    .ty { color: #79c0ff; }                /* type names */
+    .st { color: #ffa657; }                /* string literals */
+    .cm { color: var(--text-muted); }      /* comments */
+    .nm { color: #d2a8ff; }                /* property / param names */
+    .gr { color: var(--green); }           /* architectural / special terms */
+
+    /* stack */
+    .stack {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 1rem 0;
+    }
+
+    .stack-row {
+      display: flex;
+      flex-direction: row;
+      align-items: flex-start;
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid var(--border);
+      gap: 1rem;
+    }
+
+    .stack-row:last-child {
+      border-bottom: none;
+    }
+
+    .stack-row:nth-child(even) {
+      background: var(--surface-elevated);
+    }
+
+    .stack-label {
+      min-width: 120px;
+      font-weight: 700;
+      color: var(--accent);
+      font-size: 0.85rem;
+      padding-top: 0.1rem;
+    }
+
+    .stack-content {
+      color: var(--text);
+      font-size: 0.9rem;
+      line-height: 1.7;
+      flex: 1;
+    }
+
+    .stack-content code {
+      margin: 0 2px;
+    }
+
+    .stack-content strong {
+      color: var(--text-muted);
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      display: block;
+      margin-top: 0.3rem;
+    }
+
+    .stack-content strong:first-child {
+      margin-top: 0;
+    }
+
+    /* bottom nav */
+    .bottom-nav {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: var(--surface-elevated);
+      border-top: 1px solid var(--border);
+      display: flex;
+      flex-direction: row;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.75rem 2rem;
+      font-size: 0.9rem;
+    }
+
+    .bottom-nav a {
+      color: var(--accent);
+    }
+
+    /* ascii diagram */
+    .ascii-diagram {
+      font-family: monospace;
+      font-size: 0.78rem;
+      line-height: 1.5;
+      color: var(--text-muted);
+      background: var(--surface-elevated);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 1rem;
+      overflow-x: auto;
+      white-space: pre;
+      margin: 1rem 0;
+    }
+
+    .ascii-diagram .ascii-layer-label {
+      color: var(--accent);
+      font-weight: 700;
+    }
+  </style>
+</head>
+<body>
+
+  <nav class="breadcrumb">← <a href="../index.html">Home</a></nav>
+
+  <header>
+    <h1>CoreKit</h1>
+    <p>System Design — Melodify Interview Lab</p>
+  </header>
+
+  <nav class="toc">
+    <h4>Contents</h4>
+    <ol>
+      <li><a href="#requirements">Requirements</a></li>
+      <li><a href="#module-api">Module API (Public Interface)</a></li>
+      <li><a href="#data-model">Data Model Design</a></li>
+      <li><a href="#high-level-design">High-Level Design</a></li>
+      <li><a href="#data-flow">Data Flow</a></li>
+      <li><a href="#technical-deep-dive">Technical Deep-dive</a></li>
+    </ol>
+  </nav>
+
+  <!-- ═══════════════════════════════════════════════════ 1. Requirements -->
+  <section id="requirements">
+    <h2>1. Requirements</h2>
+
+    <div class="rule">
+      <p><strong>CoreKit is a shared SPM local package.</strong> It contains networking and persistence primitives that every mini-app needs without carrying any domain knowledge. No app-specific types are imported here.</p>
+    </div>
+
+    <h3>Functional</h3>
+    <ul>
+      <li>Generic <code>async</code>/<code>await</code> HTTP client: <code>GET</code>, <code>POST</code>, <code>PUT</code>, <code>PATCH</code>, <code>DELETE</code></li>
+      <li>Typed <code>APIError</code> propagation: <code>invalidURL</code>, <code>notFound</code>, <code>decodingFailed</code>, <code>networkError</code>, <code>conflict</code></li>
+      <li>WebSocket client with channel multiplexing — one connection, many logical channels via <code>subscribe(channel:) → AsyncStream&lt;String&gt;</code></li>
+      <li><code>LocalDataSourceProtocol</code> — generic protocol for any app's in-memory or disk-backed cache</li>
+      <li>Image loading protocol stack: <code>ImageDataSourceProtocol</code> (fetch) and <code>ImagePrefetcherProtocol</code> (prefetch)</li>
+      <li>Analytics gateway protocol + two concrete implementations: console logging (dev) and no-op (test/preview)</li>
+    </ul>
+
+    <h3>Non-Functional</h3>
+    <ul>
+      <li>All public types are <code>Sendable</code> — safe to use across Swift concurrency contexts</li>
+      <li><code>WebSocketClient</code> is a Swift <code>actor</code> — all channel/continuation mutations are thread-safe without locks</li>
+      <li>URLSession-based throughout — no third-party networking dependency</li>
+      <li>No UIKit, no SwiftUI, no domain models — pure Foundation + Swift Concurrency</li>
+      <li>Public API is defined through protocols so every mini-app's Data layer can inject mocks in tests</li>
+    </ul>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════ 2. Module API -->
+  <section id="module-api">
+    <h2>2. Module API (Public Interface)</h2>
+
+    <div class="callout">
+      <p>CoreKit has no HTTP endpoints. This section documents its public Swift API — the contract every mini-app's Data layer depends on.</p>
+    </div>
+
+    <h3>APIClient</h3>
+    <pre><code><span class="kw">public protocol</span> <span class="ty">APIClientProtocol</span>: <span class="ty">Sendable</span> {
+    <span class="kw">func</span> <span class="nm">get</span>&lt;<span class="ty">T</span>: <span class="ty">Decodable</span>&gt;(<span class="nm">_</span> <span class="nm">url</span>: <span class="ty">URL</span>) <span class="kw">async throws</span> -> <span class="ty">T</span>
+    <span class="kw">func</span> <span class="nm">post</span>&lt;<span class="ty">Body</span>: <span class="ty">Encodable</span> &amp; <span class="ty">Sendable</span>, <span class="ty">T</span>: <span class="ty">Decodable</span>&gt;(<span class="nm">_</span> <span class="nm">url</span>: <span class="ty">URL</span>, <span class="nm">body</span>: <span class="ty">Body</span>) <span class="kw">async throws</span> -> <span class="ty">T</span>
+    <span class="kw">func</span> <span class="nm">put</span>&lt;<span class="ty">Body</span>: <span class="ty">Encodable</span> &amp; <span class="ty">Sendable</span>, <span class="ty">T</span>: <span class="ty">Decodable</span>&gt;(<span class="nm">_</span> <span class="nm">url</span>: <span class="ty">URL</span>, <span class="nm">body</span>: <span class="ty">Body</span>) <span class="kw">async throws</span> -> <span class="ty">T</span>
+    <span class="kw">func</span> <span class="nm">patch</span>&lt;<span class="ty">Body</span>: <span class="ty">Encodable</span> &amp; <span class="ty">Sendable</span>, <span class="ty">T</span>: <span class="ty">Decodable</span>&gt;(<span class="nm">_</span> <span class="nm">url</span>: <span class="ty">URL</span>, <span class="nm">body</span>: <span class="ty">Body</span>) <span class="kw">async throws</span> -> <span class="ty">T</span>
+    <span class="kw">func</span> <span class="nm">delete</span>&lt;<span class="ty">T</span>: <span class="ty">Decodable</span>&gt;(<span class="nm">_</span> <span class="nm">url</span>: <span class="ty">URL</span>) <span class="kw">async throws</span> -> <span class="ty">T</span>
+}</code></pre>
+
+    <p>Concrete: <code>struct APIClient: APIClientProtocol</code> — URLSession-based, decodes with <code>JSONDecoder</code>, encodes bodies with <code>JSONEncoder</code>, maps HTTP 409 status to <code>APIError.conflict</code>.</p>
+
+    <h3>WebSocketClient</h3>
+    <pre><code><span class="kw">public protocol</span> <span class="ty">WebSocketClientProtocol</span>: <span class="ty">Sendable</span> {
+    <span class="kw">func</span> <span class="nm">connect</span>(<span class="nm">to</span> <span class="nm">url</span>: <span class="ty">URL</span>) <span class="kw">async throws</span>
+    <span class="kw">func</span> <span class="nm">disconnect</span>() <span class="kw">async</span>
+    <span class="kw">func</span> <span class="nm">subscribe</span>(<span class="nm">channel</span>: <span class="ty">String</span>) -> <span class="ty">AsyncStream</span>&lt;<span class="ty">String</span>&gt;
+    <span class="kw">func</span> <span class="nm">send</span>(<span class="nm">payload</span>: <span class="ty">String</span>, <span class="nm">channel</span>: <span class="ty">String</span>) <span class="kw">async throws</span>
+}</code></pre>
+
+    <p>Concrete: <code>public actor WebSocketClient: WebSocketClientProtocol</code></p>
+
+    <div class="callout">
+      <p><strong>Channel multiplexing:</strong> The outer frame is a <code>WebSocketEnvelope { channel, payload }</code>. <code>ChannelRouter</code> (private actor) maps channel strings to <code>AsyncStream.Continuation</code> instances and routes incoming payloads to the correct subscriber.</p>
+    </div>
+
+    <h3>LocalDataSourceProtocol</h3>
+    <pre><code><span class="kw">public protocol</span> <span class="ty">LocalDataSourceProtocol</span> {
+    <span class="kw">associatedtype</span> <span class="ty">Request</span>
+    <span class="kw">associatedtype</span> <span class="ty">DTO</span>: <span class="ty">Codable</span>
+
+    <span class="kw">func</span> <span class="nm">load</span>(<span class="nm">request</span>: <span class="ty">Request</span>) -> <span class="ty">DTO</span>?
+    <span class="kw">func</span> <span class="nm">save</span>(<span class="nm">_</span> <span class="nm">dto</span>: <span class="ty">DTO</span>, <span class="nm">for</span> <span class="nm">request</span>: <span class="ty">Request</span>)
+}</code></pre>
+
+    <p>Each mini-app's concrete <code>LocalDataSource</code> implements this protocol with its own <code>DTO</code> and <code>Request</code> types.</p>
+
+    <h3>Image Loading</h3>
+    <pre><code><span class="kw">public protocol</span> <span class="ty">ImageDataSourceProtocol</span> {
+    <span class="kw">func</span> <span class="nm">loadImage</span>(<span class="nm">from</span> <span class="nm">url</span>: <span class="ty">URL</span>) <span class="kw">async throws</span> -> <span class="ty">Data</span>
+}
+
+<span class="kw">public protocol</span> <span class="ty">ImagePrefetcherProtocol</span> {
+    <span class="kw">func</span> <span class="nm">prefetch</span>(<span class="nm">urls</span>: [<span class="ty">URL</span>])
+    <span class="kw">func</span> <span class="nm">cancelPrefetch</span>(<span class="nm">urls</span>: [<span class="ty">URL</span>])
+}</code></pre>
+
+    <p>Concretes in CoreKit: <code>URLSessionImageDataSource</code> (URLSession download), <code>NoOpImagePrefetcher</code> (test/dev stub). <code>MusicApp/Data/</code> provides <code>ImageDataSource</code> (SDWebImage-backed) for production — the protocol lets Data swap implementations without touching Domain.</p>
+
+    <h3>Analytics</h3>
+    <pre><code><span class="kw">public protocol</span> <span class="ty">AnalyticsEvent</span> {
+    <span class="kw">var</span> <span class="nm">name</span>: <span class="ty">String</span> { <span class="kw">get</span> }
+    <span class="kw">var</span> <span class="nm">params</span>: [<span class="ty">String</span>: <span class="ty">Any</span>] { <span class="kw">get</span> }
+}
+
+<span class="kw">public protocol</span> <span class="ty">AnalyticsGatewayProtocol</span> {
+    <span class="kw">func</span> <span class="nm">track</span>(<span class="nm">event</span>: <span class="kw">any</span> <span class="ty">AnalyticsEvent</span>)
+}</code></pre>
+
+    <p>Concretes: <code>ConsoleAnalyticsGateway</code> — prints event name + params to console (dev/debug). <code>NoOpAnalyticsGateway</code> — silently discards all events (test/preview).</p>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════ 3. Data Model Design -->
+  <section id="data-model">
+    <h2>3. Data Model Design</h2>
+
+    <h3>Error Types</h3>
+    <pre><code><span class="kw">public enum</span> <span class="ty">APIError</span>: <span class="ty">Error</span>, <span class="ty">Sendable</span> {
+    <span class="kw">case</span> <span class="nm">invalidURL</span>
+    <span class="kw">case</span> <span class="nm">notFound</span>
+    <span class="kw">case</span> <span class="nm">decodingFailed</span>(<span class="ty">Error</span>)
+    <span class="kw">case</span> <span class="nm">networkError</span>(<span class="ty">Error</span>)
+    <span class="kw">case</span> <span class="nm">conflict</span>           <span class="cm">// HTTP 409 — distinct from transient errors; needs domain-specific UX</span>
+}
+
+<span class="kw">public enum</span> <span class="ty">WebSocketError</span>: <span class="ty">Error</span>, <span class="ty">Sendable</span> {
+    <span class="kw">case</span> <span class="nm">notConnected</span>
+    <span class="kw">case</span> <span class="nm">encodingFailed</span>
+    <span class="kw">case</span> <span class="nm">transportError</span>(<span class="ty">Error</span>)
+}</code></pre>
+
+    <div class="rule">
+      <p><strong>Why <code>conflict</code> is its own case:</strong> HTTP 409 is semantically distinct from a transient network error. It signals a business-level collision (e.g. duplicate resource) that the calling app must handle with specific UX. Grouping it under <code>networkError</code> would erase that signal.</p>
+    </div>
+
+    <h3>WebSocket Envelope</h3>
+    <pre><code><span class="cm">// Wraps every WebSocket frame. The channel field routes the payload</span>
+<span class="cm">// to the correct subscriber without the consumer knowing about other channels.</span>
+<span class="kw">public struct</span> <span class="ty">WebSocketEnvelope</span>: <span class="ty">Codable</span>, <span class="ty">Sendable</span> {
+    <span class="kw">public let</span> <span class="nm">channel</span>: <span class="ty">String</span>
+    <span class="kw">public let</span> <span class="nm">payload</span>: <span class="ty">String</span>   <span class="cm">// JSON-encoded by the sender; opaque to the transport layer</span>
+}</code></pre>
+
+    <div class="callout">
+      <p><strong>Why <code>payload</code> is a <code>String</code>, not <code>Codable</code>:</strong> The transport layer (<code>WebSocketClient</code>) must remain agnostic to the payload's schema. Each channel subscriber decodes the raw JSON string into its own DTO. Keeping payload as an opaque string means CoreKit never needs to know about <code>ChatEventDTO</code>, <code>TrackUpdateDTO</code>, or any other domain type.</p>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════ 4. High-Level Design -->
+  <section id="high-level-design">
+    <h2>4. High-Level Design</h2>
+
+    <h3>File Tree</h3>
+    <pre><code><span class="ty">CoreKit</span>/
+├── <span class="gr">Network</span>/
+│   ├── <span class="ty">APIClient</span>.swift          <span class="cm">— struct APIClient: APIClientProtocol</span>
+│   │                              <span class="cm">  APIClientProtocol (public)</span>
+│   │                              <span class="cm">  APIError enum (public)</span>
+│   └── <span class="ty">WebSocketClient</span>.swift    <span class="cm">— actor WebSocketClient: WebSocketClientProtocol</span>
+│                                  <span class="cm">  WebSocketClientProtocol (public)</span>
+│                                  <span class="cm">  WebSocketEnvelope (public)</span>
+│                                  <span class="cm">  ChannelRouter (private actor — internal to WebSocketClient)</span>
+│                                  <span class="cm">  WebSocketError (public)</span>
+├── <span class="gr">Analytics</span>/
+│   ├── <span class="ty">AnalyticsEvent</span>.swift     <span class="cm">— AnalyticsEvent protocol (public)</span>
+│   ├── <span class="ty">AnalyticsGatewayProtocol</span>.swift
+│   ├── <span class="ty">ConsoleAnalyticsGateway</span>.swift
+│   └── <span class="ty">NoOpAnalyticsGateway</span>.swift
+├── <span class="gr">ImageLoading</span>/
+│   ├── <span class="ty">ImageDataSourceProtocol</span>.swift
+│   ├── <span class="ty">ImagePrefetcherProtocol</span>.swift
+│   ├── <span class="ty">URLSessionImageDataSource</span>.swift
+│   └── <span class="ty">NoOpImagePrefetcher</span>.swift
+└── <span class="gr">Persistence</span>/
+    └── <span class="ty">LocalDataSourceProtocol</span>.swift</code></pre>
+
+    <h3>Module Breakdown</h3>
+    <div class="stack">
+      <div class="stack-row">
+        <div class="stack-label">Network</div>
+        <div class="stack-content">
+          <strong>Protocols</strong>
+          <code>APIClientProtocol</code> · <code>WebSocketClientProtocol</code>
+          <strong>Concretes</strong>
+          <code>APIClient</code> · <code>WebSocketClient</code>
+          <strong>Internal</strong>
+          <code>ChannelRouter</code> (private actor — not exported)
+          <strong>Errors</strong>
+          <code>APIError</code> · <code>WebSocketError</code> · <code>WebSocketEnvelope</code>
+        </div>
+      </div>
+      <div class="stack-row">
+        <div class="stack-label">Analytics</div>
+        <div class="stack-content">
+          <strong>Protocols</strong>
+          <code>AnalyticsEvent</code> · <code>AnalyticsGatewayProtocol</code>
+          <strong>Concretes</strong>
+          <code>ConsoleAnalyticsGateway</code> · <code>NoOpAnalyticsGateway</code>
+        </div>
+      </div>
+      <div class="stack-row">
+        <div class="stack-label">Image Loading</div>
+        <div class="stack-content">
+          <strong>Protocols</strong>
+          <code>ImageDataSourceProtocol</code> · <code>ImagePrefetcherProtocol</code>
+          <strong>Concretes</strong>
+          <code>URLSessionImageDataSource</code> · <code>NoOpImagePrefetcher</code>
+        </div>
+      </div>
+      <div class="stack-row">
+        <div class="stack-label">Persistence</div>
+        <div class="stack-content">
+          <strong>Protocols</strong>
+          <code>LocalDataSourceProtocol</code>
+          <strong>Concretes</strong>
+          Provided by each mini-app (<code>TrackLocalDataSource</code>, <code>MessageLocalDataSource</code>, etc.) — CoreKit defines only the protocol
+        </div>
+      </div>
+      <div class="stack-row">
+        <div class="stack-label">External</div>
+        <div class="stack-content">
+          <code>Foundation</code> · <code>URLSession</code>
+        </div>
+      </div>
+    </div>
+
+    <div class="rule">
+      <p><strong>Dependency isolation:</strong> All public protocols — <code>APIClientProtocol</code>, <code>WebSocketClientProtocol</code>, <code>LocalDataSourceProtocol</code>, <code>AnalyticsGatewayProtocol</code>, <code>ImageDataSourceProtocol</code>, <code>ImagePrefetcherProtocol</code> — are independent of each other. No cross-module coupling inside CoreKit itself.</p>
+    </div>
+
+    <h3>Who Imports CoreKit?</h3>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Module</th><th>Imports CoreKit?</th><th>Why</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>MusicApp/Data</code></td><td>Yes</td><td>Uses <code>APIClient</code>, <code>LocalDataSourceProtocol</code>, <code>ImageDataSourceProtocol</code></td></tr>
+          <tr><td><code>ChatApp/Data</code></td><td>Yes</td><td>Uses <code>APIClient</code>, <code>WebSocketClient</code>, <code>AnalyticsGatewayProtocol</code></td></tr>
+          <tr><td><code>MusicApp/Domain</code></td><td>No</td><td>Domain never imports CoreKit</td></tr>
+          <tr><td><code>ChatApp/Domain</code></td><td>No</td><td>Domain never imports CoreKit</td></tr>
+          <tr><td><code>MelodifyDesignSystem</code></td><td>No</td><td>UI library — no networking</td></tr>
+          <tr><td>Host app (<code>Melodify</code>)</td><td>Yes</td><td>Wires <code>WebSocketClient</code> and <code>ConsoleAnalyticsGateway</code> at app start</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="warn">
+      <p><strong>Domain must never import CoreKit.</strong> If a Domain UseCase or model imports CoreKit, it introduces a dependency on networking primitives — breaking the clean architecture rule that Domain depends on nothing. Repositories in Data implement Domain protocols; Domain never references the implementation.</p>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════ 5. Data Flow -->
+  <section id="data-flow">
+    <h2>5. Data Flow</h2>
+
+    <h3>HTTP Request Lifecycle</h3>
+    <pre><code><span class="nm">MusicApp</span>: <span class="ty">TrackRemoteDataSource</span>.<span class="nm">searchTracks</span>(<span class="nm">request</span>:)
+  → build <span class="ty">URL</span> from <span class="ty">URLComponents</span> (term, media, limit, offset params)
+  → <span class="nm">APIClient</span>.<span class="nm">get</span>&lt;<span class="ty">iTunesSearchResponse</span>&gt;(<span class="nm">url</span>)
+      → <span class="ty">URLRequest</span>(<span class="nm">url</span>: url) → <span class="ty">URLSession</span>.<span class="nm">data</span>(<span class="nm">for</span>:)
+      → check HTTP status (409 → <span class="ty">APIError</span>.<span class="nm">conflict</span>)
+      → <span class="ty">JSONDecoder</span>.<span class="nm">decode</span>(<span class="ty">iTunesSearchResponse</span>.<span class="kw">self</span>, <span class="nm">from</span>: data) → response.results: [<span class="ty">TrackDTO</span>]
+  → <span class="kw">return</span> [<span class="ty">TrackDTO</span>] to <span class="ty">TrackRepository</span></code></pre>
+
+    <h3>WebSocket Receive Lifecycle</h3>
+    <pre><code><span class="ty">WebSocketClient</span>.<span class="nm">connect</span>(<span class="nm">to</span>: url)
+  → <span class="ty">URLSession</span>.<span class="nm">webSocketTask</span>(<span class="nm">with</span>: url).<span class="nm">resume</span>()
+  → <span class="nm">receiveLoop</span>(<span class="nm">task</span>:) starts in a <span class="ty">Task</span>
+
+Incoming frame arrives:
+  → task.<span class="nm">receive</span>() → .<span class="nm">string</span>(text)
+  → decode <span class="ty">WebSocketEnvelope</span> (channel: <span class="st">"conv-abc"</span>, payload: <span class="st">"{...}"</span>)
+  → <span class="ty">ChannelRouter</span>.<span class="nm">yield</span>(<span class="nm">payload</span>, <span class="nm">to</span>: <span class="st">"conv-abc"</span>)
+  → <span class="st">"conv-abc"</span> continuation.<span class="nm">yield</span>(payload)
+  → <span class="ty">MessageRepository</span> for conv-abc receives raw JSON string
+  → decode <span class="ty">ChatEventDTO</span> → process event
+
+On disconnect or error:
+  → <span class="ty">ChannelRouter</span>.<span class="nm">cancelAll</span>()  → all continuations finish → all AsyncStreams terminate</code></pre>
+
+    <h3>Channel Subscription Lifecycle</h3>
+    <pre><code><span class="ty">ChatViewModel</span>.<span class="nm">start</span>()
+  → <span class="ty">StreamMessagesUseCase</span>.<span class="nm">execute</span>(<span class="st">"conv-abc"</span>)
+      → <span class="ty">MessageRepository</span>.<span class="nm">messages</span>(<span class="st">"conv-abc"</span>)
+          → <span class="ty">WebSocketClient</span>.<span class="nm">subscribe</span>(<span class="nm">channel</span>: <span class="st">"conv-abc"</span>)
+              → <span class="ty">AsyncStream</span> { continuation <span class="kw">in</span>
+                    <span class="ty">Task</span> { <span class="kw">await</span> router.<span class="nm">add</span>(continuation, <span class="nm">for</span>: <span class="st">"conv-abc"</span>) }
+                    continuation.<span class="nm">onTermination</span> = { _ <span class="kw">in</span>
+                        <span class="ty">Task</span> { <span class="kw">await self</span>.router.<span class="nm">remove</span>(<span class="nm">channel</span>: <span class="st">"conv-abc"</span>) }
+                    }
+                }
+
+<span class="ty">ViewController</span> deinit / <span class="ty">ViewModel</span> cancels task
+  → continuation.<span class="nm">onTermination</span> fires
+  → <span class="ty">ChannelRouter</span>.<span class="nm">remove</span>(<span class="st">"conv-abc"</span>)
+  → slot is released; no memory leak</code></pre>
+
+    <div class="rule">
+      <p><strong>Memory leak prevention:</strong> <code>continuation.onTermination</code> is the cleanup hook. When the ViewController deinits or the ViewModel cancels its task, the <code>AsyncStream</code> terminates, <code>onTermination</code> fires, and <code>ChannelRouter</code> removes the channel entry. No manual teardown required at the call site.</p>
+    </div>
+
+    <h3>Analytics Event Flow</h3>
+    <pre><code>User action in MusicApp
+  → <span class="ty">MusicAnalyticsEvent</span>.<span class="nm">searchPerformed</span>(<span class="nm">term</span>:)  <span class="cm">// conforms to AnalyticsEvent</span>
+  → <span class="ty">AnalyticsGatewayProtocol</span>.<span class="nm">track</span>(<span class="nm">event</span>:)
+      [dev]  <span class="ty">ConsoleAnalyticsGateway</span> → <span class="nm">print</span>(<span class="st">"[\(event.name)] \(event.params)"</span>)
+      [test] <span class="ty">NoOpAnalyticsGateway</span>   → (silently discarded)</code></pre>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════ 6. Technical Deep-dive -->
+  <section id="technical-deep-dive">
+    <h2>6. Technical Deep-dive</h2>
+
+    <h3>Why <code>WebSocketClient</code> is a Swift actor, not a class with a lock</h3>
+    <div class="callout">
+      <p><code>WebSocketClient</code> mutates a <code>ChannelRouter</code> that maps channel strings to <code>AsyncStream.Continuation</code> instances. Those continuations can be added or removed from any concurrency context — the receive loop, a subscription call, or a disconnect. An actor serialises all of that automatically. A class with <code>NSLock</code> would work but requires manual discipline: forget to lock in one path and you get a data race. The actor is the compiler-enforced option.</p>
+    </div>
+
+    <h3>Why <code>ChannelRouter</code> is a separate private actor, not part of <code>WebSocketClient</code></h3>
+    <div class="callout">
+      <p>Keeping <code>ChannelRouter</code> private and separate from the public <code>WebSocketClient</code> actor enforces a single responsibility boundary. <code>WebSocketClient</code> owns the transport (connect, disconnect, receive loop). <code>ChannelRouter</code> owns the routing table. Neither needs to know the internals of the other. It also avoids actor reentrancy issues — a call to <code>yield</code> on <code>ChannelRouter</code> from within <code>WebSocketClient</code>'s receive loop does not re-enter the client actor.</p>
+    </div>
+
+    <h3>Why <code>LocalDataSourceProtocol</code> uses <code>associatedtype</code> instead of a generic parameter</h3>
+    <div class="callout">
+      <p>A generic parameter <code>LocalDataSource&lt;DTO&gt;</code> would require every caller to spell out the full generic type at every injection point. An <code>associatedtype</code> lets each concrete type (<code>TrackLocalDataSource</code>, <code>MessageLocalDataSource</code>) declare its own <code>DTO</code> and <code>Request</code> types — the call site stays clean and there is no generics explosion through the dependency graph. The trade-off is that <code>LocalDataSourceProtocol</code> cannot be used as an existential directly; it is always consumed through a concrete type or a type-erased wrapper, which is the correct usage pattern in a DI composition root.</p>
+    </div>
+
+    <h3>Why URLSession only — no third-party networking library</h3>
+    <div class="callout">
+      <p>CoreKit is a shared primitive layer consumed by all mini-apps. Adding Alamofire or Moya would: (1) impose a version constraint on every app that imports CoreKit, (2) add build-time overhead for functionality URLSession already provides, and (3) couple the shared layer to a third party that could be abandoned or break on a Swift/Xcode update. URLSession with <code>async</code>/<code>await</code> and <code>JSONDecoder</code> covers everything CoreKit needs.</p>
+    </div>
+
+    <h3>Why analytics event concretes are in each mini-app, not in CoreKit</h3>
+    <div class="callout">
+      <p><code>AnalyticsGatewayProtocol</code> and <code>AnalyticsEvent</code> belong in CoreKit because every app needs to track events. But the event <em>values</em> (<code>searchPerformed</code>, <code>trackPlayed</code>) are domain-specific — they know about tracks, playlists, conversations. Domain knowledge has no place in CoreKit. Each mini-app defines its own enum conforming to <code>AnalyticsEvent</code>; CoreKit provides only the protocol and the concrete gateway implementations (<code>ConsoleAnalyticsGateway</code>, <code>NoOpAnalyticsGateway</code>).</p>
+    </div>
+
+    <h3>Why no UIKit or SwiftUI in CoreKit</h3>
+    <div class="callout">
+      <p>CoreKit is consumed by the Data layer of every mini-app. The Data layer must not import UIKit or SwiftUI — domain and data layers are framework-agnostic by design. If CoreKit imported UIKit, every SPM target that imports CoreKit would transitively pull in UIKit, breaking the layer rule. Pure Foundation + Swift Concurrency keeps CoreKit importable from any layer.</p>
+    </div>
+
+    <h3>Interview Q&amp;A</h3>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Question</th><th>Answer</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Why is <code>WebSocketClient</code> an actor?</td>
+            <td>Continuations are mutated from multiple contexts — receive loop, subscriptions, disconnects. Actor serialises all access without manual locking.</td>
+          </tr>
+          <tr>
+            <td>Why <code>associatedtype</code> on <code>LocalDataSourceProtocol</code>?</td>
+            <td>Avoids generic parameter explosion at call sites. Each concrete type declares its own DTO/Request pair; the DI composition root wires the right concrete.</td>
+          </tr>
+          <tr>
+            <td>What prevents two apps from interfering on the same WebSocket connection?</td>
+            <td><code>ChannelRouter</code> namespaces each subscriber by its channel string. A message for <code>"conv-abc"</code> is only delivered to the subscriber for that channel, never to unrelated subscribers.</td>
+          </tr>
+          <tr>
+            <td>Why no third-party networking?</td>
+            <td>URLSession + async/await covers all needs. A third-party dependency in a shared package constrains every app that imports it.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <div class="bottom-nav">
+    <a href="../index.html">← Home</a>
+    <span></span>
+  </div>
+
+</body>
+</html>

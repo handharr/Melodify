@@ -66,7 +66,7 @@ public protocol LocalDataSourceProtocol {
 }
 ```
 
-Each mini-app's concrete `LocalDataSource` implements this protocol. The `associatedtype` design means there is one protocol definition and many specialised implementations — no generics explosion at the call site.
+Each mini-app's concrete `LocalDataSource` implements this protocol.
 
 ### Image Loading
 

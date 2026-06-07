@@ -113,9 +113,7 @@ struct Message: Sendable, Equatable {
     let createdAt: Date
 }
 
-// No optionals for content type.
-// An optional `text: String?` creates invalid states at the type level — a message
-// with no text and no image is legal Swift but illegal in the domain.
+// No optionals for content type — illegal states unrepresentable. See Section 6.
 enum MessageContent: Sendable, Equatable {
     case text(String)
     case image(URL, aspectRatio: CGFloat)
@@ -315,7 +313,18 @@ UIApplication.didBecomeActiveNotification
                   [failure] → PendingMessageQueue.enqueue(pending)  // will retry next foreground
 ```
 
-### WebSocket multiplexing (why one socket is enough)
+
+---
+
+## 6. Technical Deep-dive
+
+### Why HTTP POST for outbound, not WebSocket?
+
+WebSocket is a transport — it has no delivery semantics. If you send a message over WebSocket and the frame is dropped, you get no error. HTTP POST gives you: a status code (200 sent, 409 conflict, 5xx retry), a request body you can log and replay, and a confirmed response with the server-assigned message ID. The idempotency key (`clientId`) only works over a request/response protocol. The split is intentional: WebSocket for inbound real-time events, HTTP for outbound actions that need a result.
+
+### Why one WebSocket connection instead of one per conversation?
+
+One socket per conversation is O(conversations) connections per user. A user with 50 open conversations would hold 50 persistent TCP connections — unsustainable on server and mobile battery. One shared `WebSocketClient` with channel multiplexing is O(1) per user. The `ChannelRouter` actor maps channel strings to continuations; subscribing to a new conversation adds one entry to the router's dictionary, not a new socket.
 
 ```
 Single WebSocketClient (CoreKit actor)
@@ -330,21 +339,6 @@ Incoming frame: { "channel": "conv-abc", "payload": "{...}" }
   → ChannelRouter.yield(payload, to: "conv-abc")
   → conv-abc subscriber's AsyncStream yields the raw payload string
 ```
-
-**Why HTTP POST for outbound, not WebSocket?**  
-Outbound messages need HTTP semantics: guaranteed delivery confirmation, status codes (409 conflict, 5xx retry), and idempotency keys. WebSocket fire-and-forget has none of these. HTTP POST for send + WebSocket for receive is the correct split.
-
----
-
-## 6. Technical Deep-dive
-
-### Why HTTP POST for outbound, not WebSocket?
-
-WebSocket is a transport — it has no delivery semantics. If you send a message over WebSocket and the frame is dropped, you get no error. HTTP POST gives you: a status code (200 sent, 409 conflict, 5xx retry), a request body you can log and replay, and a confirmed response with the server-assigned message ID. The idempotency key (`clientId`) only works over a request/response protocol. The split is intentional: WebSocket for inbound real-time events, HTTP for outbound actions that need a result.
-
-### Why one WebSocket connection instead of one per conversation?
-
-One socket per conversation is O(conversations) connections per user. A user with 50 open conversations would hold 50 persistent TCP connections — unsustainable on server and mobile battery. One shared `WebSocketClient` with channel multiplexing is O(1) per user. The `ChannelRouter` actor maps channel strings to continuations; subscribing to a new conversation adds one entry to the router's dictionary, not a new socket.
 
 ### Why `MessageContent` enum instead of optional fields?
 
