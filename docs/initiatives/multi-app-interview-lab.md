@@ -227,12 +227,12 @@ SwiftUI screen (View)
 - [ ] One `*Preview.swift` file per component showing all variants in light + dark mode
 
 **Host app — Workspace Home screen**
-- [ ] Replace flat `UITabBarController` root with a hub-and-spoke `HomeViewController`
-- [ ] `HomeViewController` — grid of app cards (Music, Chat, DS Catalog, Feed placeholder); uses DS tokens throughout
-- [ ] `HomeCoordinator` — owns `HomeViewController`; on card tap delegates to `AppCoordinator` to push the mini-app's root flow
-- [ ] `AppCoordinator` refactored — root is a single `UINavigationController` with `HomeViewController` at the base; each mini-app pushed onto that stack
-- [ ] MusicApp entry — push a `UITabBarController` (Search + Home tabs) so Music retains its two-tab internal structure
-- [ ] Deep link handling updated — resolve to `HomeCoordinator` → push correct mini-app → drill to target screen
+- [x] Replace flat `UITabBarController` root with a hub-and-spoke `HomeViewController`
+- [x] `HomeViewController` — grid of app cards (Music, Chat, DS Catalog, Feed placeholder); uses DS tokens throughout
+- [x] `HomeCoordinator` — owns `HomeViewController`; on card tap delegates to `AppCoordinator` to push the mini-app's root flow
+- [x] `AppCoordinator` refactored — root is a single `UINavigationController` with `HomeViewController` at the base; each mini-app pushed onto that stack
+- [x] MusicApp entry — push a `UITabBarController` (Search + Home tabs) so Music retains its two-tab internal structure
+- [x] Deep link handling updated — resolve to `HomeCoordinator` → push correct mini-app → drill to target screen
 - [ ] `DSCatalogViewController` — live in-app component browser; replaces scattered `*Preview.swift` files; shows all MDS components in a scrollable list with light/dark toggle
 
 #### Interview Angle
