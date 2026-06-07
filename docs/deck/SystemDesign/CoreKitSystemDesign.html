@@ -392,6 +392,45 @@
       color: var(--accent);
       font-weight: 700;
     }
+
+    /* delta grid */
+    .delta-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+
+    .delta-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+
+    .delta-topic {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: var(--accent);
+    }
+
+    .delta-decision {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--text);
+      line-height: 1.4;
+    }
+
+    .delta-rationale {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
   </style>
 </head>
 <body>
@@ -406,6 +445,7 @@
   <nav class="toc">
     <h4>Contents</h4>
     <ol>
+      <li><a href="#delta">Delta — Key Decisions</a></li>
       <li><a href="#requirements">Requirements</a></li>
       <li><a href="#module-api">Module API (Public Interface)</a></li>
       <li><a href="#data-model">Data Model Design</a></li>
@@ -414,6 +454,50 @@
       <li><a href="#technical-deep-dive">Technical Deep-dive</a></li>
     </ol>
   </nav>
+
+  <!-- ═══════════════════════════════════════════════════ Delta -->
+  <section id="delta">
+    <h2>Delta — Key Decisions</h2>
+    <div class="delta-grid">
+
+      <div class="delta-card">
+        <div class="delta-topic">WebSocketClient as Actor</div>
+        <div class="delta-decision"><code>WebSocketClient</code> is a Swift <code>actor</code>, not a class with a lock</div>
+        <div class="delta-rationale">Continuations are mutated from multiple concurrency contexts — receive loop, subscriptions, disconnects — and the actor gives compiler-enforced serialisation without requiring manual locking discipline.</div>
+      </div>
+
+      <div class="delta-card">
+        <div class="delta-topic">ChannelRouter Separation</div>
+        <div class="delta-decision"><code>ChannelRouter</code> is a separate private actor, not part of <code>WebSocketClient</code></div>
+        <div class="delta-rationale">Separating transport ownership from routing-table ownership avoids actor reentrancy — a <code>yield</code> call from within the receive loop does not re-enter the client actor.</div>
+      </div>
+
+      <div class="delta-card">
+        <div class="delta-topic">LocalDataSource associatedtype</div>
+        <div class="delta-decision"><code>LocalDataSourceProtocol</code> uses <code>associatedtype</code> instead of a generic parameter</div>
+        <div class="delta-rationale">A generic parameter <code>LocalDataSource&lt;DTO&gt;</code> forces every injection point to spell out the full type, causing generics explosion through the dependency graph.</div>
+      </div>
+
+      <div class="delta-card">
+        <div class="delta-topic">URLSession Only</div>
+        <div class="delta-decision">CoreKit uses <code>URLSession</code> only — no third-party networking dependency</div>
+        <div class="delta-rationale">A third-party networking library in a shared package imposes version constraints on every mini-app that imports CoreKit and couples the primitive layer to a dependency that could break on a Swift/Xcode update.</div>
+      </div>
+
+      <div class="delta-card">
+        <div class="delta-topic">Analytics Event Placement</div>
+        <div class="delta-decision">Concrete analytics event types live in each mini-app, not in CoreKit</div>
+        <div class="delta-rationale">Event values like <code>searchPerformed</code> or <code>trackPlayed</code> carry domain knowledge about tracks and playlists — domain knowledge has no place in a shared primitive package.</div>
+      </div>
+
+      <div class="delta-card">
+        <div class="delta-topic">No UIKit in CoreKit</div>
+        <div class="delta-decision">CoreKit is pure Foundation + Swift Concurrency — no UIKit, no SwiftUI</div>
+        <div class="delta-rationale">If CoreKit imported UIKit, every SPM target that imports it would transitively pull in UIKit, breaking the layer rule that Data layers must be framework-agnostic.</div>
+      </div>
+
+    </div>
+  </section>
 
   <!-- ═══════════════════════════════════════════════════ 1. Requirements -->
   <section id="requirements">
@@ -447,9 +531,7 @@
   <section id="module-api">
     <h2>2. Module API (Public Interface)</h2>
 
-    <div class="callout">
-      <p>CoreKit has no HTTP endpoints. This section documents its public Swift API — the contract every mini-app's Data layer depends on.</p>
-    </div>
+    <p>CoreKit has no HTTP endpoints. This section documents its public Swift API — the contract every mini-app's Data layer depends on.</p>
 
     <h3>APIClient</h3>
     <pre><code><span class="kw">public protocol</span> <span class="ty">APIClientProtocol</span>: <span class="ty">Sendable</span> {
@@ -471,10 +553,7 @@
 }</code></pre>
 
     <p>Concrete: <code>public actor WebSocketClient: WebSocketClientProtocol</code></p>
-
-    <div class="callout">
-      <p><strong>Channel multiplexing:</strong> The outer frame is a <code>WebSocketEnvelope { channel, payload }</code>. <code>ChannelRouter</code> (private actor) maps channel strings to <code>AsyncStream.Continuation</code> instances and routes incoming payloads to the correct subscriber.</p>
-    </div>
+    <p><strong>Channel multiplexing:</strong> The outer frame is a <code>WebSocketEnvelope { channel, payload }</code>. <code>ChannelRouter</code> (private actor) maps channel strings to <code>AsyncStream.Continuation</code> instances and routes incoming payloads to the correct subscriber.</p>
 
     <h3>LocalDataSourceProtocol</h3>
     <pre><code><span class="kw">public protocol</span> <span class="ty">LocalDataSourceProtocol</span> {
@@ -531,10 +610,6 @@
     <span class="kw">case</span> <span class="nm">transportError</span>(<span class="ty">Error</span>)
 }</code></pre>
 
-    <div class="rule">
-      <p><strong>Why <code>conflict</code> is its own case:</strong> HTTP 409 is semantically distinct from a transient network error. It signals a business-level collision (e.g. duplicate resource) that the calling app must handle with specific UX. Grouping it under <code>networkError</code> would erase that signal.</p>
-    </div>
-
     <h3>WebSocket Envelope</h3>
     <pre><code><span class="cm">// Wraps every WebSocket frame. The channel field routes the payload</span>
 <span class="cm">// to the correct subscriber without the consumer knowing about other channels.</span>
@@ -543,8 +618,8 @@
     <span class="kw">public let</span> <span class="nm">payload</span>: <span class="ty">String</span>   <span class="cm">// JSON-encoded by the sender; opaque to the transport layer</span>
 }</code></pre>
 
-    <div class="callout">
-      <p><strong>Why <code>payload</code> is a <code>String</code>, not <code>Codable</code>:</strong> The transport layer (<code>WebSocketClient</code>) must remain agnostic to the payload's schema. Each channel subscriber decodes the raw JSON string into its own DTO. Keeping payload as an opaque string means CoreKit never needs to know about <code>ChatEventDTO</code>, <code>TrackUpdateDTO</code>, or any other domain type.</p>
+    <div class="rule">
+      <p><strong>Why <code>payload</code> is a <code>String</code>, not <code>Codable</code>:</strong> The transport layer must remain agnostic to the payload's schema. Each channel subscriber decodes the raw JSON string into its own DTO. Keeping payload as an opaque string means CoreKit never needs to know about <code>ChatEventDTO</code>, <code>TrackUpdateDTO</code>, or any other domain type.</p>
     </div>
   </section>
 
@@ -552,70 +627,52 @@
   <section id="high-level-design">
     <h2>4. High-Level Design</h2>
 
-    <h3>File Tree</h3>
-    <pre><code><span class="ty">CoreKit</span>/
-├── <span class="gr">Network</span>/
-│   ├── <span class="ty">APIClient</span>.swift          <span class="cm">— struct APIClient: APIClientProtocol</span>
-│   │                              <span class="cm">  APIClientProtocol (public)</span>
-│   │                              <span class="cm">  APIError enum (public)</span>
-│   └── <span class="ty">WebSocketClient</span>.swift    <span class="cm">— actor WebSocketClient: WebSocketClientProtocol</span>
-│                                  <span class="cm">  WebSocketClientProtocol (public)</span>
-│                                  <span class="cm">  WebSocketEnvelope (public)</span>
-│                                  <span class="cm">  ChannelRouter (private actor — internal to WebSocketClient)</span>
-│                                  <span class="cm">  WebSocketError (public)</span>
-├── <span class="gr">Analytics</span>/
-│   ├── <span class="ty">AnalyticsEvent</span>.swift     <span class="cm">— AnalyticsEvent protocol (public)</span>
-│   ├── <span class="ty">AnalyticsGatewayProtocol</span>.swift
-│   ├── <span class="ty">ConsoleAnalyticsGateway</span>.swift
-│   └── <span class="ty">NoOpAnalyticsGateway</span>.swift
-├── <span class="gr">ImageLoading</span>/
-│   ├── <span class="ty">ImageDataSourceProtocol</span>.swift
-│   ├── <span class="ty">ImagePrefetcherProtocol</span>.swift
-│   ├── <span class="ty">URLSessionImageDataSource</span>.swift
-│   └── <span class="ty">NoOpImagePrefetcher</span>.swift
-└── <span class="gr">Persistence</span>/
-    └── <span class="ty">LocalDataSourceProtocol</span>.swift</code></pre>
+    <div class="ascii-diagram">CoreKit/
+├── Network/
+│   ├── APIClient.swift          — <span class="ascii-layer-label">struct APIClient: APIClientProtocol</span>
+│   │                              APIClientProtocol (public)
+│   │                              APIError enum (public)
+│   └── WebSocketClient.swift    — <span class="ascii-layer-label">actor WebSocketClient: WebSocketClientProtocol</span>
+│                                  WebSocketClientProtocol (public)
+│                                  WebSocketEnvelope (public)
+│                                  ChannelRouter (private actor — internal to WebSocketClient)
+│                                  WebSocketError (public)
+├── Analytics/
+│   ├── AnalyticsEvent.swift     — AnalyticsEvent protocol (public)
+│   ├── AnalyticsGatewayProtocol.swift
+│   ├── ConsoleAnalyticsGateway.swift
+│   └── NoOpAnalyticsGateway.swift
+├── ImageLoading/
+│   ├── ImageDataSourceProtocol.swift
+│   ├── ImagePrefetcherProtocol.swift
+│   ├── URLSessionImageDataSource.swift
+│   └── NoOpImagePrefetcher.swift
+└── Persistence/
+    └── LocalDataSourceProtocol.swift</div>
 
-    <h3>Module Breakdown</h3>
+    <h3>Architecture Layer Breakdown</h3>
     <div class="stack">
       <div class="stack-row">
-        <div class="stack-label">Network</div>
+        <div class="stack-label">Presentation</div>
+        <div class="stack-content">None — CoreKit is a shared primitive package with no Presentation layer</div>
+      </div>
+      <div class="stack-row">
+        <div class="stack-label">Domain</div>
+        <div class="stack-content">None — CoreKit carries zero domain knowledge; no UseCases, no domain models</div>
+      </div>
+      <div class="stack-row">
+        <div class="stack-label">Infrastructure</div>
+        <div class="stack-content">None — protocol abstraction is defined directly in each public protocol; no Gateway wrappers needed</div>
+      </div>
+      <div class="stack-row">
+        <div class="stack-label">Data</div>
         <div class="stack-content">
-          <strong>Protocols</strong>
-          <code>APIClientProtocol</code> · <code>WebSocketClientProtocol</code>
+          <strong>Protocols (consumed by mini-app Data layers)</strong>
+          <code>APIClientProtocol</code> <code>WebSocketClientProtocol</code> <code>LocalDataSourceProtocol</code> <code>ImageDataSourceProtocol</code> <code>ImagePrefetcherProtocol</code> <code>AnalyticsGatewayProtocol</code>
           <strong>Concretes</strong>
-          <code>APIClient</code> · <code>WebSocketClient</code>
+          <code>APIClient</code> <code>WebSocketClient</code> <code>URLSessionImageDataSource</code> <code>NoOpImagePrefetcher</code> <code>ConsoleAnalyticsGateway</code> <code>NoOpAnalyticsGateway</code>
           <strong>Internal</strong>
-          <code>ChannelRouter</code> (private actor — not exported)
-          <strong>Errors</strong>
-          <code>APIError</code> · <code>WebSocketError</code> · <code>WebSocketEnvelope</code>
-        </div>
-      </div>
-      <div class="stack-row">
-        <div class="stack-label">Analytics</div>
-        <div class="stack-content">
-          <strong>Protocols</strong>
-          <code>AnalyticsEvent</code> · <code>AnalyticsGatewayProtocol</code>
-          <strong>Concretes</strong>
-          <code>ConsoleAnalyticsGateway</code> · <code>NoOpAnalyticsGateway</code>
-        </div>
-      </div>
-      <div class="stack-row">
-        <div class="stack-label">Image Loading</div>
-        <div class="stack-content">
-          <strong>Protocols</strong>
-          <code>ImageDataSourceProtocol</code> · <code>ImagePrefetcherProtocol</code>
-          <strong>Concretes</strong>
-          <code>URLSessionImageDataSource</code> · <code>NoOpImagePrefetcher</code>
-        </div>
-      </div>
-      <div class="stack-row">
-        <div class="stack-label">Persistence</div>
-        <div class="stack-content">
-          <strong>Protocols</strong>
-          <code>LocalDataSourceProtocol</code>
-          <strong>Concretes</strong>
-          Provided by each mini-app (<code>TrackLocalDataSource</code>, <code>MessageLocalDataSource</code>, etc.) — CoreKit defines only the protocol
+          <code>ChannelRouter</code> (private actor) <code>WebSocketEnvelope</code> <code>APIError</code> <code>WebSocketError</code>
         </div>
       </div>
       <div class="stack-row">
@@ -624,13 +681,17 @@
           <code>Foundation</code> · <code>URLSession</code>
         </div>
       </div>
+      <div class="stack-row">
+        <div class="stack-label">Application</div>
+        <div class="stack-content">None — CoreKit is an SPM package, not an app target; wiring is performed by each mini-app's composition root (<code>AppDelegate</code> / Coordinator)</div>
+      </div>
     </div>
 
     <div class="rule">
       <p><strong>Dependency isolation:</strong> All public protocols — <code>APIClientProtocol</code>, <code>WebSocketClientProtocol</code>, <code>LocalDataSourceProtocol</code>, <code>AnalyticsGatewayProtocol</code>, <code>ImageDataSourceProtocol</code>, <code>ImagePrefetcherProtocol</code> — are independent of each other. No cross-module coupling inside CoreKit itself.</p>
     </div>
 
-    <h3>Who Imports CoreKit?</h3>
+    <h3>Who Imports CoreKit</h3>
     <div class="table-wrap">
       <table>
         <thead>
@@ -657,16 +718,16 @@
     <h2>5. Data Flow</h2>
 
     <h3>HTTP Request Lifecycle</h3>
-    <pre><code><span class="nm">MusicApp</span>: <span class="ty">TrackRemoteDataSource</span>.<span class="nm">searchTracks</span>(<span class="nm">request</span>:)
+    <pre><code><span class="ty">MusicApp</span>: <span class="nm">TrackRemoteDataSource</span>.<span class="nm">searchTracks</span>(<span class="nm">request</span>:)
   → build <span class="ty">URL</span> from <span class="ty">URLComponents</span> (term, media, limit, offset params)
   → <span class="nm">APIClient</span>.<span class="nm">get</span>&lt;<span class="ty">iTunesSearchResponse</span>&gt;(<span class="nm">url</span>)
       → <span class="ty">URLRequest</span>(<span class="nm">url</span>: url) → <span class="ty">URLSession</span>.<span class="nm">data</span>(<span class="nm">for</span>:)
       → check HTTP status (409 → <span class="ty">APIError</span>.<span class="nm">conflict</span>)
       → <span class="ty">JSONDecoder</span>.<span class="nm">decode</span>(<span class="ty">iTunesSearchResponse</span>.<span class="kw">self</span>, <span class="nm">from</span>: data) → response.results: [<span class="ty">TrackDTO</span>]
-  → <span class="kw">return</span> [<span class="ty">TrackDTO</span>] to <span class="ty">TrackRepository</span></code></pre>
+  → <span class="kw">return</span> [<span class="ty">TrackDTO</span>] to <span class="nm">TrackRepository</span></code></pre>
 
     <h3>WebSocket Receive Lifecycle</h3>
-    <pre><code><span class="ty">WebSocketClient</span>.<span class="nm">connect</span>(<span class="nm">to</span>: url)
+    <pre><code><span class="nm">WebSocketClient</span>.<span class="nm">connect</span>(<span class="nm">to</span>: url)
   → <span class="ty">URLSession</span>.<span class="nm">webSocketTask</span>(<span class="nm">with</span>: url).<span class="nm">resume</span>()
   → <span class="nm">receiveLoop</span>(<span class="nm">task</span>:) starts in a <span class="ty">Task</span>
 
@@ -675,7 +736,7 @@ Incoming frame arrives:
   → decode <span class="ty">WebSocketEnvelope</span> (channel: <span class="st">"conv-abc"</span>, payload: <span class="st">"{...}"</span>)
   → <span class="ty">ChannelRouter</span>.<span class="nm">yield</span>(<span class="nm">payload</span>, <span class="nm">to</span>: <span class="st">"conv-abc"</span>)
   → <span class="st">"conv-abc"</span> continuation.<span class="nm">yield</span>(payload)
-  → <span class="ty">MessageRepository</span> for conv-abc receives raw JSON string
+  → <span class="nm">MessageRepository</span> for conv-abc receives raw JSON string
   → decode <span class="ty">ChatEventDTO</span> → process event
 
 On disconnect or error:
@@ -683,9 +744,9 @@ On disconnect or error:
 
     <h3>Channel Subscription Lifecycle</h3>
     <pre><code><span class="ty">ChatViewModel</span>.<span class="nm">start</span>()
-  → <span class="ty">StreamMessagesUseCase</span>.<span class="nm">execute</span>(<span class="st">"conv-abc"</span>)
-      → <span class="ty">MessageRepository</span>.<span class="nm">messages</span>(<span class="st">"conv-abc"</span>)
-          → <span class="ty">WebSocketClient</span>.<span class="nm">subscribe</span>(<span class="nm">channel</span>: <span class="st">"conv-abc"</span>)
+  → <span class="nm">StreamMessagesUseCase</span>.<span class="nm">execute</span>(<span class="st">"conv-abc"</span>)
+      → <span class="nm">MessageRepository</span>.<span class="nm">messages</span>(<span class="st">"conv-abc"</span>)
+          → <span class="nm">WebSocketClient</span>.<span class="nm">subscribe</span>(<span class="nm">channel</span>: <span class="st">"conv-abc"</span>)
               → <span class="ty">AsyncStream</span> { continuation <span class="kw">in</span>
                     <span class="ty">Task</span> { <span class="kw">await</span> router.<span class="nm">add</span>(continuation, <span class="nm">for</span>: <span class="st">"conv-abc"</span>) }
                     continuation.<span class="nm">onTermination</span> = { _ <span class="kw">in</span>
@@ -703,11 +764,11 @@ On disconnect or error:
     </div>
 
     <h3>Analytics Event Flow</h3>
-    <pre><code>User action in MusicApp
+    <pre><code>User action in <span class="ty">MusicApp</span>
   → <span class="ty">MusicAnalyticsEvent</span>.<span class="nm">searchPerformed</span>(<span class="nm">term</span>:)  <span class="cm">// conforms to AnalyticsEvent</span>
   → <span class="ty">AnalyticsGatewayProtocol</span>.<span class="nm">track</span>(<span class="nm">event</span>:)
-      [dev]  <span class="ty">ConsoleAnalyticsGateway</span> → <span class="nm">print</span>(<span class="st">"[\(event.name)] \(event.params)"</span>)
-      [test] <span class="ty">NoOpAnalyticsGateway</span>   → (silently discarded)</code></pre>
+      [dev]  <span class="nm">ConsoleAnalyticsGateway</span> → <span class="nm">print</span>(<span class="st">"[\(event.name)] \(event.params)"</span>)
+      [test] <span class="nm">NoOpAnalyticsGateway</span>   → (silently discarded)</code></pre>
   </section>
 
   <!-- ═══════════════════════════════════════════════════ 6. Technical Deep-dive -->
@@ -736,7 +797,7 @@ On disconnect or error:
 
     <h3>Why analytics event concretes are in each mini-app, not in CoreKit</h3>
     <div class="callout">
-      <p><code>AnalyticsGatewayProtocol</code> and <code>AnalyticsEvent</code> belong in CoreKit because every app needs to track events. But the event <em>values</em> (<code>searchPerformed</code>, <code>trackPlayed</code>) are domain-specific — they know about tracks, playlists, conversations. Domain knowledge has no place in CoreKit. Each mini-app defines its own enum conforming to <code>AnalyticsEvent</code>; CoreKit provides only the protocol and the concrete gateway implementations (<code>ConsoleAnalyticsGateway</code>, <code>NoOpAnalyticsGateway</code>).</p>
+      <p><code>AnalyticsGatewayProtocol</code> and <code>AnalyticsEvent</code> belong in CoreKit because every app needs to track events. But the event values (<code>searchPerformed</code>, <code>trackPlayed</code>) are domain-specific — they know about tracks, playlists, conversations. Domain knowledge has no place in CoreKit. Each mini-app defines its own enum conforming to <code>AnalyticsEvent</code>; CoreKit provides only the protocol and the concrete gateway implementations (<code>ConsoleAnalyticsGateway</code>, <code>NoOpAnalyticsGateway</code>).</p>
     </div>
 
     <h3>Why no UIKit or SwiftUI in CoreKit</h3>

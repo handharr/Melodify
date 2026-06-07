@@ -392,6 +392,45 @@
       color: var(--accent);
       font-weight: 700;
     }
+
+    /* delta grid */
+    .delta-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+
+    .delta-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+
+    .delta-topic {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: var(--accent);
+    }
+
+    .delta-decision {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--text);
+      line-height: 1.4;
+    }
+
+    .delta-rationale {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
   </style>
 </head>
 <body>
@@ -406,6 +445,7 @@
   <nav class="toc">
     <h4>Contents</h4>
     <ol>
+      <li><a href="#delta">Delta — Key Decisions</a></li>
       <li><a href="#requirements">Requirements</a></li>
       <li><a href="#api-design">API Design</a></li>
       <li><a href="#data-model">Data Model Design</a></li>
@@ -414,6 +454,50 @@
       <li><a href="#technical-deep-dive">Technical Deep-dive</a></li>
     </ol>
   </nav>
+
+  <!-- ═══════════════════════════════════════════════════ Delta -->
+  <section id="delta">
+    <h2>Delta — Key Decisions</h2>
+    <div class="delta-grid">
+
+      <div class="delta-card">
+        <div class="delta-topic">FetchPolicy on Request</div>
+        <div class="delta-decision"><code>FetchPolicy</code> is embedded in <code>Request</code>, not passed as a separate parameter</div>
+        <div class="delta-rationale">Keeps <code>UseCase.execute(request:)</code> signatures stable — callers set the policy when building the <code>Request</code>; only the Repository reads it at the cache branch.</div>
+      </div>
+
+      <div class="delta-card">
+        <div class="delta-topic">async let vs TaskGroup</div>
+        <div class="delta-decision"><code>async let</code> for 2 fixed fetches; <code>withThrowingTaskGroup</code> for N dynamic genre sections</div>
+        <div class="delta-rationale"><code>async let</code> requires a compile-time fixed count; using a task group for 2 tasks is over-engineering, and <code>async let</code> cannot iterate a runtime-length array.</div>
+      </div>
+
+      <div class="delta-card">
+        <div class="delta-topic">SearchSessionService in Domain</div>
+        <div class="delta-decision">Query + page state lives in <code>SearchSessionService</code>, not in <code>TrackListViewModel</code></div>
+        <div class="delta-rationale">Pagination state is a reusable business rule — "reset to page 1 on a new query, advance on scroll" — that would be duplicated across every screen if it lived in the ViewModel.</div>
+      </div>
+
+      <div class="delta-card">
+        <div class="delta-topic">PlaylistRepository — no cache</div>
+        <div class="delta-decision"><code>PlaylistRepository</code> is remote-only with no <code>LocalDataSource</code> and no <code>FetchPolicy</code></div>
+        <div class="delta-rationale">Playlists are user-owned mutable data; showing a stale cached list would hide edits made on another device — the cache-invalidation cost outweighs the spinner.</div>
+      </div>
+
+      <div class="delta-card">
+        <div class="delta-topic">Mapper returns Optional</div>
+        <div class="delta-decision"><code>TrackMapper.toDomain</code> returns <code>Track?</code> instead of throwing</div>
+        <div class="delta-rationale">A single invalid DTO in a list of 50 is not a fatal error; <code>compactMap</code> silently drops it so the user sees fewer results rather than an error screen.</div>
+      </div>
+
+      <div class="delta-card">
+        <div class="delta-topic">@MainActor on ViewModel</div>
+        <div class="delta-decision">ViewModel is annotated <code>@MainActor</code> rather than calling <code>DispatchQueue.main.async</code> per update</div>
+        <div class="delta-rationale"><code>@MainActor</code> is a compile-time guarantee — the compiler prevents any <code>@Published</code> mutation off the main thread, unlike a runtime dispatch call that can be forgotten.</div>
+      </div>
+
+    </div>
+  </section>
 
   <!-- ═══════════════════════════════════════════════════ 1. Requirements -->
   <section id="requirements">

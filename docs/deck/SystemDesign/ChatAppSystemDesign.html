@@ -392,6 +392,45 @@
       color: var(--accent);
       font-weight: 700;
     }
+
+    /* delta grid */
+    .delta-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 1rem;
+      margin: 1rem 0;
+    }
+
+    .delta-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+
+    .delta-topic {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: var(--accent);
+    }
+
+    .delta-decision {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--text);
+      line-height: 1.4;
+    }
+
+    .delta-rationale {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
   </style>
 </head>
 <body>
@@ -406,6 +445,7 @@
   <nav class="toc">
     <h4>Contents</h4>
     <ol>
+      <li><a href="#delta">Delta — Key Decisions</a></li>
       <li><a href="#requirements">Requirements</a></li>
       <li><a href="#api-design">API Design</a></li>
       <li><a href="#data-model">Data Model Design</a></li>
@@ -415,6 +455,62 @@
     </ol>
   </nav>
 
+  <!-- ═══════════════════════════════════════════════════ Delta -->
+  <section id="delta">
+    <h2>Delta — Key Decisions</h2>
+    <div class="delta-grid">
+
+      <div class="delta-card">
+        <div class="delta-topic">Transport split</div>
+        <div class="delta-decision">WebSocket inbound · HTTP POST outbound</div>
+        <div class="delta-rationale">HTTP gives delivery confirmation, status codes, and idempotency; WebSocket fire-and-forget has none of those guarantees for sent messages.</div>
+      </div>
+
+      <div class="delta-card">
+        <div class="delta-topic">One shared socket</div>
+        <div class="delta-decision">Single <code>WebSocketClient</code> with channel multiplexing — O(1) connections per user</div>
+        <div class="delta-rationale">One socket per conversation is O(conversations) TCP connections; <code>ChannelRouter</code> maps channel strings to continuations with no extra sockets.</div>
+      </div>
+
+      <div class="delta-card">
+        <div class="delta-topic">Message content enum</div>
+        <div class="delta-decision"><code>MessageContent</code> enum instead of optional fields — illegal states unrepresentable</div>
+        <div class="delta-rationale">The cell factory switch is exhaustive at compile time — adding a new message type without handling it is a build error, not a runtime crash.</div>
+      </div>
+
+      <div class="delta-card">
+        <div class="delta-topic">Sequence number</div>
+        <div class="delta-decision"><code>sequence: Int</code> on every <code>MessageDTO</code> — ordering, gap detection, reconnect catch-up</div>
+        <div class="delta-rationale">Without a server-assigned monotonic sequence, arrival order is the only ordering signal — unreliable across reconnects and burst deliveries.</div>
+      </div>
+
+      <div class="delta-card">
+        <div class="delta-topic">Core Data as single source</div>
+        <div class="delta-decision">No in-memory accumulation — <code>NSFetchedResultsController</code> is the live stream source</div>
+        <div class="delta-rationale">Every write (WebSocket event, pagination, send confirm) goes to Core Data; FRC fires on every insert so the ViewModel always sees what Core Data holds.</div>
+      </div>
+
+      <div class="delta-card">
+        <div class="delta-topic">Two message use cases</div>
+        <div class="delta-decision"><code>ObserveMessagesUseCase</code> (stream) and <code>FetchMessagesUseCase</code> (one-shot) — different execution models</div>
+        <div class="delta-rationale"><code>AsyncStream&lt;[Message]&gt;</code> never completes; <code>async throws</code> completes immediately — merging them gives one use case two modes of operation, breaking single responsibility.</div>
+      </div>
+
+      <div class="delta-card">
+        <div class="delta-topic">Offline send queue</div>
+        <div class="delta-decision"><code>PendingMessageQueue</code> actor indexed by <code>conversationId</code> — flush is O(pending conversations)</div>
+        <div class="delta-rationale">A flat array forces scanning all conversations on every flush; indexing at enqueue time means flush skips conversations with zero pending messages entirely.</div>
+      </div>
+
+      <div class="delta-card">
+        <div class="delta-topic">Reconnect ownership</div>
+        <div class="delta-decision">Reconnect logic lives inside <code>WebSocketClient</code> — callers observe state, never drive reconnection</div>
+        <div class="delta-rationale">A separate ConnectionManager would leak transport-level knowledge into the Data or Application layer; the client should be self-healing.</div>
+      </div>
+
+    </div>
+  </section>
+
   <!-- ═══════════════════════════════════════════════════ 1. Requirements -->
   <section id="requirements">
     <h2>1. Requirements</h2>
@@ -422,25 +518,31 @@
     <h3>Functional</h3>
     <ul>
       <li>List all conversations with avatar (initials), last message preview, timestamp, and unread badge</li>
-      <li>Open a conversation and view full message history (paginated in a real system; mock-data here)</li>
+      <li>Open a conversation and view full message history — cursor-paginated (load older messages on scroll)</li>
       <li>Send text messages via HTTP POST (not WebSocket — outbound is intentionally HTTP)</li>
       <li>Receive real-time messages via WebSocket, multiplexed by conversation channel</li>
-      <li>Offline send queue: if a send fails due to network loss, persist the message locally; retry automatically on next app foreground</li>
+      <li>Offline send queue: if a send fails due to network loss, persist the message locally; retry automatically on next app foreground or APNs silent push wake</li>
       <li>Heterogeneous message types: <code>text</code>, <code>image</code>, <code>audio</code>, <code>deleted</code> — exhaustive handling at compile time via enum</li>
+      <li>Mark conversation as read; unread count synced across devices via WebSocket <code>conversation.unread_updated</code> event</li>
+      <li>Reconnect WebSocket automatically after drop; fetch missed messages via HTTP before re-attaching to stream</li>
     </ul>
 
     <h3>Non-Functional</h3>
     <ul>
       <li>One shared <code>WebSocketClient</code> connection (CoreKit); per-conversation channels via <code>subscribe(channel: "conv-{id}")</code> — O(1) connections per user, not O(conversations)</li>
       <li>WebSocket is receive-only for inbound events; HTTP POST is the outbound path</li>
+      <li><code>sequence: Int</code> on every <code>MessageDTO</code> — server-assigned, monotonic per conversation; used for ordering and gap detection on reconnect</li>
       <li>Idempotency key (<code>clientId</code> UUID) on every send — safe retry without duplicates</li>
-      <li><code>PendingMessageQueue</code>: Swift actor, persisted to <code>Documents/pending_messages.json</code> across app restarts</li>
-      <li>Flush triggered by <code>UIApplication.didBecomeActiveNotification</code> in <code>ChatCoordinator</code> — not in any ViewController</li>
+      <li><code>PendingMessageQueue</code>: Swift actor, persisted to <code>Documents/pending_messages.json</code>, indexed by <code>conversationId</code> — flush is O(pending conversations), not O(all conversations)</li>
+      <li>Flush triggered by <code>UIApplication.didBecomeActiveNotification</code> in <code>ChatCoordinator</code>, APNs silent push, and <code>BGAppRefreshTask</code> — not in any ViewController</li>
+      <li><code>MessageLocalDataSource</code> backed by Core Data; <code>NSFetchRequest</code> with <code>fetchBatchSize: 50</code> for cursor-paginated reads</li>
+      <li><code>WebSocketClient</code> (CoreKit) internally handles reconnect with exponential backoff (1s → 2s → … → 60s cap) and exposes <code>connectionState: AsyncStream&lt;ConnectionState&gt;</code>; <code>MessageRepository</code> observes it — on <code>.connected</code> after <code>.disconnected</code>, fires catch-up fetch (<code>?after=seqN</code>) before re-attaching to stream</li>
+      <li>WebSocket <code>AsyncStream</code> buffer policy: <code>.bufferingOldest(256)</code> — keeps oldest frames under pressure; burst catch-up goes through HTTP, not the stream</li>
       <li><code>@MainActor</code> on all ViewModels; <code>defer { isLoading = false }</code> on every async path</li>
     </ul>
 
     <div class="rule">
-      <p><strong>Key invariant:</strong> WebSocket is receive-only. HTTP POST is the only outbound path for messages. The split is by direction — not protocol preference.</p>
+      <p><strong>Key invariant:</strong> Outbound sends always use HTTP POST with a <code>clientId</code> idempotency key. WebSocket is strictly a receive-only channel — it never sends messages.</p>
     </div>
   </section>
 
@@ -449,22 +551,20 @@
     <h2>2. API Design</h2>
 
     <h3>WebSocket (inbound events only)</h3>
-
     <p><strong>Connection:</strong> <code>wss://&lt;server&gt;/ws</code><br>
-    <strong>Channel subscription:</strong> <code>"conv-{conversationId}"</code> (e.g. <code>"conv-abc-123"</code>)</p>
-
+    <strong>Channel subscription:</strong> <code>"conv-{conversationId}"</code></p>
     <p>The outer envelope is handled by <code>CoreKit.WebSocketClient</code>:</p>
-
     <pre><code>{
   <span class="st">"channel"</span>: <span class="st">"conv-abc-123"</span>,
   <span class="st">"payload"</span>: <span class="st">"&lt;JSON-encoded ChatEventDTO&gt;"</span>
 }</code></pre>
 
     <p><strong>ChatEventDTO</strong> (inner payload after channel routing)</p>
-
     <pre><code>{
   <span class="st">"type"</span>: <span class="st">"message.new"</span>,
-  <span class="st">"message"</span>: { <span class="cm">/* MessageDTO */</span> }
+  <span class="st">"message"</span>: { <span class="cm">/* MessageDTO */</span> },
+  <span class="st">"conversation_id"</span>: <span class="st">"conv-abc-123"</span>,
+  <span class="st">"unread_count"</span>: <span class="nm">4</span>
 }</code></pre>
 
     <div class="table-wrap">
@@ -476,47 +576,37 @@
           <tr><td><code>message.new</code></td><td>New message received — append to list</td></tr>
           <tr><td><code>message.updated</code></td><td>Message content changed (edit, status update)</td></tr>
           <tr><td><code>message.deleted</code></td><td>Message removed — remove from list</td></tr>
+          <tr><td><code>conversation.unread_updated</code></td><td>Unread count changed (e.g. read on another device) — update badge</td></tr>
         </tbody>
       </table>
     </div>
 
-    <h3>HTTP (outbound send + history fetch)</h3>
-
+    <h3>HTTP (outbound send, history fetch, mark-read)</h3>
     <div class="table-wrap">
       <table>
         <thead>
-          <tr><th>Action</th><th>Method</th><th>Endpoint</th><th>Body</th><th>Implementation status</th></tr>
+          <tr><th>Action</th><th>Method</th><th>Endpoint</th><th>Body / Params</th><th>Status</th></tr>
         </thead>
         <tbody>
-          <tr>
-            <td>Fetch message history</td>
-            <td><code>GET</code></td>
-            <td><code>/api/v1/conversations/{id}/messages</code></td>
-            <td>—</td>
-            <td><strong>Stub</strong> — returns <code>[]</code>; local mock JSON covers the demo</td>
-          </tr>
-          <tr>
-            <td>Send message</td>
-            <td><code>POST</code></td>
-            <td><code>/api/v1/conversations/{id}/messages</code></td>
-            <td>see below</td>
-            <td><strong>Stub</strong> — synthesises a local response; no live server</td>
-          </tr>
+          <tr><td>Fetch latest messages</td><td><code>GET</code></td><td><code>/api/v1/conversations/{id}/messages?limit={n}</code></td><td>—</td><td>Stub</td></tr>
+          <tr><td>Fetch older messages</td><td><code>GET</code></td><td><code>/api/v1/conversations/{id}/messages?before={messageId}&amp;limit={n}</code></td><td>—</td><td>Stub</td></tr>
+          <tr><td>Reconnect catch-up</td><td><code>GET</code></td><td><code>/api/v1/conversations/{id}/messages?after={seq}</code></td><td>—</td><td>Stub</td></tr>
+          <tr><td>Send message</td><td><code>POST</code></td><td><code>/api/v1/conversations/{id}/messages</code></td><td>see below</td><td>Stub</td></tr>
+          <tr><td>Mark conversation read</td><td><code>POST</code></td><td><code>/api/v1/conversations/{id}/read</code></td><td>—</td><td>Stub</td></tr>
         </tbody>
       </table>
     </div>
 
-    <h3>Send Message Request Body (current — text-only)</h3>
-    <pre><code>{
+    <h3>Send Message Request Body</h3>
+    <pre><code><span class="cm">// Current implementation — text-only</span>
+{
   <span class="st">"client_id"</span>: <span class="st">"uuid-v4"</span>,
   <span class="st">"type"</span>: <span class="st">"text"</span>,
   <span class="st">"text"</span>: <span class="st">"Hello there"</span>
-}</code></pre>
+}
 
-    <p><code>client_id</code> is the idempotency key — if the server already has a message with this UUID it returns the existing record rather than creating a duplicate.</p>
-
-    <h3>Send Message Request Body (full production target)</h3>
-    <pre><code>{
+<span class="cm">// Full production body (target shape when image/audio sending is implemented)</span>
+{
   <span class="st">"client_id"</span>: <span class="st">"uuid-v4"</span>,
   <span class="st">"type"</span>: <span class="st">"text | image | audio"</span>,
   <span class="st">"text"</span>: <span class="st">"Hello there"</span>,
@@ -526,10 +616,12 @@
   <span class="st">"aspect_ratio"</span>: <span class="nm">1.78</span>
 }</code></pre>
 
-    <p><strong>Send message response</strong> — server returns the confirmed <code>MessageDTO</code> with <code>status: "sent"</code>.</p>
-
     <div class="callout">
-      <p><code>MessageRemoteDataSource</code> currently synthesises a local response (no live server). The struct types and interface contract match exactly what a real server would expect. Fetch history also returns <code>[]</code> — message history is loaded from bundled mock JSON via <code>MessageLocalDataSource</code>.</p>
+      <p><code>client_id</code> is the idempotency key — if the server already has a message with this UUID it returns the existing record rather than creating a duplicate. Server returns the confirmed <code>MessageDTO</code> with <code>status: "sent"</code> and the server-assigned <code>sequence</code>.</p>
+    </div>
+
+    <div class="warn">
+      <p><strong>Implementation note:</strong> <code>MessageRemoteDataSource</code> currently synthesises a local response (no live server). The struct types and interface contract match exactly what a real server would expect.</p>
     </div>
   </section>
 
@@ -553,10 +645,11 @@
     <span class="kw">let</span> <span class="nm">senderId</span>: <span class="ty">String</span>
     <span class="kw">let</span> <span class="nm">content</span>: <span class="ty">MessageContent</span>
     <span class="kw">let</span> <span class="nm">status</span>: <span class="ty">MessageStatus</span>
+    <span class="kw">let</span> <span class="nm">sequence</span>: <span class="ty">Int</span>        <span class="cm">// server-assigned, monotonic per conversation</span>
     <span class="kw">let</span> <span class="nm">createdAt</span>: <span class="ty">Date</span>
 }
 
-<span class="cm">// No optionals for content type — illegal states unrepresentable. See Section 6.</span>
+<span class="cm">// No optionals for content type — illegal states unrepresentable.</span>
 <span class="kw">enum</span> <span class="ty">MessageContent</span>: <span class="ty">Sendable</span>, <span class="ty">Equatable</span> {
     <span class="kw">case</span> <span class="nm">text</span>(<span class="ty">String</span>)
     <span class="kw">case</span> <span class="nm">image</span>(<span class="ty">URL</span>, aspectRatio: <span class="ty">CGFloat</span>)
@@ -575,31 +668,41 @@
     <pre><code><span class="cm">// Wire format optionals reflect API shape — Mapper decides what's valid</span>
 <span class="kw">struct</span> <span class="ty">MessageDTO</span>: <span class="ty">Codable</span>, <span class="ty">Sendable</span> {
     <span class="kw">let</span> <span class="nm">id</span>: <span class="ty">String</span>
-    <span class="kw">let</span> <span class="nm">conversationId</span>: <span class="ty">String</span>      <span class="cm">// "conversation_id"</span>
-    <span class="kw">let</span> <span class="nm">senderId</span>: <span class="ty">String</span>            <span class="cm">// "sender_id"</span>
-    <span class="kw">let</span> <span class="nm">type</span>: <span class="ty">String</span>                <span class="cm">// "text" | "image" | "audio" | "deleted"</span>
+    <span class="kw">let</span> <span class="nm">conversationId</span>: <span class="ty">String</span>       <span class="cm">// "conversation_id"</span>
+    <span class="kw">let</span> <span class="nm">senderId</span>: <span class="ty">String</span>             <span class="cm">// "sender_id"</span>
+    <span class="kw">let</span> <span class="nm">sequence</span>: <span class="ty">Int</span>                <span class="cm">// server-assigned monotonic sequence per conversation</span>
+    <span class="kw">let</span> <span class="nm">type</span>: <span class="ty">String</span>                 <span class="cm">// "text" | "image" | "audio" | "deleted"</span>
     <span class="kw">let</span> <span class="nm">text</span>: <span class="ty">String</span>?
-    <span class="kw">let</span> <span class="nm">imageURL</span>: <span class="ty">String</span>?           <span class="cm">// "image_url"</span>
-    <span class="kw">let</span> <span class="nm">aspectRatio</span>: <span class="ty">CGFloat</span>?       <span class="cm">// "aspect_ratio"</span>
+    <span class="kw">let</span> <span class="nm">imageURL</span>: <span class="ty">String</span>?            <span class="cm">// "image_url"</span>
+    <span class="kw">let</span> <span class="nm">aspectRatio</span>: <span class="ty">CGFloat</span>?        <span class="cm">// "aspect_ratio"</span>
     <span class="kw">let</span> <span class="nm">audioDuration</span>: <span class="ty">TimeInterval</span>? <span class="cm">// "audio_duration"</span>
-    <span class="kw">let</span> <span class="nm">audioURL</span>: <span class="ty">String</span>?           <span class="cm">// "audio_url"</span>
-    <span class="kw">let</span> <span class="nm">createdAt</span>: <span class="ty">String</span>           <span class="cm">// "created_at" — ISO8601</span>
-    <span class="kw">let</span> <span class="nm">status</span>: <span class="ty">String</span>              <span class="cm">// "pending" | "sent" | "delivered" | "read"</span>
+    <span class="kw">let</span> <span class="nm">audioURL</span>: <span class="ty">String</span>?            <span class="cm">// "audio_url"</span>
+    <span class="kw">let</span> <span class="nm">createdAt</span>: <span class="ty">String</span>            <span class="cm">// "created_at" — ISO8601</span>
+    <span class="kw">let</span> <span class="nm">status</span>: <span class="ty">String</span>               <span class="cm">// "pending" | "sent" | "delivered" | "read"</span>
 }
 
 <span class="kw">struct</span> <span class="ty">ConversationDTO</span>: <span class="ty">Codable</span>, <span class="ty">Sendable</span> {
     <span class="kw">let</span> <span class="nm">id</span>: <span class="ty">String</span>
-    <span class="kw">let</span> <span class="nm">participantIds</span>: [<span class="ty">String</span>]        <span class="cm">// "participant_ids"</span>
+    <span class="kw">let</span> <span class="nm">participantIds</span>: [<span class="ty">String</span>]           <span class="cm">// "participant_ids"</span>
     <span class="kw">let</span> <span class="nm">participantNames</span>: [<span class="ty">String</span>: <span class="ty">String</span>] <span class="cm">// "participant_names"</span>
-    <span class="kw">let</span> <span class="nm">lastMessage</span>: <span class="ty">String</span>             <span class="cm">// "last_message"</span>
-    <span class="kw">let</span> <span class="nm">lastMessageAt</span>: <span class="ty">String</span>           <span class="cm">// "last_message_at" — ISO8601</span>
-    <span class="kw">let</span> <span class="nm">unreadCount</span>: <span class="ty">Int</span>                <span class="cm">// "unread_count"</span>
+    <span class="kw">let</span> <span class="nm">lastMessage</span>: <span class="ty">String</span>                <span class="cm">// "last_message"</span>
+    <span class="kw">let</span> <span class="nm">lastMessageAt</span>: <span class="ty">String</span>             <span class="cm">// "last_message_at" — ISO8601</span>
+    <span class="kw">let</span> <span class="nm">unreadCount</span>: <span class="ty">Int</span>                   <span class="cm">// "unread_count"</span>
 }
 
 <span class="cm">// Inner payload after WebSocket channel routing</span>
 <span class="kw">struct</span> <span class="ty">ChatEventDTO</span>: <span class="ty">Codable</span>, <span class="ty">Sendable</span> {
-    <span class="kw">let</span> <span class="nm">type</span>: <span class="ty">String</span>
+    <span class="kw">let</span> <span class="nm">type</span>: <span class="ty">String</span>                 <span class="cm">// ChatEventType raw value</span>
     <span class="kw">let</span> <span class="nm">message</span>: <span class="ty">MessageDTO</span>?
+    <span class="kw">let</span> <span class="nm">conversationId</span>: <span class="ty">String</span>?      <span class="cm">// "conversation_id" — present on unread_updated</span>
+    <span class="kw">let</span> <span class="nm">unreadCount</span>: <span class="ty">Int</span>?            <span class="cm">// "unread_count" — present on unread_updated</span>
+}
+
+<span class="kw">enum</span> <span class="ty">ChatEventType</span>: <span class="ty">String</span>, <span class="ty">Codable</span> {
+    <span class="kw">case</span> <span class="nm">messageNew</span>     = <span class="st">"message.new"</span>
+    <span class="kw">case</span> <span class="nm">messageUpdated</span> = <span class="st">"message.updated"</span>
+    <span class="kw">case</span> <span class="nm">messageDeleted</span> = <span class="st">"message.deleted"</span>
+    <span class="kw">case</span> <span class="nm">unreadUpdated</span>  = <span class="st">"conversation.unread_updated"</span>
 }</code></pre>
 
     <h3>Request Types (Domain inputs)</h3>
@@ -607,22 +710,29 @@
 <span class="kw">struct</span> <span class="ty">FetchConversationsQuery</span>: <span class="ty">Sendable</span>, <span class="ty">Equatable</span> { <span class="kw">let</span> <span class="nm">userId</span>: <span class="ty">String</span> }
 <span class="kw">typealias</span> <span class="ty">FetchConversationsRequest</span> = <span class="ty">Request</span>&lt;<span class="ty">FetchConversationsQuery</span>, <span class="ty">Void</span>&gt;
 
-<span class="cm">// path.conversationId identifies which conversation's history to load</span>
-<span class="kw">struct</span> <span class="ty">FetchMessagesPath</span>: <span class="ty">Sendable</span>, <span class="ty">Equatable</span> { <span class="kw">let</span> <span class="nm">conversationId</span>: <span class="ty">String</span> }
+<span class="cm">// path carries cursor fields — nil beforeMessageId loads the latest page</span>
+<span class="kw">struct</span> <span class="ty">FetchMessagesPath</span>: <span class="ty">Sendable</span>, <span class="ty">Equatable</span> {
+    <span class="kw">let</span> <span class="nm">conversationId</span>: <span class="ty">String</span>
+    <span class="kw">let</span> <span class="nm">beforeMessageId</span>: <span class="ty">String</span>?  <span class="cm">// cursor — nil = load latest page</span>
+    <span class="kw">let</span> <span class="nm">limit</span>: <span class="ty">Int</span>                <span class="cm">// default 50</span>
+}
 <span class="kw">typealias</span> <span class="ty">FetchMessagesRequest</span> = <span class="ty">Request</span>&lt;<span class="ty">Void</span>, <span class="ty">FetchMessagesPath</span>&gt;
 
 <span class="cm">// Not a Request&lt;Query,Path&gt; — send is a mutation; FetchPolicy doesn't apply.</span>
-<span class="cm">// clientId (idempotency key) is generated inside init, not at the call site.</span>
 <span class="kw">struct</span> <span class="ty">SendMessageRequest</span>: <span class="ty">Sendable</span> {
     <span class="kw">let</span> <span class="nm">conversationId</span>: <span class="ty">String</span>
     <span class="kw">let</span> <span class="nm">content</span>: <span class="ty">MessageContent</span>
-    <span class="kw">let</span> <span class="nm">clientId</span>: <span class="ty">String</span>   <span class="cm">// UUID().uuidString — generated in init</span>
-}</code></pre>
+    <span class="kw">let</span> <span class="nm">clientId</span>: <span class="ty">String</span>          <span class="cm">// UUID().uuidString — generated in init</span>
+}
+
+<span class="cm">// Mark-read — no body, no response payload needed beyond success/failure</span>
+<span class="kw">struct</span> <span class="ty">MarkReadPath</span>: <span class="ty">Sendable</span>, <span class="ty">Equatable</span> { <span class="kw">let</span> <span class="nm">conversationId</span>: <span class="ty">String</span> }
+<span class="kw">typealias</span> <span class="ty">MarkReadRequest</span> = <span class="ty">Request</span>&lt;<span class="ty">Void</span>, <span class="ty">MarkReadPath</span>&gt;</code></pre>
 
     <h3>PendingMessageDTO (offline queue persistence)</h3>
     <pre><code><span class="cm">// Persisted offline queue entry — structurally mirrors MessageDTO content fields</span>
 <span class="kw">struct</span> <span class="ty">PendingMessageDTO</span>: <span class="ty">Codable</span>, <span class="ty">Sendable</span> {
-    <span class="kw">let</span> <span class="nm">id</span>: <span class="ty">String</span>           <span class="cm">// clientId — doubles as idempotency key on retry</span>
+    <span class="kw">let</span> <span class="nm">id</span>: <span class="ty">String</span>            <span class="cm">// clientId — doubles as idempotency key on retry</span>
     <span class="kw">let</span> <span class="nm">conversationId</span>: <span class="ty">String</span>
     <span class="kw">let</span> <span class="nm">type</span>: <span class="ty">String</span>
     <span class="kw">let</span> <span class="nm">text</span>: <span class="ty">String</span>?
@@ -630,12 +740,8 @@
     <span class="kw">let</span> <span class="nm">aspectRatio</span>: <span class="ty">CGFloat</span>?
     <span class="kw">let</span> <span class="nm">audioDuration</span>: <span class="ty">TimeInterval</span>?
     <span class="kw">let</span> <span class="nm">audioURL</span>: <span class="ty">String</span>?
-    <span class="kw">let</span> <span class="nm">queuedAt</span>: <span class="ty">String</span>     <span class="cm">// ISO8601</span>
+    <span class="kw">let</span> <span class="nm">queuedAt</span>: <span class="ty">String</span>      <span class="cm">// ISO8601</span>
 }</code></pre>
-
-    <div class="rule">
-      <p><strong>Rule:</strong> The Mapper is the only type that knows both DTO and Domain. <code>MessageDTO</code> optionals reflect wire shape — the Mapper decides validity and constructs the <code>MessageContent</code> enum case. DTO optionals are never exposed to Domain.</p>
-    </div>
   </section>
 
   <!-- ═══════════════════════════════════════════════════ 4. High-Level Design -->
@@ -643,7 +749,7 @@
     <h2>4. High-Level Design</h2>
 
     <div class="ascii-diagram">┌─────────────────────────────────────────────────────────────────────┐
-│  Presentation (UIKit + Combine)                                     │
+│  Presentation  (UIKit · Combine)                                    │
 │  ConversationListViewController / ConversationListViewModel         │
 │  ChatViewController / ChatViewModel                                 │
 │  Cells: TextMessageCell, AudioMessageCell,                          │
@@ -653,27 +759,46 @@
                              │
 ┌────────────────────────────▼────────────────────────────────────────┐
 │  Domain                                                             │
-│  FetchConversationsUseCase  → ConversationRepositoryProtocol        │
-│  FetchMessagesUseCase       → MessageRepositoryProtocol             │
-│  StreamMessagesUseCase      → MessageRepositoryProtocol             │
-│  SendMessageUseCase         → MessageRepositoryProtocol             │
+│  FetchConversationsUseCase   → ConversationRepositoryProtocol       │
+│  ObserveMessagesUseCase      → MessageRepositoryProtocol            │
+│    (FRC-backed; yields initial page + every Core Data write)        │
+│  FetchMessagesUseCase        → MessageRepositoryProtocol            │
+│    (cursor pagination only — writes to Core Data; FRC re-yields)    │
+│  SendMessageUseCase          → MessageRepositoryProtocol            │
 │  FlushPendingMessagesUseCase → MessageRepositoryProtocol            │
+│  MarkReadUseCase             → ConversationRepositoryProtocol       │
 └────────────────────────────┬────────────────────────────────────────┘
                              │
 ┌────────────────────────────▼────────────────────────────────────────┐
 │  Data                                                               │
-│  ConversationRepository  → ConversationLocalDataSource (JSON mock)  │
-│  MessageRepository       → MessageRemoteDataSource (HTTP POST/GET)  │
-│                          → MessageLocalDataSource (actor, in-memory)│
-│                          → WebSocketClientProtocol (CoreKit)        │
-│                          → PendingMessageQueue (actor, disk-backed) │
+│  ConversationRepository      → ConversationLocalDataSource          │
+│  ConversationLocalDataSource                  [bundled JSON mock]   │
+│  MessageRepository           → MessageRemoteDataSource              │
+│                              → MessageLocalDataSource               │
+│                              → WebSocketClientProtocol              │
+│                              → PendingMessageQueue                  │
+│    observes WebSocketClient.connectionState → triggers catch-up     │
+│  MessageRemoteDataSource              [CoreKit · APIClient]         │
+│  MessageLocalDataSource               [CoreData · NSFetchedResultsController]
+│  PendingMessageQueue (actor)          [Foundation · FileManager]    │
 │  Mappers: ConversationMapper, MessageMapper                         │
+└────────────────────────────┬────────────────────────────────────────┘
+                             │
+┌────────────────────────────▼────────────────────────────────────────┐
+│  Application                                                        │
+│  ChatCoordinator              [UIKit · BackgroundTasks ·            │
+│                                UserNotifications]                   │
+│    • didBecomeActiveNotification → FlushPendingMessages             │
+│    • APNs silent push            → FlushPendingMessages             │
+│    • BGAppRefreshTask            → periodic catch-up flush          │
 └────────────────────────────┬────────────────────────────────────────┘
                              │ imports
 ┌────────────────────────────▼────────────────────────────────────────┐
-│  CoreKit                                                            │
-│  WebSocketClient (actor, URLSessionWebSocketTask, ChannelRouter)    │
-│  APIClient (URLSession-based HTTP)                                  │
+│  Dependencies                                                       │
+│  CoreKit             WebSocketClient · APIClient · ChannelRouter    │
+│  CoreData            NSPersistentContainer · NSFetchRequest         │
+│  BackgroundTasks     BGTaskScheduler · BGAppRefreshTask             │
+│  UserNotifications   APNs silent push handling                      │
 └─────────────────────────────────────────────────────────────────────┘</div>
 
     <h3>Architecture Layer Breakdown</h3>
@@ -693,18 +818,18 @@
         <div class="stack-label">Domain</div>
         <div class="stack-content">
           <strong>UseCases</strong>
-          <code>FetchConversationsUseCase</code> <code>FetchMessagesUseCase</code> <code>StreamMessagesUseCase</code> <code>SendMessageUseCase</code> <code>FlushPendingMessagesUseCase</code>
+          <code>FetchConversationsUseCase</code> <code>ObserveMessagesUseCase</code> <code>FetchMessagesUseCase</code> <code>SendMessageUseCase</code> <code>FlushPendingMessagesUseCase</code> <code>MarkReadUseCase</code>
           <strong>Services</strong>
           None
           <strong>Models</strong>
           <code>Conversation</code> <code>Message</code> <code>MessageContent</code> <code>MessageStatus</code>
-          <strong>Params</strong>
-          <code>FetchConversationsRequest</code> <code>FetchMessagesRequest</code> <code>SendMessageRequest</code>
+          <strong>Requests</strong>
+          <code>FetchConversationsRequest</code> <code>FetchMessagesRequest</code> <code>SendMessageRequest</code> <code>MarkReadRequest</code>
         </div>
       </div>
       <div class="stack-row">
         <div class="stack-label">Infrastructure</div>
-        <div class="stack-content">None — CoreKit wraps URLSession and URLSessionWebSocketTask directly; no dedicated Infrastructure gateway layer</div>
+        <div class="stack-content">None — WebSocket and HTTP clients live in CoreKit; no dedicated Infrastructure layer in ChatApp</div>
       </div>
       <div class="stack-row">
         <div class="stack-label">Data</div>
@@ -714,7 +839,7 @@
           <strong>DataSources</strong>
           <code>ConversationLocalDataSource</code> <code>MessageRemoteDataSource</code> <code>MessageLocalDataSource</code> <code>PendingMessageQueue</code>
           <strong>DTOs</strong>
-          <code>MessageDTO</code> <code>ConversationDTO</code> <code>ChatEventDTO</code> <code>PendingMessageDTO</code>
+          <code>ConversationDTO</code> <code>MessageDTO</code> <code>ChatEventDTO</code> <code>PendingMessageDTO</code>
           <strong>Mappers</strong>
           <code>ConversationMapper</code> <code>MessageMapper</code>
         </div>
@@ -722,24 +847,21 @@
       <div class="stack-row">
         <div class="stack-label">External</div>
         <div class="stack-content">
-          <code>URLSession</code> · <code>URLSessionWebSocketTask</code> · <code>Combine</code> · <code>Foundation</code>
+          <code>CoreKit</code> · <code>CoreData</code> · <code>BackgroundTasks</code> · <code>UserNotifications</code> · <code>Network</code>
         </div>
       </div>
       <div class="stack-row">
         <div class="stack-label">Application</div>
         <div class="stack-content">
-          <code>AppDelegate</code> — wires window, creates <code>ChatCoordinator</code> as composition root, injects <code>WebSocketClientProtocol</code>
+          <code>AppDelegate</code> — wires window, creates <code>ChatCoordinator</code> as composition root, registers <code>BGAppRefreshTask</code>
           <strong>Coordinators</strong>
-          <code>ChatCoordinator</code> — composition root + flush orchestrator; observes <code>UIApplication.didBecomeActiveNotification</code>
+          <code>ChatCoordinator</code> — composition root + flush orchestrator; pushes <code>ChatViewController</code> on conversation tap
         </div>
       </div>
     </div>
 
     <h3>Navigation (Coordinator Pattern)</h3>
-    <div class="callout">
-      <p><code>ChatCoordinator</code> is injected with <code>WebSocketClientProtocol</code> by the host app. It observes <code>UIApplication.didBecomeActiveNotification</code> and calls <code>FlushPendingMessagesUseCase</code> — this logic lives in the Coordinator, not in any ViewController.</p>
-    </div>
-
+    <p><code>ChatCoordinator</code> is the composition root — it builds the full dependency graph, injects all dependencies, and owns all three flush triggers.</p>
     <pre><code><span class="nm">ChatCoordinator</span> (composition root + flush orchestrator)
   └── <span class="ty">ConversationListViewController</span>
         └── <span class="ty">ChatViewController</span> (pushed on conversation tap)</code></pre>
@@ -749,67 +871,113 @@
   <section id="data-flow">
     <h2>5. Data Flow</h2>
 
-    <h3>Message Streaming (open a conversation)</h3>
+    <h3>Message Observation (open a conversation)</h3>
     <pre><code><span class="ty">ChatViewController</span>.viewDidLoad()
-  → <span class="nm">ChatViewModel</span>.start()
-      → <span class="nm">StreamMessagesUseCase</span>.execute(conversationId: <span class="st">"conv-abc"</span>)
-          → <span class="nm">MessageRepository</span>.messages(conversationId: <span class="st">"conv-abc"</span>)
-              [Phase 1 — cache, instant]
-              → <span class="nm">MessageLocalDataSource</span>.messages(conversationId:) → [<span class="ty">MessageDTO</span>]
-              → <span class="nm">MessageMapper</span>.toDomain → [<span class="ty">Message</span>]
-              → continuation.yield([<span class="ty">Message</span>])   <span class="cm">// View renders cached messages</span>
+  → <span class="ty">ChatViewModel</span>.<span class="nm">start</span>()
+      → <span class="nm">ObserveMessagesUseCase</span>.<span class="nm">execute</span>(conversationId: <span class="st">"conv-abc"</span>)
+          → <span class="nm">MessageRepository</span>.<span class="nm">observe</span>(conversationId: <span class="st">"conv-abc"</span>)
+              → <span class="nm">MessageLocalDataSource</span>.<span class="nm">observe</span>(conversationId:)
+                  → <span class="ty">NSFetchedResultsController</span>:
+                        predicate:        conversationId == <span class="st">"conv-abc"</span>
+                        sortDescriptors:  [sequence ASC]
+                        fetchBatchSize:   <span class="nm">50</span>   <span class="cm">// lazy faulting — no full load into memory</span>
+                  → performFetch()
+                  → continuation.yield(frc.fetchedObjects → <span class="nm">MessageMapper</span>.toDomain)
+                        <span class="cm">// View renders all locally cached messages instantly</span>
 
-              [Phase 2 — live, runs indefinitely]
-              → <span class="nm">WebSocketClient</span>.subscribe(channel: <span class="st">"conv-abc"</span>)
+              [runs indefinitely — WebSocket writes to Core Data → FRC fires]
+              → <span class="nm">WebSocketClient</span>.<span class="nm">subscribe</span>(channel: <span class="st">"conv-abc"</span>)
+                  <span class="cm">// AsyncStream buffer: .bufferingOldest(256)</span>
                   <span class="kw">for await</span> payload <span class="kw">in</span> <span class="ty">AsyncStream</span>&lt;<span class="ty">String</span>&gt;:
-                      decode <span class="ty">ChatEventDTO</span>
-                      <span class="kw">switch</span> event.type:
-                        <span class="st">"message.new"</span>     → <span class="nm">localDataSource</span>.save(dto) → accumulated.append
-                        <span class="st">"message.deleted"</span> → accumulated.removeAll(id:)
-                      continuation.yield([<span class="ty">Message</span>])   <span class="cm">// View updates in real time</span></code></pre>
+                      decode <span class="ty">ChatEventDTO</span> → <span class="kw">switch</span> <span class="ty">ChatEventType</span>:
+                        .messageNew     → <span class="nm">MessageLocalDataSource</span>.<span class="nm">save</span>(dto)    <span class="cm">// Core Data insert</span>
+                        .messageDeleted → <span class="nm">MessageLocalDataSource</span>.<span class="nm">delete</span>(id:)  <span class="cm">// Core Data delete</span>
+                        .unreadUpdated  → (handled by <span class="ty">ConversationListViewModel</span>, not here)
+                        <span class="cm">// NSFetchedResultsController.controllerDidChangeContent fires</span>
+                        <span class="cm">// → continuation.yield(frc.fetchedObjects → MessageMapper.toDomain)</span>
+                        <span class="cm">// No manual accumulation — Core Data is the single source of truth</span></code></pre>
+
+    <h3>Load Older Messages (pagination)</h3>
+    <pre><code>User scrolls to top of <span class="ty">ChatViewController</span>
+  → <span class="ty">ChatViewModel</span>.<span class="nm">loadMore</span>()
+      → <span class="nm">FetchMessagesUseCase</span>.<span class="nm">execute</span>(
+            <span class="ty">FetchMessagesRequest</span>(path: .init(
+                conversationId: <span class="st">"conv-abc"</span>,
+                beforeMessageId: oldestLoadedId,
+                limit: <span class="nm">50</span>
+            ))
+        )
+          → <span class="nm">MessageRepository</span>.<span class="nm">fetchOlder</span>(conversationId:, before: oldestLoadedId, limit: <span class="nm">50</span>)
+              → <span class="nm">MessageRemoteDataSource</span>.<span class="nm">fetchMessages</span>(conversationId:, before:, limit:)
+                  → <span class="gr">GET</span> /api/v1/conversations/{id}/messages?before={messageId}&amp;limit=50
+              → <span class="nm">MessageLocalDataSource</span>.<span class="nm">save</span>(dtos)   <span class="cm">// write batch to Core Data</span>
+              <span class="cm">// NSFetchedResultsController detects batch insert</span>
+              <span class="cm">// → controllerDidChangeContent fires</span>
+              <span class="cm">// → ObserveMessagesUseCase stream yields expanded [Message] list</span>
+              <span class="cm">// ViewModel preserves scroll position (oldestLoadedId bookmark)</span></code></pre>
+
+    <h3>Reconnect + Catch-up (WebSocket drop)</h3>
+    <pre><code>WebSocket drops
+  → <span class="nm">WebSocketClient</span> (CoreKit, internal)
+      NWPathMonitor detects .satisfied
+      exponential backoff: retryDelay 1s → 2s → 4s → ... → 60s cap
+      <span class="nm">WebSocketClient</span>.connect() succeeds → connectionState yields .connected
+
+<span class="nm">MessageRepository</span> observes <span class="nm">WebSocketClient</span>.connectionState
+  → .connected (after prior .disconnected)
+      → <span class="gr">GET</span> /api/v1/conversations/{id}/messages?after={lastKnownSequence}
+      → save batch → <span class="nm">MessageLocalDataSource</span> (Core Data)
+      → <span class="ty">NSFetchedResultsController</span> fires → <span class="nm">ObserveMessagesUseCase</span> stream yields
+      → re-attach <span class="nm">WebSocketClient</span>.<span class="nm">subscribe</span>(channel: <span class="st">"conv-abc"</span>)</code></pre>
 
     <div class="rule">
-      <p><strong>Two-phase stream:</strong> Phase 1 yields cached messages instantly so the view is never blank. Phase 2 drives a live <code>AsyncStream</code> loop for the lifetime of the open conversation. The same continuation is used for both — callers see one unified stream.</p>
+      <p>Reconnect logic is entirely inside <code>WebSocketClient</code> — no separate component. <code>MessageRepository</code> is a passive observer of connection state; it reacts to <code>.connected</code> but does not drive reconnection.</p>
     </div>
 
     <h3>Send Message</h3>
     <pre><code>User taps Send, enters <span class="st">"Hello there"</span>
-  → <span class="nm">ChatViewModel</span>.send(text: <span class="st">"Hello there"</span>)
-      → <span class="nm">SendMessageUseCase</span>.execute(
+  → <span class="ty">ChatViewModel</span>.<span class="nm">send</span>(text: <span class="st">"Hello there"</span>)
+      → <span class="nm">SendMessageUseCase</span>.<span class="nm">execute</span>(
             <span class="ty">SendMessageRequest</span>(conversationId: <span class="st">"conv-abc"</span>, content: .text(<span class="st">"Hello there"</span>))
             <span class="cm">// clientId = UUID().uuidString generated inside SendMessageRequest.init</span>
         )
-          → <span class="nm">MessageRepository</span>.send(request:)
-              <span class="cm">// SendMessageAPIRequest maps only text content — current impl is text-only</span>
+          → <span class="nm">MessageRepository</span>.<span class="nm">send</span>(request:)
               → <span class="ty">SendMessageAPIRequest</span>(from: request)   <span class="cm">// { client_id, type: "text", text }</span>
               → <span class="gr">POST</span> /api/v1/conversations/{id}/messages
               [success]
-                  → <span class="ty">MessageDTO</span> (status: <span class="st">"sent"</span>) → <span class="nm">localDataSource</span>.save(dto)
+                  → <span class="ty">MessageDTO</span> (status: <span class="st">"sent"</span>, sequence: N) → localDataSource.save(dto)
                   → <span class="nm">MessageMapper</span>.toDomain → <span class="ty">Message</span>
                   → returns <span class="ty">Message</span> to ViewModel → View updates
               [failure — network loss]
-                  → <span class="ty">PendingMessageDTO</span>(id: request.clientId, ...) → <span class="nm">PendingMessageQueue</span>.enqueue
+                  → <span class="ty">PendingMessageDTO</span>(id: request.clientId, ...) → <span class="nm">PendingMessageQueue</span>.<span class="nm">enqueue</span>
                   → <span class="kw">throw</span> <span class="ty">ChatError</span>.messageQueued
       → ViewModel: catches .messageQueued → shows message with .pending status indicator</code></pre>
 
-    <div class="callout">
-      <p><strong>Failure path:</strong> <code>ChatError.messageQueued</code> is not an error to surface to the user as a dialog — it is a signal. The ViewModel catches it and renders the message with a <code>.pending</code> badge. The user sees their message appear; they are not blocked.</p>
-    </div>
+    <h3>Mark Conversation Read</h3>
+    <pre><code>User opens <span class="ty">ChatViewController</span>
+  → <span class="ty">ChatViewModel</span>.<span class="nm">markRead</span>()
+      → <span class="nm">MarkReadUseCase</span>.<span class="nm">execute</span>(<span class="ty">MarkReadRequest</span>(path: .init(conversationId: <span class="st">"conv-abc"</span>)))
+          → <span class="gr">POST</span> /api/v1/conversations/{id}/read
+          → server resets unread counter, broadcasts:
+              { <span class="st">"type"</span>: <span class="st">"conversation.unread_updated"</span>, <span class="st">"conversation_id"</span>: <span class="st">"conv-abc"</span>, <span class="st">"unread_count"</span>: <span class="nm">0</span> }
 
-    <h3>Offline Flush (on app foreground)</h3>
-    <pre><code><span class="ty">UIApplication</span>.didBecomeActiveNotification
-  → <span class="nm">ChatCoordinator</span>.flushAllPendingMessages()
-      → <span class="nm">FlushPendingMessagesUseCase</span>.execute(conversationId:) <span class="kw">for each</span> active conversation
-          → <span class="nm">MessageRepository</span>.flushPending(conversationId:)
-              → <span class="nm">PendingMessageQueue</span>.dequeue(conversationId:) → [<span class="ty">PendingMessageDTO</span>]
-              <span class="kw">for each</span> pending:
-                  → <span class="ty">SendMessageAPIRequest</span>(from: pending) → <span class="gr">POST</span> (same idempotency key)
-                  [success] → <span class="nm">localDataSource</span>.save(dto) → message shows as .sent
-                  [failure] → <span class="nm">PendingMessageQueue</span>.enqueue(pending)  <span class="cm">// will retry next foreground</span></code></pre>
+WebSocket stream (<span class="ty">ConversationListViewModel</span> subscribes)
+  → <span class="ty">ChatEventType</span>.unreadUpdated
+      → update local <span class="ty">Conversation</span>.unreadCount = <span class="nm">0</span>
+      → <span class="ty">ConversationListViewModel</span> publishes updated list → badge clears</code></pre>
 
-    <div class="rule">
-      <p><strong>Idempotency guarantee:</strong> Every retry re-uses the original <code>clientId</code> that was generated in <code>SendMessageRequest.init</code> and persisted in <code>PendingMessageDTO.id</code>. The server deduplicates on <code>client_id</code> — calling POST twice with the same UUID is safe.</p>
-    </div>
+    <h3>Offline Flush (foreground / APNs / BGAppRefreshTask)</h3>
+    <pre><code>Trigger: didBecomeActiveNotification | APNs silent push | <span class="ty">BGAppRefreshTask</span>
+  → <span class="nm">ChatCoordinator</span>.<span class="nm">flushAllPendingMessages</span>()
+      → <span class="nm">PendingMessageQueue</span>.<span class="nm">pendingConversationIds</span>()   <span class="cm">// O(pending) — only convs with queue</span>
+      <span class="kw">for</span> each conversationId <span class="kw">in</span> pendingIds:
+          → <span class="nm">FlushPendingMessagesUseCase</span>.<span class="nm">execute</span>(conversationId:)
+              → <span class="nm">MessageRepository</span>.<span class="nm">flushPending</span>(conversationId:)
+                  → <span class="nm">PendingMessageQueue</span>.<span class="nm">dequeue</span>(conversationId:) → [<span class="ty">PendingMessageDTO</span>]
+                  <span class="kw">for</span> each pending:
+                      → <span class="ty">SendMessageAPIRequest</span>(from: pending) → <span class="gr">POST</span> (same clientId = idempotency key)
+                      [success] → localDataSource.save(dto) → message shows as .sent
+                      [failure] → <span class="nm">PendingMessageQueue</span>.<span class="nm">enqueue</span>(pending)  <span class="cm">// retry next trigger</span></code></pre>
   </section>
 
   <!-- ═══════════════════════════════════════════════════ 6. Technical Deep-dive -->
@@ -818,7 +986,7 @@
 
     <h3>Why HTTP POST for outbound, not WebSocket?</h3>
     <div class="callout">
-      <p>WebSocket is a transport — it has no delivery semantics. If you send a message over WebSocket and the frame is dropped, you get no error. HTTP POST gives you: a status code (200 sent, 409 conflict, 5xx retry), a request body you can log and replay, and a confirmed response with the server-assigned message ID. The idempotency key (<code>clientId</code>) only works over a request/response protocol. The split is intentional: WebSocket for inbound real-time events, HTTP for outbound actions that need a result.</p>
+      <p>WebSocket is a transport — it has no delivery semantics. If you send a message over WebSocket and the frame is dropped, you get no error. HTTP POST gives you a status code (200 sent, 409 conflict, 5xx retry), a request body you can log and replay, and a confirmed response with the server-assigned message ID and sequence number. The idempotency key (<code>clientId</code>) only works over a request/response protocol. The split is intentional: WebSocket for inbound real-time events, HTTP for outbound actions that need a result.</p>
     </div>
 
     <h3>Why one WebSocket connection instead of one per conversation?</h3>
@@ -827,15 +995,15 @@
     </div>
 
     <pre><code>Single <span class="nm">WebSocketClient</span> (<span class="ty">CoreKit</span> actor)
-  └── One <span class="ty">URLSessionWebSocketTask</span> to <span class="st">wss://&lt;server&gt;/ws</span>
+  └── One <span class="ty">URLSessionWebSocketTask</span> to wss://&lt;server&gt;/ws
   └── <span class="nm">ChannelRouter</span> (private actor)
-        ├── <span class="st">"conv-abc"</span> → <span class="ty">AsyncStream</span>.Continuation → <span class="nm">MessageRepository</span> (conv-abc)
-        ├── <span class="st">"conv-xyz"</span> → <span class="ty">AsyncStream</span>.Continuation → <span class="nm">MessageRepository</span> (conv-xyz)
+        ├── <span class="st">"conv-abc"</span> → <span class="ty">AsyncStream.Continuation</span> → <span class="nm">MessageRepository</span> (conv-abc)
+        ├── <span class="st">"conv-xyz"</span> → <span class="ty">AsyncStream.Continuation</span> → <span class="nm">MessageRepository</span> (conv-xyz)
         └── ...
 
 Incoming frame: { <span class="st">"channel"</span>: <span class="st">"conv-abc"</span>, <span class="st">"payload"</span>: <span class="st">"{...}"</span> }
-  → <span class="nm">WebSocketClient</span>.receiveLoop decodes <span class="ty">WebSocketEnvelope</span>
-  → <span class="nm">ChannelRouter</span>.yield(payload, to: <span class="st">"conv-abc"</span>)
+  → <span class="nm">WebSocketClient</span>.<span class="nm">receiveLoop</span> decodes <span class="ty">WebSocketEnvelope</span>
+  → <span class="nm">ChannelRouter</span>.<span class="nm">yield</span>(payload, to: <span class="st">"conv-abc"</span>)
   → conv-abc subscriber's <span class="ty">AsyncStream</span> yields the raw payload string</code></pre>
 
     <h3>Why <code>MessageContent</code> enum instead of optional fields?</h3>
@@ -843,24 +1011,112 @@ Incoming frame: { <span class="st">"channel"</span>: <span class="st">"conv-abc"
       <p>Optional fields (<code>text: String?</code>, <code>imageURL: URL?</code>) make invalid states representable at the type level. A <code>MessageDTO</code> with no text and no image URL is syntactically valid Swift but semantically illegal in the domain. The <code>MessageContent</code> enum makes illegal states unrepresentable: every <code>Message</code> has exactly one content case. The switch in the cell factory is exhaustive at compile time — adding a new message type without handling it is a build error, not a runtime crash.</p>
     </div>
 
-    <h3>Why <code>clientId</code> (idempotency key) generated in <code>SendMessageRequest.init</code>?</h3>
+    <h3>Why <code>sequence: Int</code> on every <code>MessageDTO</code>?</h3>
     <div class="callout">
-      <p>If generated at the ViewModel call site, the same action (e.g. a button tap that retries) would produce different UUIDs each time — defeating idempotency. If generated in the Repository or DataSource, the key is not accessible to the offline queue. Generating it in <code>SendMessageRequest.init</code> means: the same <code>Request</code> object always carries the same <code>clientId</code>, the queue can persist it, and retries (whether from queue flush or network retry) re-use the same key. The server deduplicates on <code>client_id</code> — safe to call twice with the same UUID.</p>
+      <p>WebSocket frames can arrive out of order across reconnects and burst deliveries. Without a server-assigned sequence number, the client has no way to detect gaps or determine ordering. <code>sequence</code> unlocks three behaviours simultaneously: <strong>Ordering</strong> — sorted by <code>sequence</code>, not arrival time; <strong>Gap detection</strong> — a jump (e.g. 14 → 17) means frames 15–16 were lost, trigger catch-up; <strong>Reconnect catch-up</strong> — <code>GET ?after=lastKnownSeq</code> returns only the missed window, no full reload.</p>
     </div>
 
-    <h3>Why <code>PendingMessageQueue</code> is a Swift actor?</h3>
+    <h3>Why reconnect logic lives inside <code>WebSocketClient</code>, not a separate component?</h3>
     <div class="callout">
-      <p>The queue is accessed from multiple concurrency contexts: the send path (ViewModel → UseCase → Repository), the flush path (Coordinator on app foreground), and potentially background retry logic. A class with a lock would work but requires manual locking discipline. An actor serialises all access automatically — no lock, no data race, compiler-enforced.</p>
+      <p>Reconnection is not a separate architectural concern — it is an internal behaviour of the WebSocket client. A separate "ConnectionManager" would mean the caller must know the client can drop, must trigger reconnection manually, and must know when it's safe to re-subscribe — leaking transport-level knowledge into the Data or Application layer. The client should be self-healing; callers subscribe to a channel and trust the client to keep the connection alive.</p>
+    </div>
+
+    <pre><code><span class="cm">// CoreKit — internals invisible to callers</span>
+<span class="kw">actor</span> <span class="ty">WebSocketClient</span>: <span class="ty">WebSocketClientProtocol</span> {
+    <span class="cm">// Exposed to callers</span>
+    <span class="kw">var</span> <span class="nm">connectionState</span>: <span class="ty">AsyncStream</span>&lt;<span class="ty">ConnectionState</span>&gt;
+    <span class="kw">func</span> <span class="nm">subscribe</span>(channel: <span class="ty">String</span>) -> <span class="ty">AsyncStream</span>&lt;<span class="ty">String</span>&gt;
+
+    <span class="cm">// Internal — callers never touch these</span>
+    <span class="kw">private var</span> <span class="nm">retryDelay</span>: <span class="ty">TimeInterval</span> = <span class="nm">1.0</span>
+    <span class="kw">private let</span> <span class="nm">maxDelay</span>: <span class="ty">TimeInterval</span> = <span class="nm">60.0</span>
+    <span class="kw">private var</span> <span class="nm">pathMonitor</span>: <span class="ty">NWPathMonitor</span>
+
+    <span class="kw">private func</span> <span class="nm">reconnectLoop</span>() <span class="kw">async</span> {
+        <span class="cm">// NWPathMonitor detects .satisfied → retry connect() with backoff</span>
+        <span class="cm">// yields .reconnecting → .connected on success</span>
+    }
+}</code></pre>
+
+    <h3>Why two use cases for messages — <code>ObserveMessagesUseCase</code> and <code>FetchMessagesUseCase</code> — instead of one?</h3>
+    <div class="callout">
+      <p>They have different execution models. <code>ObserveMessagesUseCase</code> returns <code>AsyncStream&lt;[Message]&gt;</code> — it never completes. <code>FetchMessagesUseCase</code> is <code>async throws</code> — it completes immediately. You cannot merge them without giving a single use case two modes of operation, which breaks single responsibility.</p>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th></th><th><code>ObserveMessagesUseCase</code></th><th><code>FetchMessagesUseCase</code></th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Trigger</td><td><code>viewDidLoad</code> — once</td><td>User scrolls to top — on demand</td></tr>
+          <tr><td>Lifetime</td><td>Alive until screen dismissal</td><td>Completes immediately</td></tr>
+          <tr><td>Return type</td><td><code>AsyncStream&lt;[Message]&gt;</code></td><td><code>Void</code> (FRC delivers the result)</td></tr>
+          <tr><td>Failure path</td><td>No throws — stream stays open</td><td><code>throws</code> — show error, allow retry</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Why <code>ObserveMessagesUseCase</code> instead of <code>StreamMessagesUseCase</code>?</h3>
+    <div class="callout">
+      <p><code>StreamMessagesUseCase</code> implied the stream came from WebSocket — an implementation detail that leaked into the domain. The domain doesn't know or care where updates come from. With <code>NSFetchedResultsController</code> as the stream source, the correct domain name is <code>ObserveMessagesUseCase</code> — it observes a resource, same as you would observe any other piece of state. The WebSocket is an invisible write path into Core Data; the FRC is the read path. The name reflects domain intent, not transport.</p>
+    </div>
+
+    <h3>Why Core Data as single source of truth (no in-memory accumulation)?</h3>
+    <div class="callout">
+      <p>The original design maintained an in-memory <code>accumulated: [MessageDTO]</code> array inside <code>MessageRepository</code>. Core Data was written to for persistence but never read back as the live source. If the app is killed mid-conversation, the accumulated array is gone — and if the two sources diverged, the displayed state is inconsistent with what was persisted. With FRC as the stream source, every write (WebSocket event, pagination fetch, send confirmation) goes to Core Data; every read comes back via FRC. One write path, one read path, one truth.</p>
+    </div>
+
+    <pre><code>WebSocket event → Core Data write → FRC fires → AsyncStream yields → ViewModel updates
+Pagination fetch → Core Data write → FRC fires → AsyncStream yields → ViewModel updates
+Send confirm    → Core Data write → FRC fires → AsyncStream yields → ViewModel updates</code></pre>
+
+    <h3>Why cursor pagination protocol is defined now, even with a mock backend?</h3>
+    <div class="callout">
+      <p>The protocol contract is what every caller depends on — <code>ChatViewModel</code>, <code>FetchMessagesUseCase</code>, and <code>MessageRepositoryProtocol</code>. Defining <code>before: String?, limit: Int</code> now means call sites are already correct when Core Data replaces the in-memory store. Adding pagination later to a protocol that only exposes <code>messages(conversationId:)</code> requires simultaneous changes across all four layers.</p>
+    </div>
+
+    <pre><code><span class="cm">// Defined now — mock impl ignores before/limit; Core Data impl uses both</span>
+<span class="kw">func</span> <span class="nm">messages</span>(
+    conversationId: <span class="ty">String</span>,
+    before messageId: <span class="ty">String</span>?,
+    limit: <span class="ty">Int</span>
+) <span class="kw">async throws</span> -> [<span class="ty">MessageDTO</span>]</code></pre>
+
+    <h3>Why two paths for burst delivery: stream vs catch-up HTTP?</h3>
+    <div class="callout">
+      <p>The WebSocket stream is designed for low-latency, low-volume real-time events. Catch-up after reconnect can be high-volume (hundreds of messages in a burst). Routing catch-up through the stream exhausts the <code>AsyncStream</code> buffer and risks dropping frames under <code>.bufferingOldest(256)</code>. The correct split: catch-up via <code>GET ?after=seqN</code> (paginated, retryable HTTP), real-time via stream. The stream buffer is never responsible for history.</p>
+    </div>
+
+    <h3>Why Core Data over Realm for <code>MessageLocalDataSource</code>?</h3>
+    <div class="callout">
+      <p>Chat message storage is append-heavy, cursor-read. Core Data fits this directly: <code>NSFetchRequest</code> with <code>sequence &lt; beforeSeq</code> predicate + <code>fetchBatchSize: 50</code> gives cursor pagination with lazy faulting; <code>NSFetchedResultsController</code> fires <code>controllerDidChangeContent</code> on insert — reactive updates without a separate mechanism; no third-party dependency. Realm's live-object model conflicts with Swift actor isolation (<code>Sendable</code> requirements) — passing Realm objects across actor boundaries requires <code>.freeze()</code> + copy, erasing the live-object advantage. Realm belongs in FeedApp where live <code>Results&lt;T&gt;</code> queries shine.</p>
+    </div>
+
+    <h3>Why <code>PendingMessageQueue</code> is indexed by <code>conversationId</code>?</h3>
+    <div class="callout">
+      <p>A flat array forces <code>FlushPendingMessagesUseCase</code> to scan all conversations on every flush — including those with zero pending messages. Indexing by <code>conversationId</code> at enqueue time makes flush O(pending conversations). If zero conversations have pending messages, <code>pendingConversationIds()</code> returns <code>[]</code> and the flush is a no-op — no disk access, no network calls.</p>
+    </div>
+
+    <pre><code><span class="kw">actor</span> <span class="ty">PendingMessageQueue</span> {
+    <span class="kw">private var</span> <span class="nm">queue</span>: [<span class="ty">String</span>: [<span class="ty">PendingMessageDTO</span>]] = [:]  <span class="cm">// conversationId → pending</span>
+
+    <span class="kw">func</span> <span class="nm">pendingConversationIds</span>() -> [<span class="ty">String</span>] { <span class="ty">Array</span>(<span class="nm">queue</span>.keys) }
+
+    <span class="kw">func</span> <span class="nm">dequeue</span>(conversationId: <span class="ty">String</span>) -> [<span class="ty">PendingMessageDTO</span>] {
+        <span class="kw">defer</span> { <span class="nm">queue</span>[conversationId] = <span class="kw">nil</span> }
+        <span class="kw">return</span> <span class="nm">queue</span>[conversationId] ?? []
+    }
+}</code></pre>
+
+    <h3>Why <code>clientId</code> generated in <code>SendMessageRequest.init</code>?</h3>
+    <div class="callout">
+      <p>If generated at the ViewModel call site, the same action (e.g. a button tap that retries) would produce different UUIDs each time — defeating idempotency. If generated in the Repository or DataSource, the key is not accessible to the offline queue. Generating it in <code>SendMessageRequest.init</code> means: the same <code>Request</code> object always carries the same <code>clientId</code>, the queue can persist it, and retries (whether from queue flush or network retry) re-use the same key.</p>
     </div>
 
     <h3>Why flush is triggered in <code>ChatCoordinator</code>, not in a ViewController?</h3>
     <div class="callout">
-      <p><code>UIApplication.didBecomeActiveNotification</code> fires app-wide — it doesn't belong to any one screen. If the <code>ConversationListViewController</code> owned the flush, it would miss events while another screen is active. <code>ChatCoordinator</code> is app-scoped for the chat feature; it lives as long as the chat module is active and is the correct owner of cross-screen infrastructure concerns.</p>
-    </div>
-
-    <h3>Why <code>MessageLocalDataSource</code> is in-memory (actor) rather than disk-backed?</h3>
-    <div class="callout">
-      <p>Message history for the current session is loaded from bundled mock JSON via the local data source. In a production app it would be backed by Core Data or SQLite. The actor boundary is already in place — swapping the storage backend is a one-file change inside <code>MessageLocalDataSource</code> without touching any caller.</p>
+      <p><code>UIApplication.didBecomeActiveNotification</code> fires app-wide — it doesn't belong to any one screen. If <code>ConversationListViewController</code> owned the flush, it would miss events while another screen is active. <code>ChatCoordinator</code> is app-scoped for the chat feature; it lives as long as the chat module is active and is the correct owner of cross-screen infrastructure concerns. All three flush triggers (foreground, APNs, BGAppRefreshTask) route to the same <code>FlushPendingMessagesUseCase</code>.</p>
     </div>
 
     <h3>Interview Q&amp;A</h3>
@@ -872,7 +1128,7 @@ Incoming frame: { <span class="st">"channel"</span>: <span class="st">"conv-abc"
         <tbody>
           <tr>
             <td>Why WebSocket for inbound but HTTP for outbound?</td>
-            <td>HTTP gives you delivery confirmation, status codes, and idempotency. WebSocket fire-and-forget has none of those guarantees. The direction of the data determines the protocol.</td>
+            <td>HTTP gives delivery confirmation, status codes, and idempotency. WebSocket fire-and-forget has none of those guarantees. The direction of the data determines the protocol.</td>
           </tr>
           <tr>
             <td>Why one socket?</td>
@@ -884,11 +1140,43 @@ Incoming frame: { <span class="st">"channel"</span>: <span class="st">"conv-abc"
           </tr>
           <tr>
             <td>What happens if a send fails while offline?</td>
-            <td><code>PendingMessageQueue.enqueue(PendingMessageDTO)</code> persists it to disk. On next app foreground, <code>ChatCoordinator</code> triggers <code>FlushPendingMessagesUseCase</code> which re-sends with the same <code>clientId</code> — server deduplicates.</td>
+            <td><code>PendingMessageQueue.enqueue(PendingMessageDTO)</code> persists it to disk. On next trigger (foreground, APNs push, or BGAppRefreshTask), <code>ChatCoordinator</code> calls <code>FlushPendingMessagesUseCase</code> which re-sends with the same <code>clientId</code> — server deduplicates.</td>
           </tr>
           <tr>
             <td>Why is <code>clientId</code> generated in <code>SendMessageRequest.init</code>?</td>
             <td>So the same request object always carries the same key. Retries and queue flushes re-use it automatically — no caller needs to track the UUID.</td>
+          </tr>
+          <tr>
+            <td>What happens when the WebSocket drops?</td>
+            <td><code>WebSocketClient</code> (CoreKit) handles reconnect internally — <code>NWPathMonitor</code> detects <code>.satisfied</code>, exponential backoff retries <code>connect()</code>, then yields <code>.connected</code>. <code>MessageRepository</code> observes that event, fires <code>GET ?after=lastKnownSeq</code>, writes to Core Data, and FRC re-yields before re-subscribing.</td>
+          </tr>
+          <tr>
+            <td>Why <code>sequence</code> on <code>MessageDTO</code>?</td>
+            <td>Ordering, gap detection, and reconnect catch-up all require a monotonic server-assigned sequence. Without it, arrival order is the only ordering signal — unreliable across reconnects.</td>
+          </tr>
+          <tr>
+            <td>Why Core Data over Realm for messages?</td>
+            <td>Chat is append-heavy with cursor reads. <code>NSFetchRequest</code> with <code>fetchBatchSize</code> maps directly. <code>NSFetchedResultsController</code> bridges naturally into <code>AsyncStream</code>. Realm's live-object model conflicts with Swift actor isolation (<code>Sendable</code>) and adds a dependency without benefit here.</td>
+          </tr>
+          <tr>
+            <td>Why two use cases for messages instead of one?</td>
+            <td>Different execution models. <code>ObserveMessagesUseCase</code> returns <code>AsyncStream&lt;[Message]&gt;</code> — never completes. <code>FetchMessagesUseCase</code> is <code>async throws</code> — completes immediately. You cannot merge different return types without two modes of operation in one use case.</td>
+          </tr>
+          <tr>
+            <td>Why <code>ObserveMessagesUseCase</code> instead of <code>StreamMessagesUseCase</code>?</td>
+            <td><code>StreamMessages</code> implied WebSocket as the source — an implementation detail. The domain intent is observation of a live resource. FRC is the stream source; WebSocket is just a write path into Core Data.</td>
+          </tr>
+          <tr>
+            <td>Why does <code>FetchMessagesUseCase</code> not return messages to the ViewModel?</td>
+            <td>It only triggers a remote fetch + Core Data write. <code>ObserveMessagesUseCase</code>'s FRC detects the batch insert and re-yields the expanded list. One delivery path — no dual accumulation.</td>
+          </tr>
+          <tr>
+            <td>How does unread count stay in sync across devices?</td>
+            <td><code>POST /conversations/{id}/read</code> on open. Server resets the counter and broadcasts <code>conversation.unread_updated</code> to all active devices via WebSocket. The conversation list updates reactively — no re-fetch.</td>
+          </tr>
+          <tr>
+            <td>Why two paths for message delivery (stream vs HTTP catch-up)?</td>
+            <td>The stream is for low-latency, low-volume real-time events. Catch-up after reconnect can be hundreds of messages — routing that through the stream exhausts the buffer. HTTP catch-up is paginated and retryable; the stream stays clean for live events.</td>
           </tr>
         </tbody>
       </table>
