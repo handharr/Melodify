@@ -1,4 +1,5 @@
 import Foundation
+import CoreKit
 
 struct SearchSession {
     let request: SearchTracksRequest

@@ -1,4 +1,5 @@
 import Foundation
+import CoreKit
 
 struct CreateReservationQuery: Sendable, Equatable {
     let localId: UUID

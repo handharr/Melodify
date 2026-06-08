@@ -1,4 +1,5 @@
 import Foundation
+import CoreKit
 
 typealias FetchRestaurantsRequest = Request<Void, FetchRestaurantsPath>
 

@@ -1,4 +1,5 @@
 import Foundation
+import CoreKit
 
 struct FetchHomeSectionsQuery: Sendable {
     let genreQueries: [(genre: String, query: SearchTracksQuery)]

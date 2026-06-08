@@ -1,4 +1,5 @@
 import Foundation
+import CoreKit
 
 struct SearchHotelsQuery: Sendable, Equatable {
     let destination: String

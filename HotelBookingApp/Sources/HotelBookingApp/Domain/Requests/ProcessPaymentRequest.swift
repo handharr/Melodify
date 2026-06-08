@@ -1,4 +1,5 @@
 import Foundation
+import CoreKit
 
 struct ProcessPaymentQuery: Sendable, Equatable {
     let paymentToken: String

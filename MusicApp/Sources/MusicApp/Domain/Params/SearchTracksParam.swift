@@ -1,4 +1,5 @@
 import Foundation
+import CoreKit
 
 struct SearchTracksQuery: Sendable, Equatable {
     let term: String

@@ -1,4 +1,5 @@
 import Foundation
+import CoreKit
 
 struct FetchStoriesQuery: Sendable, Equatable {
     let cursor: Int?

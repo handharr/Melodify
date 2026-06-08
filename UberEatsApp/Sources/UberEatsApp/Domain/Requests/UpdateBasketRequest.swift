@@ -1,4 +1,5 @@
 import Foundation
+import CoreKit
 
 typealias UpdateBasketRequest = Request<UpdateBasketQuery, Void>
 

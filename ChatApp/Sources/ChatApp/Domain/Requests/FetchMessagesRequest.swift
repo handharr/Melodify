@@ -1,4 +1,5 @@
 import Foundation
+import CoreKit
 
 struct FetchMessagesPath: Sendable, Equatable {
     let conversationId: String

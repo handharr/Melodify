@@ -1,4 +1,5 @@
 import Foundation
+import CoreKit
 
 struct CreatePlaylistQuery: Sendable {
     let name: String
