@@ -1,0 +1,9 @@
+import Foundation
+
+struct DishDTO: Codable, Sendable {
+    let dishID: Int
+    let restaurantID: Int
+    let name: String
+    let price: Double
+    let imageURL: String
+}

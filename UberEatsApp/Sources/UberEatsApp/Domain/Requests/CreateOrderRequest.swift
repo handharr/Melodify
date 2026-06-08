@@ -1,0 +1,9 @@
+import Foundation
+
+typealias CreateOrderRequest = Request<CreateOrderQuery, Void>
+
+struct CreateOrderQuery: Sendable {
+    let userID: Int
+    let basketID: Int
+    let idempotencyKey: UUID
+}
