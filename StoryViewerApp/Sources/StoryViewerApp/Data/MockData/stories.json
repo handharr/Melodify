@@ -1,0 +1,42 @@
+[
+  {
+    "photoID": 1,
+    "photoURL": "https://picsum.photos/seed/story1/800/1200",
+    "profilePicURL": "https://picsum.photos/seed/avatar1/100/100",
+    "authorName": "Alice",
+    "createdAt": 0,
+    "expireAt": 0
+  },
+  {
+    "photoID": 2,
+    "photoURL": "https://picsum.photos/seed/story2/800/1200",
+    "profilePicURL": "https://picsum.photos/seed/avatar2/100/100",
+    "authorName": "Bob",
+    "createdAt": 0,
+    "expireAt": 0
+  },
+  {
+    "photoID": 3,
+    "photoURL": "https://picsum.photos/seed/story3/800/1200",
+    "profilePicURL": "https://picsum.photos/seed/avatar3/100/100",
+    "authorName": "Carol",
+    "createdAt": 0,
+    "expireAt": 0
+  },
+  {
+    "photoID": 4,
+    "photoURL": "https://picsum.photos/seed/story4/800/1200",
+    "profilePicURL": "https://picsum.photos/seed/avatar4/100/100",
+    "authorName": "Dan",
+    "createdAt": 0,
+    "expireAt": 0
+  },
+  {
+    "photoID": 5,
+    "photoURL": "https://picsum.photos/seed/story5/800/1200",
+    "profilePicURL": "https://picsum.photos/seed/avatar5/100/100",
+    "authorName": "Eve",
+    "createdAt": 0,
+    "expireAt": 0
+  }
+]
