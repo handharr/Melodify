@@ -3,6 +3,8 @@ import CoreKit
 import MusicApp
 import ChatApp
 import HotelBookingApp
+import StoryViewerApp
+import UberEatsApp
 import MelodifyDesignSystem
 
 final class AppCoordinator: DeepLinkHandler {
@@ -12,6 +14,8 @@ final class AppCoordinator: DeepLinkHandler {
     private var musicCoordinator: MusicCoordinator?
     private var chatCoordinator: ChatCoordinator?
     private var hotelBookingCoordinator: HotelBookingCoordinator?
+    private var storyCoordinator: StoryCoordinator?
+    private var uberEatsCoordinator: UberEatsCoordinator?
     private var deepLinkObserver: Any?
 
     init(window: UIWindow) {
@@ -49,7 +53,8 @@ final class AppCoordinator: DeepLinkHandler {
         switch id {
         case .music:        pushMusicApp()
         case .chat:         pushChatApp()
-        case .feed:         pushPlaceholder(title: "Feed", icon: "newspaper.fill")
+        case .storyViewer:  pushStoryViewerApp()
+        case .uberEats:     pushUberEatsApp()
         case .dsCatalog:    navigationController.pushViewController(DSCatalogViewController(), animated: true)
         case .hotelBooking: pushHotelBookingApp()
         }
@@ -78,21 +83,17 @@ final class AppCoordinator: DeepLinkHandler {
         navigationController.pushViewController(coordinator.tabBarController, animated: true)
     }
 
-    @MainActor private func pushPlaceholder(title: String, icon: String) {
-        let vc = UIViewController()
-        vc.title = title
-        vc.view.backgroundColor = MDSColor.surface
-        let label = UILabel()
-        label.text = "\(title) — Coming Soon"
-        label.font = Typography.body
-        label.textColor = MDSColor.textSecondary
-        label.translatesAutoresizingMaskIntoConstraints = false
-        vc.view.addSubview(label)
-        NSLayoutConstraint.activate([
-            label.centerXAnchor.constraint(equalTo: vc.view.centerXAnchor),
-            label.centerYAnchor.constraint(equalTo: vc.view.centerYAnchor),
-        ])
-        navigationController.pushViewController(vc, animated: true)
+    @MainActor private func pushStoryViewerApp() {
+        let coordinator = StoryCoordinator(navigationController: navigationController)
+        storyCoordinator = coordinator
+        Task { await coordinator.start() }
+    }
+
+    @MainActor private func pushUberEatsApp() {
+        let coordinator = UberEatsCoordinator(userID: 1, addressID: 1)
+        coordinator.start()
+        uberEatsCoordinator = coordinator
+        navigationController.pushViewController(coordinator.navigationController, animated: true)
     }
 
     @MainActor func handle(_ link: DeepLink) {

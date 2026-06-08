@@ -4,7 +4,8 @@ import MelodifyDesignSystem
 enum AppCardID {
     case music
     case chat
-    case feed
+    case storyViewer
+    case uberEats
     case dsCatalog
     case hotelBooking
 }
@@ -37,15 +38,17 @@ final class HomeViewController: UIViewController {
     }()
 
     private let cards: [AppCard] = [
-        AppCard(id: .music,    icon: "music.note",       title: "Music",
+        AppCard(id: .music,        icon: "music.note",         title: "Music",
                 subtitle: "HLS streaming · AudioService · FetchPolicy"),
-        AppCard(id: .chat,     icon: "message.fill",     title: "Chat",
+        AppCard(id: .chat,         icon: "message.fill",       title: "Chat",
                 subtitle: "WebSocket mux · MessageContent · Send queue"),
-        AppCard(id: .feed,     icon: "newspaper.fill",   title: "Feed",
-                subtitle: "Cursor pagination · Realm · Prefetching"),
-        AppCard(id: .dsCatalog, icon: "paintpalette.fill", title: "DS Catalog",
+        AppCard(id: .storyViewer,  icon: "play.circle.fill",   title: "Story Viewer",
+                subtitle: "Three-view recycling · Prefetch · Auto-advance timer"),
+        AppCard(id: .uberEats,     icon: "fork.knife",         title: "Uber Eats",
+                subtitle: "SSE order tracking · Basket · Three-tier API"),
+        AppCard(id: .dsCatalog,    icon: "paintpalette.fill",  title: "DS Catalog",
                 subtitle: "MelodifyDesignSystem component browser"),
-        AppCard(id: .hotelBooking, icon: "building.2.fill", title: "Hotel Booking",
+        AppCard(id: .hotelBooking, icon: "building.2.fill",    title: "Hotel Booking",
                 subtitle: "ReservationService · Stripe facade · Offset pagination"),
     ]
 
