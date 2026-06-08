@@ -41,7 +41,7 @@ public final class ChatViewController: UIViewController {
         }
         let cv = UICollectionView(frame: .zero, collectionViewLayout: layout)
         cv.translatesAutoresizingMaskIntoConstraints = false
-        cv.backgroundColor = .systemBackground
+        cv.backgroundColor = MDSColor.surface
         cv.keyboardDismissMode = .interactive
         return cv
     }()

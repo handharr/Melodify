@@ -1,4 +1,5 @@
 import UIKit
+import MelodifyDesignSystem
 
 final class ImageMessageCell: UICollectionViewCell {
     private let imageView: UIImageView = {
@@ -6,15 +7,15 @@ final class ImageMessageCell: UICollectionViewCell {
         iv.contentMode = .scaleAspectFill
         iv.clipsToBounds = true
         iv.layer.cornerRadius = 12
-        iv.backgroundColor = .secondarySystemBackground
+        iv.backgroundColor = MDSColor.surfaceElevated
         iv.translatesAutoresizingMaskIntoConstraints = false
         return iv
     }()
 
     private let metaLabel: UILabel = {
         let l = UILabel()
-        l.font = .systemFont(ofSize: 11)
-        l.textColor = .secondaryLabel
+        l.font = Typography.caption
+        l.textColor = MDSColor.textSecondary
         l.translatesAutoresizingMaskIntoConstraints = false
         return l
     }()

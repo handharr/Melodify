@@ -8,13 +8,12 @@ let package = Package(
         .library(name: "StoryViewerApp", targets: ["StoryViewerApp"])
     ],
     dependencies: [
-        .package(path: "../CoreKit"),
-        .package(path: "../MelodifyDesignSystem")
+        .package(path: "../CoreKit")
     ],
     targets: [
         .target(
             name: "StoryViewerApp",
-            dependencies: ["CoreKit", "MelodifyDesignSystem"],
+            dependencies: ["CoreKit"],
             path: "Sources/StoryViewerApp",
             resources: [
                 .process("Data/MockData")
