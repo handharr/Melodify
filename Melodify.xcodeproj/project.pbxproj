@@ -8,6 +8,9 @@
 
 /* Begin PBXBuildFile section */
 		B4403E022FBE9E3B0004ADA9 /* MelodifyDesignSystem in Frameworks */ = {isa = PBXBuildFile; productRef = B4403E012FBE9E3B0004ADA9 /* MelodifyDesignSystem */; };
+		B4A843F52FD6FBC500CE5DEA /* HotelBookingApp in Frameworks */ = {isa = PBXBuildFile; productRef = B4A843F42FD6FBC500CE5DEA /* HotelBookingApp */; };
+		B4A843F82FD6FBDF00CE5DEA /* StoryViewerApp in Frameworks */ = {isa = PBXBuildFile; productRef = B4A843F72FD6FBDF00CE5DEA /* StoryViewerApp */; };
+		B4A843FB2FD6FBF000CE5DEA /* UberEatsApp in Frameworks */ = {isa = PBXBuildFile; productRef = B4A843FA2FD6FBF000CE5DEA /* UberEatsApp */; };
 		B4F25DFF2FD5289800F40E37 /* CoreKit in Frameworks */ = {isa = PBXBuildFile; productRef = B4F25DFE2FD5289800F40E37 /* CoreKit */; };
 		B4F25E022FD528A600F40E37 /* MusicApp in Frameworks */ = {isa = PBXBuildFile; productRef = B4F25E012FD528A600F40E37 /* MusicApp */; };
 		B4F25E032FD528C000F40E37 /* ChatApp in Frameworks */ = {isa = PBXBuildFile; productRef = B4F25E052FD528C000F40E37 /* ChatApp */; };
@@ -59,9 +62,12 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B4A843F82FD6FBDF00CE5DEA /* StoryViewerApp in Frameworks */,
 				B4F25E022FD528A600F40E37 /* MusicApp in Frameworks */,
 				B4F25E032FD528C000F40E37 /* ChatApp in Frameworks */,
+				B4A843F52FD6FBC500CE5DEA /* HotelBookingApp in Frameworks */,
 				B4F25DFF2FD5289800F40E37 /* CoreKit in Frameworks */,
+				B4A843FB2FD6FBF000CE5DEA /* UberEatsApp in Frameworks */,
 				B4403E022FBE9E3B0004ADA9 /* MelodifyDesignSystem in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -127,6 +133,9 @@
 				B4F25DFE2FD5289800F40E37 /* CoreKit */,
 				B4F25E012FD528A600F40E37 /* MusicApp */,
 				B4F25E052FD528C000F40E37 /* ChatApp */,
+				B4A843F42FD6FBC500CE5DEA /* HotelBookingApp */,
+				B4A843F72FD6FBDF00CE5DEA /* StoryViewerApp */,
+				B4A843FA2FD6FBF000CE5DEA /* UberEatsApp */,
 			);
 			productName = Melodify;
 			productReference = B4FEE2132FB84A5F00626790 /* Melodify.app */;
@@ -215,6 +224,9 @@
 				B4F25DFD2FD5289800F40E37 /* XCLocalSwiftPackageReference "CoreKit" */,
 				B4F25E002FD528A600F40E37 /* XCLocalSwiftPackageReference "MusicApp" */,
 				B4F25E042FD528C000F40E37 /* XCLocalSwiftPackageReference "ChatApp" */,
+				B4A843F32FD6FBC500CE5DEA /* XCLocalSwiftPackageReference "HotelBookingApp" */,
+				B4A843F62FD6FBDF00CE5DEA /* XCLocalSwiftPackageReference "StoryViewerApp" */,
+				B4A843F92FD6FBF000CE5DEA /* XCLocalSwiftPackageReference "UberEatsApp" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = B4FEE2142FB84A5F00626790 /* Products */;
@@ -642,6 +654,18 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = MelodifyDesignSystem;
 		};
+		B4A843F32FD6FBC500CE5DEA /* XCLocalSwiftPackageReference "HotelBookingApp" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = HotelBookingApp;
+		};
+		B4A843F62FD6FBDF00CE5DEA /* XCLocalSwiftPackageReference "StoryViewerApp" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = StoryViewerApp;
+		};
+		B4A843F92FD6FBF000CE5DEA /* XCLocalSwiftPackageReference "UberEatsApp" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = UberEatsApp;
+		};
 		B4F25DFD2FD5289800F40E37 /* XCLocalSwiftPackageReference "CoreKit" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = CoreKit;
@@ -660,6 +684,18 @@
 		B4403E012FBE9E3B0004ADA9 /* MelodifyDesignSystem */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = MelodifyDesignSystem;
+		};
+		B4A843F42FD6FBC500CE5DEA /* HotelBookingApp */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = HotelBookingApp;
+		};
+		B4A843F72FD6FBDF00CE5DEA /* StoryViewerApp */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = StoryViewerApp;
+		};
+		B4A843FA2FD6FBF000CE5DEA /* UberEatsApp */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = UberEatsApp;
 		};
 		B4F25DFE2FD5289800F40E37 /* CoreKit */ = {
 			isa = XCSwiftPackageProductDependency;

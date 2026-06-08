@@ -2,6 +2,7 @@ import UIKit
 import CoreKit
 import MusicApp
 import ChatApp
+import HotelBookingApp
 import MelodifyDesignSystem
 
 final class AppCoordinator: DeepLinkHandler {
@@ -10,6 +11,7 @@ final class AppCoordinator: DeepLinkHandler {
     private var homeCoordinator: HomeCoordinator?
     private var musicCoordinator: MusicCoordinator?
     private var chatCoordinator: ChatCoordinator?
+    private var hotelBookingCoordinator: HotelBookingCoordinator?
     private var deepLinkObserver: Any?
 
     init(window: UIWindow) {
@@ -45,10 +47,11 @@ final class AppCoordinator: DeepLinkHandler {
 
     @MainActor private func push(_ id: AppCardID) {
         switch id {
-        case .music:    pushMusicApp()
-        case .chat:     pushChatApp()
-        case .feed:     pushPlaceholder(title: "Feed", icon: "newspaper.fill")
-        case .dsCatalog: navigationController.pushViewController(DSCatalogViewController(), animated: true)
+        case .music:        pushMusicApp()
+        case .chat:         pushChatApp()
+        case .feed:         pushPlaceholder(title: "Feed", icon: "newspaper.fill")
+        case .dsCatalog:    navigationController.pushViewController(DSCatalogViewController(), animated: true)
+        case .hotelBooking: pushHotelBookingApp()
         }
     }
 
@@ -66,6 +69,13 @@ final class AppCoordinator: DeepLinkHandler {
         )
         coordinator.start()
         chatCoordinator = coordinator
+    }
+
+    @MainActor private func pushHotelBookingApp() {
+        let coordinator = HotelBookingCoordinator()
+        coordinator.start()
+        hotelBookingCoordinator = coordinator
+        navigationController.pushViewController(coordinator.tabBarController, animated: true)
     }
 
     @MainActor private func pushPlaceholder(title: String, icon: String) {

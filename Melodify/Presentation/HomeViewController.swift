@@ -6,6 +6,7 @@ enum AppCardID {
     case chat
     case feed
     case dsCatalog
+    case hotelBooking
 }
 
 private struct AppCard {
@@ -44,6 +45,8 @@ final class HomeViewController: UIViewController {
                 subtitle: "Cursor pagination · Realm · Prefetching"),
         AppCard(id: .dsCatalog, icon: "paintpalette.fill", title: "DS Catalog",
                 subtitle: "MelodifyDesignSystem component browser"),
+        AppCard(id: .hotelBooking, icon: "building.2.fill", title: "Hotel Booking",
+                subtitle: "ReservationService · Stripe facade · Offset pagination"),
     ]
 
     override func viewDidLoad() {
