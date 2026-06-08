@@ -1,0 +1,1133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UberEatsApp — System Design</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --surface-elevated: #21262d;
+      --border: #30363d;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --text-muted: #8b949e;
+      --accent: #58a6ff;
+      --accent-muted: #1f3a5f;
+      --green: #3fb950;
+      --green-muted: #1a3626;
+      --orange: #d29922;
+      --orange-muted: #3a2a0a;
+      --purple: #bc8cff;
+      --purple-muted: #2d1f4e;
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      line-height: 1.6;
+      max-width: 900px;
+      margin: auto;
+      padding: 2rem;
+      padding-bottom: 5rem;
+    }
+
+    a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    h2 {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: var(--text);
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 1.25rem;
+    }
+
+    h3 {
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: var(--accent);
+      margin: 1.25rem 0 0.75rem;
+    }
+
+    p {
+      margin: 0.75rem 0;
+    }
+
+    ul, ol {
+      padding-left: 1.5rem;
+      margin: 0.5rem 0 0.75rem;
+    }
+
+    li {
+      margin: 0.3rem 0;
+    }
+
+    strong {
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    /* nav breadcrumb */
+    nav.breadcrumb {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin-bottom: 1.5rem;
+    }
+
+    nav.breadcrumb a {
+      color: var(--accent);
+    }
+
+    /* header */
+    header {
+      padding: 2rem 0 1.5rem;
+    }
+
+    header h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 0.4rem;
+    }
+
+    header p {
+      color: var(--text-muted);
+      font-size: 1rem;
+      margin: 0;
+    }
+
+    /* toc */
+    nav.toc {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 2rem;
+    }
+
+    nav.toc h4 {
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+      margin-bottom: 0.75rem;
+    }
+
+    nav.toc ol {
+      list-style: none;
+      padding: 0;
+      counter-reset: toc-counter;
+    }
+
+    nav.toc ol li {
+      counter-increment: toc-counter;
+      display: flex;
+      align-items: baseline;
+      gap: 0.6rem;
+      padding: 0.3rem 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    nav.toc ol li:last-child {
+      border-bottom: none;
+    }
+
+    nav.toc ol li::before {
+      content: counter(toc-counter, decimal-leading-zero);
+      color: var(--accent);
+      font-size: 0.8rem;
+      font-weight: 700;
+      min-width: 1.8rem;
+    }
+
+    nav.toc ol li a {
+      color: var(--text);
+      text-decoration: none;
+      font-size: 0.95rem;
+    }
+
+    nav.toc ol li a:hover {
+      color: var(--accent);
+    }
+
+    /* sections */
+    section {
+      padding: 2rem 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    section:last-of-type {
+      border-bottom: none;
+    }
+
+    /* callout */
+    .callout {
+      border-left: 4px solid var(--accent);
+      background: var(--accent-muted);
+      padding: 1rem 1.25rem;
+      border-radius: 6px;
+      margin: 1rem 0;
+    }
+
+    .callout p {
+      margin: 0;
+    }
+
+    /* rule */
+    .rule {
+      border-left: 4px solid var(--green);
+      background: var(--green-muted);
+      padding: 1rem 1.25rem;
+      border-radius: 6px;
+      margin: 1rem 0;
+    }
+
+    .rule p {
+      margin: 0;
+    }
+
+    /* warn */
+    .warn {
+      border-left: 4px solid var(--orange);
+      background: var(--orange-muted);
+      padding: 1rem 1.25rem;
+      border-radius: 6px;
+      margin: 1rem 0;
+    }
+
+    .warn p {
+      margin: 0;
+    }
+
+    /* table */
+    .table-wrap {
+      overflow-x: auto;
+      margin: 1rem 0;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+
+    thead tr {
+      background: var(--surface);
+    }
+
+    thead th {
+      color: var(--text-muted);
+      font-weight: 600;
+      text-align: left;
+      padding: 0.6rem 1rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    tbody tr:nth-child(even) {
+      background: var(--surface-elevated);
+    }
+
+    tbody td {
+      padding: 0.6rem 1rem;
+      border-bottom: 1px solid var(--border);
+      color: var(--text);
+    }
+
+    tbody tr:last-child td {
+      border-bottom: none;
+    }
+
+    /* code */
+    code {
+      background: var(--surface-elevated);
+      color: var(--text);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.85em;
+      font-family: monospace;
+    }
+
+    pre {
+      margin: 1rem 0;
+      border-radius: 6px;
+      overflow-x: auto;
+      border: 1px solid var(--border);
+    }
+
+    pre code {
+      display: block;
+      background: var(--surface-elevated);
+      color: var(--text);
+      padding: 1rem;
+      border-radius: 6px;
+      font-size: 0.875rem;
+      line-height: 1.7;
+      overflow-x: auto;
+      white-space: pre;
+    }
+
+    /* syntax highlight */
+    .kw { color: var(--accent); }          /* keywords: struct, let, func, etc. */
+    .ty { color: #79c0ff; }                /* type names */
+    .st { color: #ffa657; }                /* string literals */
+    .cm { color: var(--text-muted); }      /* comments */
+    .nm { color: #d2a8ff; }                /* property / param names */
+    .gr { color: var(--green); }           /* architectural / special terms */
+
+    /* stack */
+    .stack {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 1rem 0;
+    }
+
+    .stack-row {
+      display: flex;
+      flex-direction: row;
+      align-items: flex-start;
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid var(--border);
+      gap: 1rem;
+    }
+
+    .stack-row:last-child {
+      border-bottom: none;
+    }
+
+    .stack-row:nth-child(even) {
+      background: var(--surface-elevated);
+    }
+
+    .stack-label {
+      min-width: 120px;
+      font-weight: 700;
+      color: var(--accent);
+      font-size: 0.85rem;
+      padding-top: 0.1rem;
+    }
+
+    .stack-content {
+      color: var(--text);
+      font-size: 0.9rem;
+      line-height: 1.7;
+      flex: 1;
+    }
+
+    .stack-content code {
+      margin: 0 2px;
+    }
+
+    .stack-content strong {
+      color: var(--text-muted);
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      display: block;
+      margin-top: 0.3rem;
+    }
+
+    .stack-content strong:first-child {
+      margin-top: 0;
+    }
+
+    /* bottom nav */
+    .bottom-nav {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: var(--surface-elevated);
+      border-top: 1px solid var(--border);
+      display: flex;
+      flex-direction: row;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.75rem 2rem;
+      font-size: 0.9rem;
+    }
+
+    .bottom-nav a {
+      color: var(--accent);
+    }
+
+    /* ascii diagram */
+    .ascii-diagram {
+      font-family: monospace;
+      font-size: 0.78rem;
+      line-height: 1.5;
+      color: var(--text-muted);
+      background: var(--surface-elevated);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 1rem;
+      overflow-x: auto;
+      white-space: pre;
+      margin: 1rem 0;
+    }
+
+    .ascii-diagram .ascii-layer-label {
+      color: var(--accent);
+      font-weight: 700;
+    }
+
+    /* delta grid */
+    .delta-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+
+    .delta-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+
+    .delta-topic {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: var(--accent);
+    }
+
+    .delta-decision {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--text);
+      line-height: 1.4;
+    }
+
+    .delta-rationale {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+
+  <nav class="breadcrumb">← <a href="../index.html">Home</a></nav>
+
+  <header>
+    <h1>UberEatsApp</h1>
+    <p>System Design — Melodify Interview Lab</p>
+  </header>
+
+  <nav class="toc">
+    <h4>Contents</h4>
+    <ol>
+      <li><a href="#delta">Delta — Key Decisions</a></li>
+      <li><a href="#requirements">Requirements</a></li>
+      <li><a href="#api-design">API Design</a></li>
+      <li><a href="#data-model">Data Model</a></li>
+      <li><a href="#high-level-design">High-Level Design</a></li>
+      <li><a href="#data-flow">Data Flow</a></li>
+      <li><a href="#technical-deep-dive">Technical Deep-dive</a></li>
+      <li><a href="#vocabulary">Vocabulary Mapping</a></li>
+    </ol>
+  </nav>
+
+  <!-- ═══════════════════════════════════════════════════ Delta -->
+  <section id="delta">
+    <h2>Delta — Key Decisions</h2>
+    <div class="delta-grid">
+
+      <div class="delta-card">
+        <div class="delta-topic">SSE over Polling</div>
+        <div class="delta-decision">One persistent SSE connection replaces up to 600 HTTP polling requests per order</div>
+        <div class="delta-rationale">A 1-second poll over a 10-minute delivery = 600 requests; 599 return no new data. SSE holds one connection and the server writes only when state changes.</div>
+      </div>
+
+      <div class="delta-card">
+        <div class="delta-topic">SSE over WebSocket</div>
+        <div class="delta-decision">Courier tracking uses SSE, not WebSocket, because the channel is server → client only</div>
+        <div class="delta-rationale">WebSockets add bidirectional complexity — a separate protocol, manual reconnection, and ws:// infrastructure — that this unidirectional tracking use case does not need.</div>
+      </div>
+
+      <div class="delta-card">
+        <div class="delta-topic">AnyPublisher for OrderService</div>
+        <div class="delta-decision"><code>OrderService</code> publishes <code>AnyPublisher&lt;Order, AppError&gt;</code> rather than <code>AsyncStream</code></div>
+        <div class="delta-rationale"><code>OrderStatusViewModel</code> is already Combine-based; <code>AnyPublisher</code> integrates natively with <code>debounce</code>/<code>throttle</code> for burst SSE events and avoids manual bridging at the ViewModel boundary.</div>
+      </div>
+
+      <div class="delta-card">
+        <div class="delta-topic">OrderService Scoping</div>
+        <div class="delta-decision"><code>OrderService</code> is scoped to <code>OrderCoordinator</code>, not app-scoped</div>
+        <div class="delta-rationale">There is no reason to hold an SSE connection while the user is not on the Order Status screen — it drains battery and holds a server connection. ViewController scope is too narrow; Coordinator is the right granularity.</div>
+      </div>
+
+      <div class="delta-card">
+        <div class="delta-topic">Server-Hosted Basket</div>
+        <div class="delta-decision">Basket lives on the backend, not only on-device, for cross-device continuity</div>
+        <div class="delta-rationale">Start an order on iPhone, continue on web — every basket mutation hits the network. A local Core Data mirror enables instant UI restore and optimistic display while the server confirms.</div>
+      </div>
+
+      <div class="delta-card">
+        <div class="delta-topic">Image Loading Facade</div>
+        <div class="delta-decision">All image loads go through a <code>UIImageView</code> extension, never the library directly</div>
+        <div class="delta-rationale">Same isolation principle as <code>ThirdPartyDataSource</code> — swapping SDWebImage for Kingfisher (or a native loader) touches one file, not every cell that loads a restaurant or dish image.</div>
+      </div>
+
+      <div class="delta-card">
+        <div class="delta-topic">UIKit Throughout</div>
+        <div class="delta-decision">UIKit used for all screens — not SwiftUI — due to scroll lifecycle and MapKit requirements</div>
+        <div class="delta-rationale">Restaurant list and menu need <code>UITableView</code>/<code>UICollectionView</code> scroll lifecycle hooks for pagination; Order Status embeds <code>MKMapView</code> which requires direct delegate and annotation lifecycle control.</div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════ 1. Requirements -->
+  <section id="requirements">
+    <h2>1. Requirements</h2>
+
+    <h3>Functional</h3>
+    <ul>
+      <li>Choose a delivery address from saved addresses</li>
+      <li>View nearby restaurants filtered by selected address</li>
+      <li>Browse restaurant menus and add dishes to a basket</li>
+      <li>Edit basket (change quantities, remove items), then place an order</li>
+      <li>Track order status and courier position in real-time on a map</li>
+      <li>Payment is out of scope</li>
+    </ul>
+
+    <h3>Non-Functional</h3>
+    <ul>
+      <li>Reasonable performance on slow mobile networks</li>
+      <li>Optimise for limited on-device storage</li>
+      <li>Do not overload the backend — no polling; prefer SSE for real-time updates</li>
+    </ul>
+
+    <h3>Screens in Scope</h3>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Screen</th><th>Description</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Restaurant List</td><td>Address selector + list of nearby restaurants (name, image, rating)</td></tr>
+          <tr><td>Menu</td><td>Dish list for a selected restaurant (name, price, image); add to basket</td></tr>
+          <tr><td>Basket</td><td>View and edit selected dishes; place order (payment excluded)</td></tr>
+          <tr><td>Order Status</td><td>Current order status + courier real-time position on a map</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════ 2. API Design -->
+  <section id="api-design">
+    <h2>2. API Design</h2>
+
+    <h3>REST Endpoints</h3>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>#</th><th>Method</th><th>Path</th><th>Body</th><th>Returns</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>1</td><td><span class="gr">GET</span></td><td><code>/users/&lt;userID&gt;</code></td><td>—</td><td><code>UserDTO</code></td></tr>
+          <tr><td>2</td><td><span class="gr">GET</span></td><td><code>/restaurants/&lt;addressID&gt;</code></td><td>—</td><td><code>[RestaurantDTO]</code></td></tr>
+          <tr><td>3</td><td><span class="gr">GET</span></td><td><code>/dishes/&lt;restaurantID&gt;</code></td><td>—</td><td><code>[DishDTO]</code></td></tr>
+          <tr><td>4</td><td><span class="gr">POST</span></td><td><code>/basket</code></td><td><code>{userID, restaurantID, dishID, count}</code></td><td><code>BasketDTO</code></td></tr>
+          <tr><td>5</td><td><span class="gr">PATCH</span></td><td><code>/basket</code></td><td><code>{basketID, dishID, count}</code></td><td><code>BasketDTO</code></td></tr>
+          <tr><td>6</td><td><span class="gr">GET</span></td><td><code>/basket/&lt;basketID&gt;</code></td><td>—</td><td><code>BasketDTO</code></td></tr>
+          <tr><td>7</td><td><span class="gr">POST</span></td><td><code>/orders</code></td><td><code>{userID, basketID, idempotencyKey}</code></td><td><code>OrderDTO</code></td></tr>
+          <tr><td>8</td><td><span class="gr">GET</span></td><td><code>/orders/&lt;orderID&gt;</code></td><td>—</td><td><code>OrderDTO</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>SSE Endpoint</h3>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>#</th><th>Method</th><th>Path</th><th>Returns</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>9</td><td><span class="gr">GET</span></td><td><code>/live-order-status/&lt;orderID&gt;</code></td><td><code>text/event-stream</code> — courier coords + status per event</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="rule">
+      <p><strong>Idempotency key rule:</strong> <code>CreateOrderParam</code> includes <code>idempotencyKey: UUID()</code> generated at the call site — not inside the Repository or DataSource. The same request object carries the same key across retries; the server returns the existing order rather than a duplicate.</p>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════ 3. Data Model -->
+  <section id="data-model">
+    <h2>3. Data Model</h2>
+
+    <h3>Domain Models (pure Swift structs, no UIKit or Foundation networking)</h3>
+    <pre><code><span class="kw">struct</span> <span class="ty">User</span> {
+    <span class="kw">let</span> <span class="nm">userID</span>: <span class="ty">Int</span>
+    <span class="kw">let</span> <span class="nm">name</span>: <span class="ty">String</span>
+    <span class="kw">let</span> <span class="nm">email</span>: <span class="ty">String</span>
+    <span class="kw">let</span> <span class="nm">addresses</span>: [<span class="ty">Address</span>]
+    <span class="kw">let</span> <span class="nm">lastUsedAddress</span>: <span class="ty">Address</span>   <span class="cm">// drives initial restaurant list without extra fetch</span>
+}
+
+<span class="kw">struct</span> <span class="ty">Address</span> {
+    <span class="kw">let</span> <span class="nm">addressID</span>: <span class="ty">Int</span>
+    <span class="kw">let</span> <span class="nm">label</span>: <span class="ty">String</span>
+    <span class="kw">let</span> <span class="nm">city</span>: <span class="ty">String</span>
+    <span class="kw">let</span> <span class="nm">street</span>: <span class="ty">String</span>
+    <span class="kw">let</span> <span class="nm">flat</span>: <span class="ty">String</span>
+    <span class="kw">let</span> <span class="nm">postcode</span>: <span class="ty">String</span>
+    <span class="kw">let</span> <span class="nm">latitude</span>: <span class="ty">Double</span>
+    <span class="kw">let</span> <span class="nm">longitude</span>: <span class="ty">Double</span>
+}
+
+<span class="kw">struct</span> <span class="ty">Restaurant</span> {
+    <span class="kw">let</span> <span class="nm">restaurantID</span>: <span class="ty">Int</span>
+    <span class="kw">let</span> <span class="nm">name</span>: <span class="ty">String</span>
+    <span class="kw">let</span> <span class="nm">rating</span>: <span class="ty">Int</span>
+    <span class="kw">let</span> <span class="nm">address</span>: <span class="ty">Address</span>
+    <span class="kw">let</span> <span class="nm">imageURL</span>: <span class="ty">URL</span>
+}
+
+<span class="kw">struct</span> <span class="ty">Dish</span> {
+    <span class="kw">let</span> <span class="nm">dishID</span>: <span class="ty">Int</span>
+    <span class="kw">let</span> <span class="nm">restaurantID</span>: <span class="ty">Int</span>           <span class="cm">// FK: one-to-many with Restaurant</span>
+    <span class="kw">let</span> <span class="nm">name</span>: <span class="ty">String</span>
+    <span class="kw">let</span> <span class="nm">price</span>: <span class="ty">Double</span>
+    <span class="kw">let</span> <span class="nm">imageURL</span>: <span class="ty">URL</span>
+}
+
+<span class="kw">struct</span> <span class="ty">Basket</span> {
+    <span class="kw">let</span> <span class="nm">basketID</span>: <span class="ty">Int</span>
+    <span class="kw">let</span> <span class="nm">userID</span>: <span class="ty">Int</span>
+    <span class="kw">let</span> <span class="nm">restaurantID</span>: <span class="ty">Int</span>
+    <span class="kw">let</span> <span class="nm">selectedDishes</span>: [(dishID: <span class="ty">Int</span>, count: <span class="ty">Int</span>)]
+}
+
+<span class="kw">struct</span> <span class="ty">Order</span> {
+    <span class="kw">let</span> <span class="nm">orderID</span>: <span class="ty">Int</span>
+    <span class="kw">let</span> <span class="nm">status</span>: <span class="ty">OrderStatus</span>
+    <span class="kw">let</span> <span class="nm">basket</span>: <span class="ty">Basket</span>
+    <span class="kw">let</span> <span class="nm">courierLatitude</span>: <span class="ty">Double</span>     <span class="cm">// updated via SSE</span>
+    <span class="kw">let</span> <span class="nm">courierLongitude</span>: <span class="ty">Double</span>    <span class="cm">// updated via SSE</span>
+}
+
+<span class="kw">enum</span> <span class="ty">OrderStatus</span> {
+    <span class="kw">case</span> placed, preparing, pickedUp, inTransit, delivered, cancelled
+}</code></pre>
+
+    <h3>DTOs (Codable, mirror wire format)</h3>
+    <pre><code><span class="kw">struct</span> <span class="ty">UserDTO</span>: <span class="ty">Codable</span> {
+    <span class="kw">let</span> <span class="nm">userID</span>: <span class="ty">Int</span>
+    <span class="kw">let</span> <span class="nm">name</span>: <span class="ty">String</span>
+    <span class="kw">let</span> <span class="nm">email</span>: <span class="ty">String</span>
+    <span class="kw">let</span> <span class="nm">addresses</span>: [<span class="ty">AddressDTO</span>]
+    <span class="kw">let</span> <span class="nm">lastUsedAddressID</span>: <span class="ty">Int</span>
+}
+
+<span class="kw">struct</span> <span class="ty">AddressDTO</span>: <span class="ty">Codable</span> {
+    <span class="kw">let</span> <span class="nm">addressID</span>: <span class="ty">Int</span>
+    <span class="kw">let</span> <span class="nm">label</span>: <span class="ty">String</span>
+    <span class="kw">let</span> <span class="nm">city</span>: <span class="ty">String</span>
+    <span class="kw">let</span> <span class="nm">street</span>: <span class="ty">String</span>
+    <span class="kw">let</span> <span class="nm">flat</span>: <span class="ty">String</span>
+    <span class="kw">let</span> <span class="nm">postcode</span>: <span class="ty">String</span>
+    <span class="kw">let</span> <span class="nm">latitude</span>: <span class="ty">Double</span>
+    <span class="kw">let</span> <span class="nm">longitude</span>: <span class="ty">Double</span>
+}
+
+<span class="kw">struct</span> <span class="ty">RestaurantDTO</span>: <span class="ty">Codable</span> {
+    <span class="kw">let</span> <span class="nm">restaurantID</span>: <span class="ty">Int</span>
+    <span class="kw">let</span> <span class="nm">name</span>: <span class="ty">String</span>
+    <span class="kw">let</span> <span class="nm">rating</span>: <span class="ty">Int</span>
+    <span class="kw">let</span> <span class="nm">address</span>: <span class="ty">AddressDTO</span>
+    <span class="kw">let</span> <span class="nm">imageURL</span>: <span class="ty">String</span>
+}
+
+<span class="kw">struct</span> <span class="ty">DishDTO</span>: <span class="ty">Codable</span> {
+    <span class="kw">let</span> <span class="nm">dishID</span>: <span class="ty">Int</span>
+    <span class="kw">let</span> <span class="nm">restaurantID</span>: <span class="ty">Int</span>
+    <span class="kw">let</span> <span class="nm">name</span>: <span class="ty">String</span>
+    <span class="kw">let</span> <span class="nm">price</span>: <span class="ty">Double</span>
+    <span class="kw">let</span> <span class="nm">imageURL</span>: <span class="ty">String</span>
+}
+
+<span class="kw">struct</span> <span class="ty">BasketDTO</span>: <span class="ty">Codable</span> {
+    <span class="kw">let</span> <span class="nm">basketID</span>: <span class="ty">Int</span>
+    <span class="kw">let</span> <span class="nm">userID</span>: <span class="ty">Int</span>
+    <span class="kw">let</span> <span class="nm">restaurantID</span>: <span class="ty">Int</span>
+    <span class="kw">let</span> <span class="nm">selectedDishes</span>: [<span class="ty">BasketItemDTO</span>]
+}
+
+<span class="kw">struct</span> <span class="ty">BasketItemDTO</span>: <span class="ty">Codable</span> {
+    <span class="kw">let</span> <span class="nm">dishID</span>: <span class="ty">Int</span>
+    <span class="kw">let</span> <span class="nm">count</span>: <span class="ty">Int</span>
+}
+
+<span class="kw">struct</span> <span class="ty">OrderDTO</span>: <span class="ty">Codable</span> {
+    <span class="kw">let</span> <span class="nm">orderID</span>: <span class="ty">Int</span>
+    <span class="kw">let</span> <span class="nm">status</span>: <span class="ty">String</span>          <span class="cm">// OrderStatus raw value</span>
+    <span class="kw">let</span> <span class="nm">basket</span>: <span class="ty">BasketDTO</span>
+    <span class="kw">let</span> <span class="nm">courierLatitude</span>: <span class="ty">Double</span>
+    <span class="kw">let</span> <span class="nm">courierLongitude</span>: <span class="ty">Double</span>
+}
+
+<span class="cm">// SSE event — decoded from text/event-stream data field</span>
+<span class="kw">struct</span> <span class="ty">OrderSSEEventDTO</span>: <span class="ty">Codable</span> {
+    <span class="kw">let</span> <span class="nm">orderID</span>: <span class="ty">Int</span>
+    <span class="kw">let</span> <span class="nm">status</span>: <span class="ty">String</span>
+    <span class="kw">let</span> <span class="nm">courierLatitude</span>: <span class="ty">Double</span>
+    <span class="kw">let</span> <span class="nm">courierLongitude</span>: <span class="ty">Double</span>
+}</code></pre>
+
+    <h3>Mappers (the only type that knows both DTO and Domain)</h3>
+    <pre><code><span class="nm">UserMapper</span>.toDomain(<span class="nm">_</span> <span class="nm">dto</span>: <span class="ty">UserDTO</span>, addresses: [<span class="ty">AddressDTO</span>]) -> <span class="ty">User</span>
+<span class="nm">RestaurantMapper</span>.toDomain(<span class="nm">_</span> <span class="nm">dto</span>: <span class="ty">RestaurantDTO</span>) -> <span class="ty">Restaurant</span>
+<span class="nm">DishMapper</span>.toDomain(<span class="nm">_</span> <span class="nm">dto</span>: <span class="ty">DishDTO</span>) -> <span class="ty">Dish</span>
+<span class="nm">BasketMapper</span>.toDomain(<span class="nm">_</span> <span class="nm">dto</span>: <span class="ty">BasketDTO</span>) -> <span class="ty">Basket</span>
+<span class="nm">OrderMapper</span>.toDomain(<span class="nm">_</span> <span class="nm">dto</span>: <span class="ty">OrderDTO</span>) -> <span class="ty">Order</span>
+<span class="nm">OrderMapper</span>.toDomain(<span class="nm">event</span>: <span class="ty">OrderSSEEventDTO</span>) -> <span class="ty">Order</span>   <span class="cm">// SSE event path</span></code></pre>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════ 4. High-Level Design -->
+  <section id="high-level-design">
+    <h2>4. High-Level Design</h2>
+
+    <div class="ascii-diagram">┌─────────────────────────────────────────────────────────────────────┐
+│  Presentation  (UIKit · Combine)                                    │
+│  RestaurantListViewController / RestaurantListViewModel             │
+│  MenuViewController / MenuViewModel                                 │
+│  BasketViewController / BasketViewModel                             │
+│  OrderStatusViewController / OrderStatusViewModel                   │
+│  OrderMapView (UIView subclass wrapping MKMapView)                  │
+│  UIImageView extension — wraps SDWebImage/Kingfisher                │
+│  UIModels: RestaurantUIModel, DishUIModel,                          │
+│            BasketUIModel, OrderUIModel                              │
+└────────────────────────────┬────────────────────────────────────────┘
+                             │
+┌────────────────────────────▼────────────────────────────────────────┐
+│  Domain                                                             │
+│  FetchUserUseCase           → UserRepositoryProtocol               │
+│  FetchRestaurantsUseCase    → RestaurantRepositoryProtocol         │
+│  FetchDishesUseCase         → DishRepositoryProtocol               │
+│  CreateBasketUseCase        → BasketRepositoryProtocol             │
+│  UpdateBasketUseCase        → BasketRepositoryProtocol             │
+│  FetchBasketUseCase         → BasketRepositoryProtocol             │
+│  CreateOrderUseCase         → OrderRepositoryProtocol              │
+│                                                                     │
+│  OrderService (Domain Service — scoped to OrderCoordinator)        │
+│    opens SSE via OrderSSEDataSourceProtocol.stream(orderID:)       │
+│    publishes AnyPublisher&lt;Order, AppError&gt;                         │
+│    OrderSSEDataSourceProtocol lives in Domain/Interfaces/          │
+│                                                                     │
+│  Models: User, Address, Restaurant, Dish, Basket, Order,           │
+│          OrderStatus                                                │
+│  Params: FetchUserParam, FetchRestaurantsParam,                    │
+│          FetchDishesParam, CreateBasketParam,                       │
+│          UpdateBasketParam, FetchBasketParam,                       │
+│          CreateOrderParam(userID:, basketID:,                       │
+│                          idempotencyKey: UUID)                      │
+└────────────────────────────┬────────────────────────────────────────┘
+                             │
+┌────────────────────────────▼────────────────────────────────────────┐
+│  Data                                                               │
+│  UserRepository        → UserRemoteDataSource                      │
+│                        → UserLocalDataSource                        │
+│  UserRemoteDataSource                  [URLSession · APIClient]    │
+│  UserLocalDataSource                   [CoreData]                  │
+│                                                                     │
+│  RestaurantRepository  → RestaurantRemoteDataSource                │
+│                        → RestaurantLocalDataSource                 │
+│  RestaurantRemoteDataSource            [URLSession · APIClient]    │
+│  RestaurantLocalDataSource             [CoreData]                  │
+│                                                                     │
+│  DishRepository        → DishRemoteDataSource                      │
+│                        → DishLocalDataSource                       │
+│  DishRemoteDataSource                  [URLSession · APIClient]    │
+│  DishLocalDataSource                   [CoreData]                  │
+│                                                                     │
+│  BasketRepository      → BasketRemoteDataSource                    │
+│                        → BasketLocalDataSource                     │
+│  BasketRemoteDataSource                [URLSession · APIClient]    │
+│  BasketLocalDataSource                 [CoreData]                  │
+│                                                                     │
+│  OrderRepository       → OrderRemoteDataSource                     │
+│  OrderRemoteDataSource                 [URLSession · APIClient]    │
+│                                                                     │
+│  OrderSSEDataSource    : OrderSSEDataSourceProtocol                │
+│    └─ SSEClient (wraps URLSession persistent GET, text/event-stream)│
+│    └─ returns AsyncStream&lt;OrderSSEEventDTO&gt;                        │
+│  SSEClient                             [URLSession]                │
+│    └─ transport-only peer to APIClient                             │
+│    └─ receive() → AsyncStream&lt;Data&gt; / disconnect()                 │
+│                                                                     │
+│  Mappers: UserMapper, RestaurantMapper, DishMapper,                │
+│           BasketMapper, OrderMapper                                 │
+└────────────────────────────┬────────────────────────────────────────┘
+                             │
+┌────────────────────────────▼────────────────────────────────────────┐
+│  Application                                                        │
+│  AppCoordinator           [UIKit]                                  │
+│    wires window → root tab bar                                      │
+│    composes all dependencies via manual init injection              │
+│  RestaurantCoordinator, BasketCoordinator                          │
+│  OrderCoordinator                                                   │
+│    creates and owns OrderService for the order tracking flow        │
+│    destroys OrderService on deallocation                            │
+└────────────────────────────┬────────────────────────────────────────┘
+                             │
+┌────────────────────────────▼────────────────────────────────────────┐
+│  Infrastructure                                                     │
+│  None                                                               │
+└────────────────────────────┬────────────────────────────────────────┘
+                             │
+┌────────────────────────────▼────────────────────────────────────────┐
+│  Dependencies                                                       │
+│  URLSession        persistent GET (SSEClient) · request/response   │
+│  CoreData          NSPersistentContainer · NSManagedObjectContext   │
+│  MapKit            MKMapView (wrapped by OrderMapView)             │
+│  SDWebImage / Kingfisher   image loading (wrapped by UIImageView ext)│
+└─────────────────────────────────────────────────────────────────────┘</div>
+
+    <h3>Architecture Layer Breakdown</h3>
+    <div class="stack">
+      <div class="stack-row">
+        <div class="stack-label">Presentation</div>
+        <div class="stack-content">
+          <strong>ViewControllers</strong>
+          <code>RestaurantListViewController</code> <code>MenuViewController</code> <code>BasketViewController</code> <code>OrderStatusViewController</code>
+          <strong>ViewModels (Combine @Published)</strong>
+          <code>RestaurantListViewModel</code> <code>MenuViewModel</code> <code>BasketViewModel</code> <code>OrderStatusViewModel</code>
+          <strong>Views</strong>
+          <code>OrderMapView</code> · <code>UIImageView</code> extension (image facade)
+        </div>
+      </div>
+      <div class="stack-row">
+        <div class="stack-label">Domain</div>
+        <div class="stack-content">
+          <strong>UseCases</strong>
+          <code>FetchUserUseCase</code> <code>FetchRestaurantsUseCase</code> <code>FetchDishesUseCase</code> <code>CreateBasketUseCase</code> <code>UpdateBasketUseCase</code> <code>FetchBasketUseCase</code> <code>CreateOrderUseCase</code>
+          <strong>Services</strong>
+          <code>OrderService</code> — scoped to <code>OrderCoordinator</code>; publishes <code>AnyPublisher&lt;Order, AppError&gt;</code>
+          <strong>Models</strong>
+          <code>User</code> <code>Address</code> <code>Restaurant</code> <code>Dish</code> <code>Basket</code> <code>Order</code> <code>OrderStatus</code>
+          <strong>Params</strong>
+          <code>FetchUserParam</code> <code>FetchRestaurantsParam</code> <code>FetchDishesParam</code> <code>CreateBasketParam</code> <code>UpdateBasketParam</code> <code>FetchBasketParam</code> <code>CreateOrderParam</code>
+        </div>
+      </div>
+      <div class="stack-row">
+        <div class="stack-label">Infrastructure</div>
+        <div class="stack-content">None — no gateway wrappers required in this scenario</div>
+      </div>
+      <div class="stack-row">
+        <div class="stack-label">Data</div>
+        <div class="stack-content">
+          <strong>Repositories</strong>
+          <code>UserRepository</code> <code>RestaurantRepository</code> <code>DishRepository</code> <code>BasketRepository</code> <code>OrderRepository</code>
+          <strong>DataSources</strong>
+          <code>UserRemoteDataSource</code> <code>UserLocalDataSource</code> <code>RestaurantRemoteDataSource</code> <code>RestaurantLocalDataSource</code> <code>DishRemoteDataSource</code> <code>DishLocalDataSource</code> <code>BasketRemoteDataSource</code> <code>BasketLocalDataSource</code> <code>OrderRemoteDataSource</code> <code>OrderSSEDataSource</code> · <code>SSEClient</code>
+          <strong>DTOs</strong>
+          <code>UserDTO</code> <code>AddressDTO</code> <code>RestaurantDTO</code> <code>DishDTO</code> <code>BasketDTO</code> <code>BasketItemDTO</code> <code>OrderDTO</code> <code>OrderSSEEventDTO</code>
+          <strong>Mappers</strong>
+          <code>UserMapper</code> <code>RestaurantMapper</code> <code>DishMapper</code> <code>BasketMapper</code> <code>OrderMapper</code>
+        </div>
+      </div>
+      <div class="stack-row">
+        <div class="stack-label">External</div>
+        <div class="stack-content">
+          <code>URLSession</code> · <code>CoreData</code> · <code>MapKit</code> · <code>SDWebImage</code> / <code>Kingfisher</code>
+        </div>
+      </div>
+      <div class="stack-row">
+        <div class="stack-label">Application</div>
+        <div class="stack-content">
+          <code>AppDelegate</code> — wires window, creates <code>AppCoordinator</code> as composition root, builds full DI graph via manual init injection
+          <strong>Coordinators</strong>
+          <code>AppCoordinator</code> <code>RestaurantCoordinator</code> <code>BasketCoordinator</code> <code>OrderCoordinator</code>
+        </div>
+      </div>
+    </div>
+
+    <h3>Navigation (Coordinator Pattern)</h3>
+    <pre><code><span class="nm">AppCoordinator</span> (root, tab bar)
+  └── <span class="nm">RestaurantCoordinator</span>
+        └── <span class="ty">RestaurantListViewController</span>
+              └── <span class="ty">MenuViewController</span> (pushed on restaurant tap)
+  └── <span class="nm">BasketCoordinator</span>
+        └── <span class="ty">BasketViewController</span>
+  └── <span class="nm">OrderCoordinator</span> (created on place order)
+        └── <span class="ty">OrderStatusViewController</span></code></pre>
+
+    <div class="callout">
+      <p><code>OrderCoordinator</code> is the composition root for the order tracking flow. It creates <code>OrderService</code> on init and injects it into <code>OrderStatusViewModel</code>. When <code>OrderCoordinator</code> is deallocated (user exits the order flow), <code>OrderService</code> is destroyed and the SSE connection is closed automatically.</p>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════ 5. Data Flow -->
+  <section id="data-flow">
+    <h2>5. Data Flow</h2>
+
+    <h3>Restaurant List Screen</h3>
+    <p>Two awaits in the ViewModel — cache renders immediately, then network refreshes.</p>
+    <pre><code><span class="nm">1.</span> <span class="ty">AppCoordinator</span> reads <span class="ty">User</span>.<span class="nm">lastUsedAddress</span> from <span class="nm">UserRepository</span> (.cached)
+<span class="nm">2.</span> <span class="ty">RestaurantListViewModel</span>.<span class="nm">load</span>()
+     → <span class="nm">isLoading</span> = <span class="kw">true</span>
+
+     <span class="cm">// Phase 1 — cache (instant)</span>
+     <span class="kw">if let</span> cached = <span class="kw">try</span>? <span class="kw">await</span> <span class="nm">FetchRestaurantsUseCase</span>.<span class="nm">execute</span>(policy: .strict, param: <span class="ty">FetchRestaurantsParam</span>(addressID:))
+         → <span class="nm">RestaurantRepository</span> checks <span class="nm">RestaurantLocalDataSource</span> only — throws on miss
+         → ViewModel maps [<span class="ty">Restaurant</span>] → [<span class="ty">RestaurantUIModel</span>]
+         → @Published <span class="nm">restaurantList</span> updated → UI renders immediately
+
+     <span class="cm">// Phase 2 — network (background)</span>
+     <span class="kw">let</span> <span class="nm">fresh</span> = <span class="kw">try await</span> <span class="nm">FetchRestaurantsUseCase</span>.<span class="nm">execute</span>(policy: .fresh, param: <span class="ty">FetchRestaurantsParam</span>(addressID:))
+         → <span class="nm">RestaurantRepository</span> fetches <span class="nm">RestaurantRemoteDataSource</span> → <span class="gr">GET</span> /restaurants/&lt;addressID&gt;
+         → DTO → Mapper → [<span class="ty">Restaurant</span>]
+         → <span class="nm">RestaurantLocalDataSource</span>.<span class="nm">save</span>(dtos)         <span class="cm">// Core Data updated</span>
+         → ViewModel maps [<span class="ty">Restaurant</span>] → [<span class="ty">RestaurantUIModel</span>]
+         → @Published <span class="nm">restaurantList</span> updated → ViewController re-renders
+
+     → <span class="kw">defer</span>: <span class="nm">isLoading</span> = <span class="kw">false</span></code></pre>
+
+    <h3>Place Order</h3>
+    <pre><code><span class="ty">BasketViewModel</span>.<span class="nm">placeOrder</span>()
+     → <span class="nm">CreateOrderUseCase</span>.<span class="nm">execute</span>(param: <span class="ty">CreateOrderParam</span>(userID:, basketID:, idempotencyKey: <span class="ty">UUID</span>()))
+         → <span class="nm">OrderRepository</span>.<span class="nm">create</span>(param:)
+             → <span class="nm">OrderRemoteDataSource</span>.<span class="nm">post</span>(/orders, body) → <span class="ty">OrderDTO</span> → Mapper → <span class="ty">Order</span>
+         → ViewModel navigates to Order Status screen via Coordinator</code></pre>
+
+    <h3>Order Status Screen — SSE Flow</h3>
+    <pre><code><span class="ty">OrderStatusViewController</span>.<span class="nm">viewDidAppear</span>()
+     → <span class="ty">OrderStatusViewModel</span>.<span class="nm">startTracking</span>(orderID:)
+         → <span class="nm">OrderService</span>.<span class="nm">startTracking</span>(orderID:)
+             → <span class="nm">orderSSEDataSource</span>.<span class="nm">stream</span>(orderID:)    <span class="cm">// OrderSSEDataSourceProtocol in Domain/Interfaces/</span>
+             → returns <span class="ty">AsyncStream</span>&lt;<span class="ty">OrderSSEEventDTO</span>&gt;
+             → <span class="kw">for await</span> event <span class="kw">in</span> stream → <span class="nm">OrderMapper</span>.<span class="nm">toDomain</span>(event) → <span class="ty">Order</span>
+             → publishes <span class="ty">Order</span> via <span class="ty">AnyPublisher</span>&lt;<span class="ty">Order</span>, <span class="ty">AppError</span>&gt;
+         → ViewModel.<span class="nm">orderUpdates</span> sink → maps <span class="ty">Order</span> → <span class="ty">OrderUIModel</span>
+         → @Published <span class="nm">courierLocation</span> + <span class="nm">orderStatus</span> updated → map pin moves + label updates
+
+<span class="ty">OrderStatusViewController</span>.<span class="nm">viewDidDisappear</span>()
+     → <span class="ty">OrderStatusViewModel</span>.<span class="nm">stopTracking</span>()
+         → <span class="nm">OrderService</span>.<span class="nm">stopTracking</span>()  <span class="cm">← closes SSE connection immediately</span></code></pre>
+
+    <div class="warn">
+      <p><strong>Gotcha — SSE lifecycle:</strong> If <code>OrderService</code> is not stopped on screen exit, the SSE connection stays open in the background, drains battery, and holds a server-side resource. The ViewController calls <code>OrderStatusViewModel.stopTracking()</code> — never closes the service directly, always through the ViewModel boundary.</p>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════ 6. Technical Deep-dive -->
+  <section id="technical-deep-dive">
+    <h2>6. Technical Deep-dive</h2>
+
+    <h3>Why SSE over polling?</h3>
+    <div class="callout">
+      <p>A 1-second polling interval over a 10-minute order = 600 HTTP requests. Each request creates a new TCP connection (or reuses a keep-alive connection), sends headers (~400 bytes), and most responses return no new data. SSE replaces this with one persistent connection where the server writes only when state changes.</p>
+    </div>
+    <pre><code><span class="cm">// Polling path (bad):</span>
+  t=<span class="nm">0</span>s  <span class="gr">GET</span> /orders/{id} → <span class="nm">200</span> <span class="st">"preparing"</span>   <span class="cm">← unnecessary</span>
+  t=<span class="nm">1</span>s  <span class="gr">GET</span> /orders/{id} → <span class="nm">200</span> <span class="st">"preparing"</span>   <span class="cm">← unnecessary</span>
+  ...
+  t=<span class="nm">47</span>s <span class="gr">GET</span> /orders/{id} → <span class="nm">200</span> <span class="st">"picked_up"</span>   <span class="cm">← useful</span>
+  ...600 requests, 599 wasted
+
+<span class="cm">// SSE path (good):</span>
+  t=<span class="nm">0</span>s  <span class="gr">GET</span> /live-order-status/{id}           <span class="cm">← one persistent connection</span>
+  t=<span class="nm">47</span>s <span class="cm">← server writes: {status: "picked_up", lat: 1.3, lng: 103.8}</span>
+  t=<span class="nm">89</span>s <span class="cm">← server writes: {status: "in_transit", lat: 1.31, lng: 103.81}</span></code></pre>
+
+    <h3>Why SSE over WebSockets?</h3>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th></th><th>SSE</th><th>WebSocket</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Direction</td><td>Server → client only</td><td>Bidirectional</td></tr>
+          <tr><td>Protocol</td><td>HTTP/1.1 or HTTP/2</td><td><code>ws://</code> (separate protocol)</td></tr>
+          <tr><td>Reconnection</td><td>Browser/client auto-reconnects</td><td>Manual</td></tr>
+          <tr><td>Use case</td><td>Courier tracking, notifications</td><td>Chat, collaborative editing</td></tr>
+          <tr><td>Complexity</td><td>Simple</td><td>Higher</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="callout">
+      <p>Courier tracking is read-only from the client's perspective — SSE is sufficient. WebSockets add bidirectional complexity that this scenario doesn't need.</p>
+    </div>
+
+    <h3>Why <code>AnyPublisher</code> over <code>AsyncStream</code> for <code>OrderService</code>?</h3>
+    <div class="callout">
+      <p><code>OrderService</code> is a Domain Service that lives alongside <code>@Published</code> Combine state in <code>OrderStatusViewModel</code>. <code>AnyPublisher&lt;Order, AppError&gt;</code> integrates natively with Combine operators — <code>debounce</code>, <code>throttle</code>, <code>receive(on: DispatchQueue.main)</code> — which are directly useful when SSE events arrive in rapid bursts (e.g. courier moving fast). <code>AsyncStream</code> would require bridging into Combine manually at the ViewModel boundary, and loses the operator pipeline. The choice is not about correctness — either works — but about consistency: the ViewModel is already Combine-based.</p>
+    </div>
+
+    <h3>Why is <code>OrderService</code> scoped to <code>OrderCoordinator</code>, not app-scoped?</h3>
+    <div class="callout">
+      <p>Unlike <code>PlayerService</code> in the music streaming scenario (which must be app-scoped to keep audio playing when screens change), <code>OrderService</code> should only live as long as the Order Status screen is active. There is no reason to maintain an SSE connection when the user is not on the Order Status screen — keeping it alive wastes battery and server resources. ViewController scope is too narrow: if the ViewController is re-created, the service would be destroyed mid-stream. Coordinator ownership is the right granularity — <code>OrderCoordinator</code> creates <code>OrderService</code> on init and the service is destroyed on deallocation, naturally closing the SSE connection.</p>
+    </div>
+
+    <h3>Why a server-hosted basket?</h3>
+    <div class="callout">
+      <p>Basket state on the backend enables cross-device continuity — start an order on iPhone, continue on web or iPad. Trade-off: every basket mutation (<code>POST /basket</code>, <code>PATCH /basket</code>) requires a network round-trip. <code>BasketLocalDataSource</code> mirrors the server state in Core Data for two purposes: (1) instant restore — if the app is killed and relaunched mid-basket, the local cache shows the last known state immediately while a <code>GET /basket</code> fetch runs in the background; (2) optimistic display — after <code>PATCH /basket</code>, update the local cache immediately and reconcile with the server response when it arrives. <code>FetchPolicy.cached</code> on <code>FetchBasketUseCase</code> implements this: return local first, then refresh from network.</p>
+    </div>
+
+    <h3>Why <code>UIImageView</code> extension as the image loading facade?</h3>
+    <div class="callout">
+      <p>SDWebImage and Kingfisher both provide their own <code>UIImageView</code> category. Calling the library's extension directly in every cell means swapping the library requires updating every call site. A single <code>UIImageView</code> extension that wraps whichever library is chosen means the call site <code>imageView.setImage(url:)</code> is identical regardless of which library is underneath — swapping SDWebImage for Kingfisher (or a native <code>URLSession</code>-based loader) touches one file. This is the same isolation principle as <code>ThirdPartyDataSource</code>.</p>
+    </div>
+
+    <h3>Why UIKit throughout instead of SwiftUI?</h3>
+    <div class="callout">
+      <p>Two triggers from the philosophy doc apply here: (1) restaurant list and menu screens use <code>UITableView</code>/<code>UICollectionView</code> for <code>willDisplay cell</code> pagination hooks and sticky header customisation that SwiftUI's <code>List</code> does not expose at the same granularity; (2) the Order Status screen embeds <code>OrderMapView</code> — a <code>UIView</code> subclass wrapping <code>MKMapView</code>. MapKit requires direct lifecycle control (setting the delegate, calling <code>setRegion</code>, adding/removing annotations) that is straightforward in UIKit and cumbersome through <code>UIViewRepresentable</code>. SwiftUI would be valid for simpler screens (e.g. address picker), but the screens in scope justify UIKit throughout for consistency.</p>
+    </div>
+
+    <h3>Interview Q&amp;A</h3>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Question</th><th>Answer</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Why SSE over polling?</td>
+            <td>1-second polling for 10 minutes = 600 HTTP requests, 599 return no new data. SSE holds one persistent connection; server writes only on state change.</td>
+          </tr>
+          <tr>
+            <td>Why SSE over WebSockets?</td>
+            <td>Courier tracking is server → client only. WebSockets add bidirectional complexity this scenario doesn't need. SSE is simpler and sufficient.</td>
+          </tr>
+          <tr>
+            <td>Why <code>AnyPublisher</code> for <code>OrderService</code> instead of <code>AsyncStream</code>?</td>
+            <td><code>OrderService</code> sits in a Combine-based ViewModel. <code>AnyPublisher</code> integrates natively with debounce/throttle for burst events and <code>receive(on:)</code> for threading. <code>AsyncStream</code> would need manual Combine bridging at the ViewModel boundary.</td>
+          </tr>
+          <tr>
+            <td>Why is <code>OrderService</code> scoped to <code>OrderCoordinator</code>?</td>
+            <td>No reason to hold an SSE connection while the user is not tracking an order — wastes battery and server connections. ViewController scope is too narrow (re-creation destroys the service mid-stream). Coordinator is the right granularity.</td>
+          </tr>
+          <tr>
+            <td>Why server-hosted basket?</td>
+            <td>Cross-device continuity — same basket visible on iPhone and web. Local Core Data mirror provides instant UI restore and optimistic updates; backend is source of truth.</td>
+          </tr>
+          <tr>
+            <td>Why is <code>OrderSSEDataSourceProtocol</code> in <code>Domain/Interfaces/</code>?</td>
+            <td><code>OrderService</code> is a Domain Service — it depends on the protocol, never the concrete. Domain defines the interface; Data provides the concrete <code>OrderSSEDataSource</code>. This is Dependency Inversion: Domain owns the contract, Data fulfils it.</td>
+          </tr>
+          <tr>
+            <td>Why not close SSE in <code>viewDidDisappear</code> directly?</td>
+            <td>The ViewController calls <code>OrderStatusViewModel.stopTracking()</code> → <code>OrderService.stopTracking()</code>. The ViewController never holds or knows about the Service — it goes through the ViewModel boundary.</td>
+          </tr>
+          <tr>
+            <td>Why no idempotency key on basket mutations?</td>
+            <td><code>POST /basket</code> creates a basket at most once per user per restaurant; a duplicate add would be visible to the user and rejected by the server. <code>POST /orders</code> is the irreversible, high-stakes mutation — duplicates cause real business harm. Idempotency key effort is proportional to duplicate risk.</td>
+          </tr>
+          <tr>
+            <td>Why UIKit instead of SwiftUI for this scenario?</td>
+            <td>Two triggers from the philosophy doc: <code>UITableView</code>/<code>UICollectionView</code> scroll lifecycle for pagination, and <code>MKMapView</code> requiring direct lifecycle control in <code>OrderMapView</code>. SwiftUI <code>List</code> and <code>UIViewRepresentable</code> are valid but add friction where UIKit is the natural fit.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════ Vocabulary -->
+  <section id="vocabulary">
+    <h2>Vocabulary Mapping</h2>
+    <p>Terms used in the source interview video mapped to their Clean Architecture equivalents.</p>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Video term</th><th>Clean Architecture equivalent</th><th>Notes</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>Presenter</code></td>
+            <td><code>ViewModel</code></td>
+            <td>MVVM eliminates the back-reference: ViewModel has no reference to the View. ViewController subscribes to <code>@Published</code> state via Combine sink.</td>
+          </tr>
+          <tr>
+            <td><code>Router</code></td>
+            <td><code>Coordinator</code></td>
+            <td>Direct equivalent. One Coordinator per flow.</td>
+          </tr>
+          <tr>
+            <td><code>RestaurantService</code></td>
+            <td><code>FetchRestaurantsUseCase</code> + <code>RestaurantRepository</code></td>
+            <td>Stateless per-action logic → UseCase. Data access → Repository.</td>
+          </tr>
+          <tr>
+            <td><code>BasketService</code></td>
+            <td><code>CreateBasketUseCase</code> / <code>UpdateBasketUseCase</code> + <code>BasketRepository</code></td>
+            <td>Same split.</td>
+          </tr>
+          <tr>
+            <td><code>OrderService</code> (with SSE)</td>
+            <td><code>OrderService</code> + <code>OrderSSEDataSource</code> + <code>SSEClient</code></td>
+            <td>Stateful/long-lived → Domain Service. SSE transport → Data (<code>SSEClient</code> wrapped by <code>OrderSSEDataSource: OrderSSEDataSourceProtocol</code>).</td>
+          </tr>
+          <tr>
+            <td><code>AuthService</code></td>
+            <td>Domain Service: <code>SessionService</code></td>
+            <td>Stateful session — app-scoped Domain Service.</td>
+          </tr>
+          <tr>
+            <td><code>Network Client (Alamofire)</code></td>
+            <td><code>APIClient</code> (URLSession-based)</td>
+            <td>Generic HTTP client. Alamofire is a valid implementation detail inside <code>RemoteDataSource</code>.</td>
+          </tr>
+          <tr>
+            <td><code>Storage Facade / Core Data</code></td>
+            <td><code>RestaurantLocalDataSource</code>, <code>DishLocalDataSource</code>, <code>BasketLocalDataSource</code> wrapping Core Data</td>
+            <td>Each domain entity gets its own named <code>LocalDataSource</code>. Swapping Core Data for GRDB touches those files only.</td>
+          </tr>
+          <tr>
+            <td><code>SSE Client</code></td>
+            <td><code>SSEClient</code> + <code>OrderSSEDataSource: OrderSSEDataSourceProtocol</code> (Data)</td>
+            <td><code>SSEClient</code> wraps URLSession SSE stream; <code>OrderSSEDataSource</code> returns <code>AsyncStream&lt;OrderSSEEventDTO&gt;</code> to <code>OrderService</code>; same transport-only pattern as <code>WebSocketClient</code> in ChatApp.</td>
+          </tr>
+          <tr>
+            <td><code>UIImageView Extension</code></td>
+            <td><code>ThirdPartyDataSource</code> facade pattern</td>
+            <td>Same isolation principle — call site calls <code>imageView.setImage(url:)</code>, never the library directly.</td>
+          </tr>
+          <tr>
+            <td><code>Swinject DI container</code></td>
+            <td>Manual init injection via <code>Coordinator</code></td>
+            <td>Avoids a framework dependency; all dependencies visible at compile time.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <div class="bottom-nav">
+    <a href="../index.html">← Home</a>
+    <span></span>
+  </div>
+
+</body>
+</html>
