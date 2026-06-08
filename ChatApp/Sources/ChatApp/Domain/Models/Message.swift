@@ -6,5 +6,6 @@ struct Message: Sendable, Equatable {
     let senderId: String
     let content: MessageContent
     let status: MessageStatus
+    let sequence: Int       // server-assigned monotonic sequence per conversation
     let createdAt: Date
 }

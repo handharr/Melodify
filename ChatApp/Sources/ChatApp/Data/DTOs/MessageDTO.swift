@@ -6,6 +6,7 @@ struct MessageDTO: Codable, Sendable {
     let id: String
     let conversationId: String
     let senderId: String
+    let sequence: Int       // server-assigned, monotonic per conversation
     let type: String        // "text" | "image" | "audio" | "deleted"
     let text: String?
     let imageURL: String?
@@ -19,6 +20,7 @@ struct MessageDTO: Codable, Sendable {
         case id
         case conversationId = "conversation_id"
         case senderId = "sender_id"
+        case sequence
         case type
         case text
         case imageURL = "image_url"

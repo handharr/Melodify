@@ -1,5 +1,8 @@
 import Foundation
 
+// Cursor-based pagination. Fetches older messages and writes them to local storage.
+// Does not return messages — the ObserveMessagesUseCase stream re-yields automatically
+// when the local store is updated (same as NSFetchedResultsController.controllerDidChangeContent).
 final class FetchMessagesUseCase: Sendable {
     private let repository: MessageRepositoryProtocol
 
@@ -7,7 +10,11 @@ final class FetchMessagesUseCase: Sendable {
         self.repository = repository
     }
 
-    func execute(request: FetchMessagesRequest) async throws -> [Message] {
-        try await repository.fetchHistory(request: request)
+    func execute(_ request: FetchMessagesRequest) async throws {
+        try await repository.fetchOlder(
+            conversationId: request.path.conversationId,
+            before: request.path.beforeMessageId,
+            limit: request.path.limit
+        )
     }
 }

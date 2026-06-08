@@ -32,6 +32,12 @@ actor PendingMessageQueue {
 
     func allPending() -> [PendingMessageDTO] { items }
 
+    // O(pending conversations) — only conversations with queued messages are returned.
+    // Flush iterates this list so conversations with zero pending are never touched.
+    func pendingConversationIds() -> [String] {
+        Array(Set(items.map { $0.conversationId }))
+    }
+
     // MARK: - Persistence
 
     private func persist() {

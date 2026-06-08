@@ -1,18 +1,18 @@
 import Foundation
 
 protocol MessageRepositoryProtocol: Sendable {
-    // Returns cached messages immediately, then streams updates as WebSocket events arrive.
-    // Stream never throws — errors are silently swallowed and the stream terminates on disconnect.
-    func messages(conversationId: String) -> AsyncStream<[Message]>
+    // Returns cached messages immediately, then yields on every Core Data / local write.
+    // Never throws — stream stays open until the caller cancels iteration.
+    func observe(conversationId: String) -> AsyncStream<[Message]>
 
-    // HTTP POST for outbound send. WebSocket is receive-only.
-    // Throws ChatError.messageQueued if offline — caller should surface a "pending" indicator.
+    // Cursor pagination — fetches older messages and writes them to local storage.
+    // The observation stream re-yields automatically (FRC / observer pattern).
+    func fetchOlder(conversationId: String, before messageId: String?, limit: Int) async throws
+
+    // HTTP POST for outbound. WebSocket is receive-only.
+    // Throws ChatError.messageQueued if offline — caller surfaces a "pending" indicator.
     func send(request: SendMessageRequest) async throws -> Message
 
-    // Loads historical messages from remote. Called once on screen open.
-    func fetchHistory(request: FetchMessagesRequest) async throws -> [Message]
-
     // Retries all queued messages for the given conversation.
-    // Called by coordinator on app foreground / WebSocket reconnect.
     func flushPending(conversationId: String) async
 }

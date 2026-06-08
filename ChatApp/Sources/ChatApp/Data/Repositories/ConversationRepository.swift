@@ -11,4 +11,9 @@ final class ConversationRepository: ConversationRepositoryProtocol, Sendable {
         let dtos = try await localDataSource.fetchAll()
         return dtos.compactMap { ConversationMapper.toDomain($0) }
     }
+
+    func markRead(request: MarkReadRequest) async throws {
+        // Real: POST /api/v1/conversations/{id}/read
+        // Stub: no-op — server broadcasts conversation.unread_updated via WebSocket in production.
+    }
 }

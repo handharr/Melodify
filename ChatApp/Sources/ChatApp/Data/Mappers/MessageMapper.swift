@@ -14,6 +14,7 @@ enum MessageMapper {
             senderId: dto.senderId,
             content: content,
             status: status,
+            sequence: dto.sequence,
             createdAt: date
         )
     }

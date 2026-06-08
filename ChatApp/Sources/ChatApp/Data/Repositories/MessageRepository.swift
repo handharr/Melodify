@@ -20,43 +20,56 @@ final class MessageRepository: MessageRepositoryProtocol, @unchecked Sendable {
         self.pendingQueue = pendingQueue
     }
 
-    // Yields cached messages first, then streams live updates from WebSocket.
-    // Never throws — the stream silently terminates on disconnect.
-    func messages(conversationId: String) -> AsyncStream<[Message]> {
+    // Local observation is the single read path — mirrors NSFetchedResultsController.
+    // WebSocket events write to local; local notifies all observers automatically.
+    func observe(conversationId: String) -> AsyncStream<[Message]> {
         AsyncStream { continuation in
-            Task {
-                let cached = await localDataSource.messages(conversationId: conversationId)
-                var accumulated = cached.compactMap { MessageMapper.toDomain($0) }
-                continuation.yield(accumulated)
+            // Task 1 — forward local data source stream → domain models
+            let localTask = Task {
+                for await dtos in localDataSource.observe(conversationId: conversationId) {
+                    guard !Task.isCancelled else { break }
+                    continuation.yield(dtos.compactMap { MessageMapper.toDomain($0) })
+                }
+                continuation.finish()
+            }
 
-                // WebSocket receive — outbound send uses HTTP POST.
+            // Task 2 — WebSocket events → write to local → local observer fires → Task 1 re-yields
+            let wsTask = Task {
                 for await payload in webSocketClient.subscribe(channel: "conv-\(conversationId)") {
-                    guard
-                        let data = payload.data(using: .utf8),
-                        let event = try? self.decoder.decode(ChatEventDTO.self, from: data)
+                    guard !Task.isCancelled,
+                          let data = payload.data(using: .utf8),
+                          let event = try? self.decoder.decode(ChatEventDTO.self, from: data)
                     else { continue }
 
                     switch event.type {
                     case "message.new":
-                        guard let dto = event.message, let msg = MessageMapper.toDomain(dto) else { continue }
-                        await self.localDataSource.save(dto)
-                        accumulated.append(msg)
-                        continuation.yield(accumulated)
+                        if let dto = event.message { await self.localDataSource.save(dto) }
                     case "message.deleted":
-                        guard let dto = event.message else { continue }
-                        accumulated.removeAll { $0.id == dto.id }
-                        continuation.yield(accumulated)
+                        if let dto = event.message { await self.localDataSource.delete(id: dto.id) }
                     default:
                         break
                     }
                 }
-                continuation.finish()
+            }
+
+            continuation.onTermination = { _ in
+                localTask.cancel()
+                wsTask.cancel()
             }
         }
     }
 
-    // HTTP POST for outbound. WebSocket is receive-only — server pushes the
-    // confirmed message back to all participants including the sender.
+    // Writes older messages to local storage; observation stream re-yields automatically.
+    func fetchOlder(conversationId: String, before messageId: String?, limit: Int) async throws {
+        let dtos = try await remoteDataSource.fetchMessages(
+            conversationId: conversationId,
+            before: messageId,
+            limit: limit
+        )
+        for dto in dtos { await localDataSource.save(dto) }
+    }
+
+    // HTTP POST for outbound. WebSocket is receive-only.
     func send(request: SendMessageRequest) async throws -> Message {
         let apiRequest = SendMessageAPIRequest(from: request)
         do {
@@ -67,7 +80,6 @@ final class MessageRepository: MessageRepositoryProtocol, @unchecked Sendable {
         } catch is ChatError {
             throw ChatError.decodingFailed
         } catch {
-            // Network failure — persist to offline queue, surface pending state to ViewModel.
             let pending = PendingMessageDTO(
                 id: request.clientId,
                 conversationId: request.conversationId,
@@ -84,15 +96,6 @@ final class MessageRepository: MessageRepositoryProtocol, @unchecked Sendable {
         }
     }
 
-    func fetchHistory(request: FetchMessagesRequest) async throws -> [Message] {
-        let dtos = try await remoteDataSource.fetchHistory(conversationId: request.path.conversationId)
-        let messages = dtos.compactMap { MessageMapper.toDomain($0) }
-        for dto in dtos { await localDataSource.save(dto) }
-        return messages
-    }
-
-    // Called by ChatCoordinator on app foreground / WebSocket reconnect.
-    // Re-queues items that still fail so the next flush can retry them.
     func flushPending(conversationId: String) async {
         let pending = await pendingQueue.dequeue(conversationId: conversationId)
         for item in pending {

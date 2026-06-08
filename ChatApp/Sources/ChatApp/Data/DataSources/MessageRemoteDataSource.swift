@@ -8,23 +8,20 @@ final class MessageRemoteDataSource: MessageRemoteDataSourceProtocol, Sendable {
         self.client = client
     }
 
-    func fetchHistory(conversationId: String) async throws -> [MessageDTO] {
-        // In a real app: GET /api/v1/conversations/{conversationId}/messages
-        // Returning empty here since the local mock covers the demo scenario.
+    func fetchMessages(conversationId: String, before messageId: String?, limit: Int) async throws -> [MessageDTO] {
+        // Real: GET /api/v1/conversations/{conversationId}/messages?before={messageId}&limit={n}
+        // Stub: local mock JSON covers the demo; pagination returns empty (FRC re-yields from cache).
         return []
     }
 
     func send(_ request: SendMessageAPIRequest) async throws -> MessageDTO {
-        // In a real app: POST /api/v1/conversations/{conversationId}/messages
-        // Body: { client_id, type, text?, image_url?, ... }
-        // Returns the server-confirmed MessageDTO with status "sent".
-        //
-        // We synthesise a response here so the flow compiles end-to-end
-        // without a live server.
+        // Real: POST /api/v1/conversations/{conversationId}/messages
+        // Synthesised response — struct types and interface contract match what a real server returns.
         return MessageDTO(
             id: request.clientId,
             conversationId: request.conversationId,
             senderId: "me",
+            sequence: 0,    // stub — server assigns a real monotonic value
             type: request.type,
             text: request.text,
             imageURL: nil,
