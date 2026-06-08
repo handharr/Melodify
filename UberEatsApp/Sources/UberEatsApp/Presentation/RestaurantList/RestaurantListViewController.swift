@@ -15,7 +15,11 @@ final class RestaurantListViewController: UIViewController {
         return tv
     }()
 
-    private let activityIndicator = UIActivityIndicatorView(style: .medium)
+    private let loadingView: MDSLoadingView = {
+        let v = MDSLoadingView()
+        v.translatesAutoresizingMaskIntoConstraints = false
+        return v
+    }()
 
     init(viewModel: RestaurantListViewModel) {
         self.viewModel = viewModel
@@ -35,17 +39,16 @@ final class RestaurantListViewController: UIViewController {
     }
 
     private func setupLayout() {
-        activityIndicator.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(tableView)
-        view.addSubview(activityIndicator)
+        view.addSubview(loadingView)
 
         NSLayoutConstraint.activate([
             tableView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            activityIndicator.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            activityIndicator.centerYAnchor.constraint(equalTo: view.centerYAnchor)
+            loadingView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            loadingView.centerYAnchor.constraint(equalTo: view.centerYAnchor)
         ])
     }
 
@@ -63,7 +66,8 @@ final class RestaurantListViewController: UIViewController {
         viewModel.$isLoading
             .receive(on: DispatchQueue.main)
             .sink { [weak self] loading in
-                loading ? self?.activityIndicator.startAnimating() : self?.activityIndicator.stopAnimating()
+                self?.loadingView.isHidden = !loading
+                if loading { self?.loadingView.configure(with: MDSLoadingConfiguration()) }
             }
             .store(in: &cancellables)
     }

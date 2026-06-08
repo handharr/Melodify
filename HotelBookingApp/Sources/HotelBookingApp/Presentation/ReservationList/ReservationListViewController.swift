@@ -1,5 +1,6 @@
 import UIKit
 import Combine
+import MelodifyDesignSystem
 
 final class ReservationListViewController: UITableViewController {
 
@@ -41,9 +42,10 @@ final class ReservationListViewController: UITableViewController {
             .sink { [weak self] loading in
                 guard let self else { return }
                 if loading {
-                    let spinner = UIActivityIndicatorView(style: .medium)
-                    spinner.startAnimating()
-                    tableView.tableFooterView = spinner
+                    let footer = MDSLoadingView()
+                    footer.configure(with: MDSLoadingConfiguration())
+                    footer.frame = CGRect(x: 0, y: 0, width: tableView.bounds.width, height: 56)
+                    tableView.tableFooterView = footer
                 } else {
                     tableView.tableFooterView = nil
                 }

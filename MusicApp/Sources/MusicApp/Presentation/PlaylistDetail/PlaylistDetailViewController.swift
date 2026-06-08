@@ -1,12 +1,17 @@
 import UIKit
 import Combine
+import MelodifyDesignSystem
 
 final class PlaylistDetailViewController: UIViewController {
     private let viewModel: PlaylistDetailViewModel
     private var cancellables = Set<AnyCancellable>()
 
     private let tableView = UITableView()
-    private let activityIndicator = UIActivityIndicatorView(style: .medium)
+    private let loadingView: MDSLoadingView = {
+        let v = MDSLoadingView()
+        v.translatesAutoresizingMaskIntoConstraints = false
+        return v
+    }()
 
     init(viewModel: PlaylistDetailViewModel) {
         self.viewModel = viewModel
@@ -17,9 +22,8 @@ final class PlaylistDetailViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = .systemBackground
+        view.backgroundColor = MDSColor.surface
         setupTableView()
-        setupActivityIndicator()
         bindViewModel()
         viewModel.load()
     }
@@ -30,20 +34,14 @@ final class PlaylistDetailViewController: UIViewController {
         tableView.rowHeight = 56
         tableView.dataSource = self
         view.addSubview(tableView)
+        view.addSubview(loadingView)
         NSLayoutConstraint.activate([
             tableView.topAnchor.constraint(equalTo: view.topAnchor),
-            tableView.leadingAnchor.constraint(equalTo: view.trailingAnchor),
+            tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
-        ])
-    }
-
-    private func setupActivityIndicator() {
-        activityIndicator.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(activityIndicator)
-        NSLayoutConstraint.activate([
-            activityIndicator.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            activityIndicator.centerYAnchor.constraint(equalTo: view.centerYAnchor)
+            tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            loadingView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            loadingView.centerYAnchor.constraint(equalTo: view.centerYAnchor)
         ])
     }
 
@@ -59,8 +57,8 @@ final class PlaylistDetailViewController: UIViewController {
         viewModel.$isLoading
             .receive(on: DispatchQueue.main)
             .sink { [weak self] loading in
-                loading ? self?.activityIndicator.startAnimating()
-                        : self?.activityIndicator.stopAnimating()
+                self?.loadingView.isHidden = !loading
+                if loading { self?.loadingView.configure(with: MDSLoadingConfiguration()) }
             }
             .store(in: &cancellables)
 

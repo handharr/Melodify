@@ -1,5 +1,6 @@
 import UIKit
 import Combine
+import MelodifyDesignSystem
 
 final class HotelListViewController: UITableViewController {
 
@@ -49,9 +50,10 @@ final class HotelListViewController: UITableViewController {
             .sink { [weak self] loading in
                 guard let self else { return }
                 if loading {
-                    let spinner = UIActivityIndicatorView(style: .medium)
-                    spinner.startAnimating()
-                    tableView.tableFooterView = spinner
+                    let footer = MDSLoadingView()
+                    footer.configure(with: MDSLoadingConfiguration())
+                    footer.frame = CGRect(x: 0, y: 0, width: tableView.bounds.width, height: 56)
+                    tableView.tableFooterView = footer
                 } else {
                     tableView.tableFooterView = nil
                 }
@@ -103,15 +105,15 @@ private final class HotelListCell: UITableViewCell {
 
     private let nameLabel: UILabel = {
         let l = UILabel()
-        l.font = .systemFont(ofSize: 16, weight: .semibold)
+        l.font = Typography.title
         l.translatesAutoresizingMaskIntoConstraints = false
         return l
     }()
 
     private let subtitleLabel: UILabel = {
         let l = UILabel()
-        l.font = .systemFont(ofSize: 13, weight: .regular)
-        l.textColor = .secondaryLabel
+        l.font = Typography.body
+        l.textColor = MDSColor.textSecondary
         l.translatesAutoresizingMaskIntoConstraints = false
         return l
     }()

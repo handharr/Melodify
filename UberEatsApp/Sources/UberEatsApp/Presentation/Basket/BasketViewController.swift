@@ -31,7 +31,11 @@ final class BasketViewController: UIViewController {
         return b
     }()
 
-    private let activityIndicator = UIActivityIndicatorView(style: .medium)
+    private let loadingView: MDSLoadingView = {
+        let v = MDSLoadingView()
+        v.translatesAutoresizingMaskIntoConstraints = false
+        return v
+    }()
 
     init(viewModel: BasketViewModel) {
         self.viewModel = viewModel
@@ -52,11 +56,10 @@ final class BasketViewController: UIViewController {
     }
 
     private func setupLayout() {
-        activityIndicator.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(tableView)
         view.addSubview(totalLabel)
         view.addSubview(placeOrderButton)
-        view.addSubview(activityIndicator)
+        view.addSubview(loadingView)
 
         NSLayoutConstraint.activate([
             tableView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
@@ -73,8 +76,8 @@ final class BasketViewController: UIViewController {
             placeOrderButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -16),
             placeOrderButton.heightAnchor.constraint(equalToConstant: 50),
 
-            activityIndicator.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            activityIndicator.centerYAnchor.constraint(equalTo: view.centerYAnchor)
+            loadingView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            loadingView.centerYAnchor.constraint(equalTo: view.centerYAnchor)
         ])
     }
 
@@ -90,7 +93,8 @@ final class BasketViewController: UIViewController {
         viewModel.$isLoading
             .receive(on: DispatchQueue.main)
             .sink { [weak self] loading in
-                loading ? self?.activityIndicator.startAnimating() : self?.activityIndicator.stopAnimating()
+                self?.loadingView.isHidden = !loading
+            if loading { self?.loadingView.configure(with: MDSLoadingConfiguration()) }
                 self?.placeOrderButton.isEnabled = !loading
             }
             .store(in: &cancellables)

@@ -20,7 +20,11 @@ final class MenuViewController: UIViewController {
         return cv
     }()
 
-    private let activityIndicator = UIActivityIndicatorView(style: .medium)
+    private let loadingView: MDSLoadingView = {
+        let v = MDSLoadingView()
+        v.translatesAutoresizingMaskIntoConstraints = false
+        return v
+    }()
 
     init(viewModel: MenuViewModel) {
         self.viewModel = viewModel
@@ -39,17 +43,16 @@ final class MenuViewController: UIViewController {
     }
 
     private func setupLayout() {
-        activityIndicator.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(collectionView)
-        view.addSubview(activityIndicator)
+        view.addSubview(loadingView)
 
         NSLayoutConstraint.activate([
             collectionView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             collectionView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             collectionView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             collectionView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            activityIndicator.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            activityIndicator.centerYAnchor.constraint(equalTo: view.centerYAnchor)
+            loadingView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            loadingView.centerYAnchor.constraint(equalTo: view.centerYAnchor)
         ])
     }
 
@@ -62,7 +65,8 @@ final class MenuViewController: UIViewController {
         viewModel.$isLoading
             .receive(on: DispatchQueue.main)
             .sink { [weak self] loading in
-                loading ? self?.activityIndicator.startAnimating() : self?.activityIndicator.stopAnimating()
+                self?.loadingView.isHidden = !loading
+                if loading { self?.loadingView.configure(with: MDSLoadingConfiguration()) }
             }
             .store(in: &cancellables)
     }
